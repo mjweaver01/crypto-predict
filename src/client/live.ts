@@ -1,5 +1,4 @@
 import type {
-  InsightSnapshot,
   Prediction,
   PricePoint,
   PriceTick,
@@ -7,56 +6,24 @@ import type {
   RangePrediction,
   SpotRangeId,
 } from '../shared/types.ts';
-
-const $ = <T extends HTMLElement = HTMLElement>(id: string): T =>
-  document.getElementById(id) as T;
-
-const fmtUsd = (n: number) =>
-  n.toLocaleString('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 0,
-  });
-
-const fmtUsd2 = (n: number) =>
-  n.toLocaleString('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 2,
-  });
-
-const fmtPct = (p: number) => `${(p * 100).toFixed(1)}%`;
-
-const fmtClock = (iso: string) =>
-  new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-
-const fmtDay = (t: number) =>
-  new Date(t).toLocaleDateString([], { month: 'short', day: 'numeric' });
-
-function relTime(targetIso: string): string {
-  const mins = Math.round(
-    (new Date(targetIso).getTime() - Date.now()) / 60_000
-  );
-  if (mins < 1) return 'now';
-  if (mins < 60) return `in ${mins}m`;
-  if (mins < 60 * 24) return `in ${(mins / 60).toFixed(1)}h`;
-  return `in ${(mins / (60 * 24)).toFixed(1)}d`;
-}
+import {
+  $,
+  COLORS,
+  fmtClock,
+  fmtDay,
+  fmtPct,
+  fmtUsd,
+  fmtUsd2,
+  px,
+  relTime,
+} from './format.ts';
 
 // ── Inline SVG charts (dependency-free) ──────────────────────────────────
-const COLORS = {
-  up: '#34d399',
-  down: '#f87171',
-  accent: '#f7931a',
-  muted: '#7b8fa8',
-};
 
 /** Last `mins` minutes of history (1 sample ≈ 1 minute, plus the live point). */
 function lastMinutes(history: PricePoint[], mins: number): PricePoint[] {
   return history.slice(-(mins + 1));
 }
-
-const px = (n: number) => n.toFixed(2);
 
 /** A price sparkline scaled to a 100x32 viewBox, with an optional strike line. */
 function sparkline(
@@ -437,74 +404,6 @@ function render(p: Prediction) {
   $('app').classList.remove('loading');
 }
 
-// ── Previous reads (windowed in-memory insight history) ──────────────────
-const escapeHtml = (s: string) =>
-  s.replace(
-    /[&<>"']/g,
-    c =>
-      (
-        ({
-          '&': '&amp;',
-          '<': '&lt;',
-          '>': '&gt;',
-          '"': '&quot;',
-          "'": '&#39;',
-        }) as Record<string, string>
-      )[c]!
-  );
-
-let historyOpen = true;
-
-function renderHistory(entries: InsightSnapshot[]) {
-  const list = $('history-list');
-  const empty = $('history-empty');
-  empty.style.display = entries.length ? 'none' : 'block';
-  list.innerHTML = entries
-    .map(e => {
-      const method = e.llmApplied
-        ? '<span class="hist-method llm">LLM</span>'
-        : '<span class="hist-method stats">Stats</span>';
-      const change = `${e.change24hPct >= 0 ? '+' : ''}${e.change24hPct.toFixed(2)}%`;
-      const reasoning = e.reasoning
-        ? `<div class="hist-reasoning">${escapeHtml(e.reasoning)}</div>`
-        : '';
-      const calls = e.calls
-        .map(
-          c =>
-            `<span class="hist-call ${c.side === 'UP' ? 'up' : 'down'}">${c.label} ${c.side} ${fmtPct(c.probUp)}</span>`
-        )
-        .join('');
-      return `<div class="hist">
-        <div class="hist-top">
-          <span class="hist-time">${new Date(e.asOf).toLocaleTimeString()}</span>
-          ${method}
-          <span>${fmtUsd(e.price)} · ${change} 24h</span>
-        </div>
-        <div class="hist-narrative">${escapeHtml(e.narrative)}</div>
-        ${reasoning}
-        <div class="hist-calls">${calls}</div>
-      </div>`;
-    })
-    .join('');
-}
-
-async function refreshHistory() {
-  try {
-    const res = await fetch('/api/insights');
-    if (!res.ok) return;
-    const data = (await res.json()) as { entries: InsightSnapshot[] };
-    renderHistory(data.entries);
-  } catch {
-    // History is best-effort; ignore transient failures.
-  }
-}
-
-$('history-toggle').addEventListener('click', () => {
-  historyOpen = !historyOpen;
-  $('history-list').classList.toggle('collapsed', !historyOpen);
-  $('history-toggle').textContent = historyOpen ? 'Hide' : 'Show';
-});
-
 let inflight = false;
 async function refresh() {
   if (inflight) return;
@@ -514,7 +413,6 @@ async function refresh() {
     if (!res.ok) throw new Error(`predict ${res.status}`);
     render((await res.json()) as Prediction);
     $('error').textContent = '';
-    void refreshHistory();
   } catch (err) {
     $('error').textContent = `Failed to load: ${String(err)}`;
   } finally {

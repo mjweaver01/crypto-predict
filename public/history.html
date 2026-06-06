@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bitcoin Predict · History</title>
+    <link rel="stylesheet" href="/app.css" />
+  </head>
+  <body>
+    <main id="app" class="app loading">
+      <header>
+        <div class="header-left">
+          <div class="brand">Bitcoin Predict · BTC/USDT</div>
+          <nav class="nav">
+            <a href="/">Live</a>
+            <a href="/history" class="active">History</a>
+          </nav>
+        </div>
+        <div class="updated">updated <span id="updated">—</span></div>
+      </header>
+
+      <!-- Track record: historical calls vs realized outcomes (persisted ledger) -->
+      <div class="card record-card">
+        <div class="record-head">
+          <div>
+            <span class="card-title"><span>Track record</span></span>
+            <div class="record-sub" id="rec-sub">—</div>
+          </div>
+          <div class="record-stats" id="rec-stats"></div>
+        </div>
+        <div class="record-filters" id="rec-filters"></div>
+        <div class="record-list" id="rec-list"></div>
+        <div class="record-empty" id="rec-empty">No resolved calls yet.</div>
+      </div>
+
+      <!-- Previous model reads (windowed in-memory history) -->
+      <div class="card history-card">
+        <div class="history-head">
+          <span class="card-title"><span>Previous reads</span></span>
+          <button id="history-toggle" class="history-toggle" type="button">
+            Hide
+          </button>
+        </div>
+        <div id="history-list" class="history-list"></div>
+        <div id="history-empty" class="history-empty">No history yet.</div>
+      </div>
+
+      <div id="error"></div>
+    </main>
+
+    <script src="/dist/history.js" type="module"></script>
+  </body>
+</html>

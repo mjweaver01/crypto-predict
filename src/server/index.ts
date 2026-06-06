@@ -13,7 +13,7 @@ const IS_DEV = process.env.NODE_ENV !== 'production';
 // Bundle the client on startup so there is no separate build step in dev.
 async function buildClient() {
   const result = await Bun.build({
-    entrypoints: ['src/client/main.ts'],
+    entrypoints: ['src/client/live.ts', 'src/client/history.ts'],
     outdir: 'public/dist',
     target: 'browser',
     minify: !IS_DEV,
@@ -93,8 +93,14 @@ const server = Bun.serve({
       return json({ error: String(err) }, 500);
     }
 
-    // Static files.
-    const rel = pathname === '/' ? 'index.html' : pathname.slice(1);
+    // Static files. `/` and `/history` map to their page documents; everything
+    // else is served verbatim from public/.
+    const rel =
+      pathname === '/'
+        ? 'index.html'
+        : pathname === '/history'
+          ? 'history.html'
+          : pathname.slice(1);
     const file = Bun.file(PUBLIC + rel);
     if (!(await file.exists()))
       return new Response('Not found', { status: 404 });

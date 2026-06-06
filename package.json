@@ -9,7 +9,7 @@
     "backtest": "bun run scripts/backtest.ts",
     "backtest:market": "bun run scripts/backtest-market.ts",
     "backfill": "bun run scripts/backfill.ts",
-    "build:client": "bun build src/client/main.ts --outdir public/dist --target browser",
+    "build:client": "bun build src/client/live.ts src/client/history.ts --outdir public/dist --target browser",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src scripts",
     "lint:fix": "eslint src scripts --fix",
