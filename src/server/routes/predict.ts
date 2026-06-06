@@ -32,6 +32,19 @@ import type {
 
 const TTL = Number(env('CACHE_TTL_PREDICT', '20'));
 
+/**
+ * The most recent prediction computed by the server-side commit loop. The
+ * browser reads this snapshot instead of triggering a recompute, so ALL data
+ * generation (committing calls, recording insights) happens on the server's own
+ * cadence rather than as a side effect of an HTTP request.
+ */
+let latest: Prediction | null = null;
+
+/** The latest server-computed prediction, or null before the first cycle. */
+export function getLatestPrediction(): Prediction | null {
+  return latest;
+}
+
 /** Open price of the candle whose openTime is exactly `startMs`, if present. */
 function candleOpenAt(
   candles: { openTime: number; open: number }[],
@@ -118,7 +131,7 @@ const META: Record<
 };
 
 export async function predict(): Promise<Prediction> {
-  return cached('predict:ranges', TTL, async () => {
+  const p = await cached('predict:ranges', TTL, async () => {
     const now = Date.now();
     const win = windowsAt(now);
 
@@ -303,4 +316,6 @@ export async function predict(): Promise<Prediction> {
 
     return prediction;
   });
+  latest = p;
+  return p;
 }

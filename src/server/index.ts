@@ -1,4 +1,4 @@
-import { predict } from './routes/predict.ts';
+import { getLatestPrediction, predict } from './routes/predict.ts';
 import { getLedger, resolvePending, summarize } from './model/ledger.ts';
 import { env } from './cache.ts';
 import { refreshCalibrators } from './model/calibration.ts';
@@ -76,7 +76,10 @@ const server = Bun.serve({
     try {
       if (pathname === '/api/health') return json({ ok: true });
       if (pathname === '/api/predict') {
-        return json(await predict());
+        // Serve the snapshot the server-side commit loop already computed; the
+        // browser never triggers a recompute or records calls. Only on a cold
+        // start (before the first cycle finishes) do we compute on demand.
+        return json(getLatestPrediction() ?? (await predict()));
       }
       if (pathname === '/api/ledger') {
         const entries = await getLedger();

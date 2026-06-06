@@ -6708,5 +6708,22 @@
     "correct": false,
     "resolvedBy": "polymarket",
     "resolvedAt": "2026-06-06T15:50:58.336Z"
+  },
+  "5m:1780761300000": {
+    "id": "5m:1780761300000",
+    "rangeId": "5m",
+    "slug": "btc-updown-5m-1780761300",
+    "windowStart": "2026-06-06T15:55:00.000Z",
+    "windowEnd": "2026-06-06T16:00:00.000Z",
+    "strike": 60733.08616269282,
+    "probUp": 0.5190051641796333,
+    "rawProbUp": 0.5173685206341263,
+    "side": "UP",
+    "confidence": 0.5190051641796333,
+    "marketImpliedUp": 0.385,
+    "horizonMinutes": 4.694,
+    "decidedAt": "2026-06-06T15:55:18.360Z",
+    "source": "live",
+    "outcome": null
   }
 }
