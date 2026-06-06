@@ -55,23 +55,27 @@ statistical core.
 
 ```
 client (browser)
-  └─ single dashboard: live price + 4 prediction cards, polls /api/predict every 5s
+  └─ dashboard: live price + tabs per Polymarket market (5m/15m/hourly/daily),
+     polls /api/predict every 5s
 
 server (Bun)
   ├─ sources/binance.ts   → spot price, 24h change, 1m + 1h klines (cached)
   ├─ model/forecast.ts    → lognormal drift/vol model → 4 predictions
   ├─ model/llmAssist.ts   → optional LLM read + clamped bias
-  └─ routes/predict.ts    → GET /api/predict?strike=&target= → Prediction JSON
+  └─ routes/predict.ts    → GET /api/predict → Prediction JSON
 ```
 
 ## API
 
 ```
-GET /api/predict?strike=65000&target=2026-06-06T16:00:00.000Z
+GET /api/predict
 ```
 
-Returns the full `Prediction` object (see `src/shared/types.ts`). Both query
-params are optional (`strike` defaults to spot, `target` to +24h).
+Returns the full `Prediction` object (see `src/shared/types.ts`). It computes
+one `RangePrediction` per Polymarket BTC Up/Down family — `5m`, `15m`, `1h`
+(hourly), and `1d` (daily) — each with the window-anchored up/down odds, the
+price-to-beat, a price forecast for the window close, and the live Polymarket
+quote when one exists. No query params.
 
 ## Development
 

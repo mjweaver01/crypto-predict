@@ -5,86 +5,198 @@ import {
   fetchPrice,
   TRADING_SYMBOL,
 } from '../sources/binance.ts';
-import {
-  buildModel,
-  predictAbove,
-  predictDirection,
-  predictPrice,
-} from '../model/forecast.ts';
+import { buildModel, predictAbove, predictPrice } from '../model/forecast.ts';
 import { applyBias, assist } from '../model/llmAssist.ts';
-import type { Prediction } from '../../shared/types.ts';
+import { fetchMarket, slugFor } from '../sources/polymarket.ts';
+import type { Prediction, RangeId, RangePrediction } from '../../shared/types.ts';
 
 const TTL = Number(env('CACHE_TTL_PREDICT', '20'));
+const ET = 'America/New_York';
 
-/**
- * Open price of the candle that starts at (or most recently before) `startMs`.
- * Binance 1m candles are minute-aligned, so a 5m-aligned start usually matches
- * a candle's openTime exactly; we fall back to the last candle at/under it.
- */
-function intervalOpen(
+/** Open price of the candle whose openTime is exactly `startMs`, if present. */
+function candleOpenAt(
   candles: { openTime: number; open: number }[],
   startMs: number
 ): number | undefined {
-  let best: { openTime: number; open: number } | undefined;
+  return candles.find(c => c.openTime === startMs)?.open;
+}
+
+/**
+ * Close of the most recent candle that opened strictly before `startMs` — i.e.
+ * the last observed price before the boundary, which is ~equal to the boundary
+ * open and far more stable than live spot once the window has begun.
+ */
+function lastCloseBefore(
+  candles: { openTime: number; close: number }[],
+  startMs: number
+): number | undefined {
+  let best: { openTime: number; close: number } | undefined;
   for (const c of candles) {
-    if (c.openTime === startMs) return c.open;
     if (c.openTime < startMs && (!best || c.openTime > best.openTime)) best = c;
   }
-  return best?.open;
+  return best?.close;
 }
 
-export interface PredictParams {
-  /** Strike for the "above price on date" market. Defaults to spot. */
-  strike?: number;
-  /** ISO target time for the strike + price forecast. Defaults to +24h. */
-  target?: string;
+type Candleish = { openTime: number; open: number; close: number };
+
+/**
+ * The "price to beat" at `startMs`: the candle open at that exact boundary,
+ * preferring the coarsest candle given, then the finer one.
+ *
+ * Right after a boundary the new candle may not be cached yet (klines are
+ * cached for a few seconds and were last fetched before the boundary). In that
+ * gap we must NOT use live spot — spot has already drifted seconds into the new
+ * window, so it skews the strike specifically at interval starts and snaps once
+ * the real candle lands. Instead fall back to the close of the last candle
+ * before the boundary (≈ the true open). Live spot is only a last resort.
+ */
+function strikeAt(
+  startMs: number,
+  coarse: Candleish[],
+  fine: Candleish[],
+  spot: number
+): number {
+  return (
+    candleOpenAt(coarse, startMs) ??
+    candleOpenAt(fine, startMs) ??
+    lastCloseBefore(fine, startMs) ??
+    lastCloseBefore(coarse, startMs) ??
+    spot
+  );
 }
 
-export async function predict(params: PredictParams = {}): Promise<Prediction> {
-  const strikeKey = params.strike ?? 'spot';
-  const targetKey = params.target ?? '24h';
+/** ET wall-clock offset (local - UTC) in ms at a given instant. */
+function etOffsetMs(utcMs: number): number {
+  const d = new Date(utcMs);
+  const loc = new Date(d.toLocaleString('en-US', { timeZone: ET }));
+  const utc = new Date(d.toLocaleString('en-US', { timeZone: 'UTC' }));
+  return loc.getTime() - utc.getTime();
+}
 
-  return cached(`predict:${strikeKey}:${targetKey}`, TTL, async () => {
-    const [price, change24hPct, minuteCandles, hourCandles] = await Promise.all([
-      fetchPrice(),
-      fetch24hChangePct(),
-      fetchCandles('1m', 240),
-      fetchCandles('1h', 720),
-    ]);
+/** UTC instant for 12:00 ET on the ET calendar date containing `refMs`. */
+function noonEtUtc(refMs: number): number {
+  const [y, m, d] = new Intl.DateTimeFormat('en-CA', {
+    timeZone: ET,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  })
+    .format(new Date(refMs))
+    .split('-')
+    .map(Number);
+  const wallAsUtc = Date.UTC(y!, m! - 1, d!, 12, 0, 0);
+  return wallAsUtc - etOffsetMs(wallAsUtc);
+}
+
+const floorTo = (n: number, step: number) => Math.floor(n / step) * step;
+const MS = { '5m': 5 * 60_000, '15m': 15 * 60_000, '1h': 60 * 60_000 };
+
+/** Window bounds (start/end epoch ms) for each market family at `now`. */
+function windowsAt(now: number) {
+  const todayNoon = noonEtUtc(now);
+  // The active daily market is the one whose closing noon is still ahead.
+  const dayEnd = now >= todayNoon ? noonEtUtc(todayNoon + 30 * 3_600_000) : todayNoon;
+  const dayStart = now >= todayNoon ? todayNoon : noonEtUtc(todayNoon - 18 * 3_600_000);
+  return {
+    '5m': { start: floorTo(now, MS['5m']), end: floorTo(now, MS['5m']) + MS['5m'] },
+    '15m': { start: floorTo(now, MS['15m']), end: floorTo(now, MS['15m']) + MS['15m'] },
+    '1h': { start: floorTo(now, MS['1h']), end: floorTo(now, MS['1h']) + MS['1h'] },
+    '1d': { start: dayStart, end: dayEnd },
+  } as Record<RangeId, { start: number; end: number }>;
+}
+
+const META: Record<
+  RangeId,
+  { label: string; resolutionSource: 'chainlink' | 'binance'; strikeIsProxy: boolean }
+> = {
+  '5m': { label: '5 min', resolutionSource: 'chainlink', strikeIsProxy: true },
+  '15m': { label: '15 min', resolutionSource: 'chainlink', strikeIsProxy: true },
+  '1h': { label: 'Hourly', resolutionSource: 'binance', strikeIsProxy: false },
+  '1d': { label: 'Daily', resolutionSource: 'binance', strikeIsProxy: false },
+};
+
+export async function predict(): Promise<Prediction> {
+  return cached('predict:ranges', TTL, async () => {
+    const [price, change24hPct, minuteCandles, fiveMinCandles, hourCandles] =
+      await Promise.all([
+        fetchPrice(),
+        fetch24hChangePct(),
+        fetchCandles('1m', 240),
+        fetchCandles('5m', 60),
+        fetchCandles('1h', 720),
+      ]);
 
     const model = buildModel({ price, change24hPct, minuteCandles, hourCandles });
-
     const now = Date.now();
-    const target = params.target
-      ? new Date(params.target)
-      : new Date(now + 24 * 60 * 60 * 1000);
-    const horizonMin = Math.max(1, Math.round((target.getTime() - now) / 60_000));
-
-    // Polymarket 5m markets resolve against the "price to beat": the price at
-    // the open of the interval [target-5m, target]. Default the strike to that
-    // so projections answer the same question the market does.
-    const intervalStart = target.getTime() - 5 * 60_000;
-    const priceToBeat = intervalOpen(minuteCandles, intervalStart) ?? price;
-    const strike = params.strike ?? priceToBeat;
-
     const a = await assist(model);
+    const win = windowsAt(now);
 
-    const up5mRaw = predictDirection(model, 5);
-    const up15mRaw = predictDirection(model, 15);
-    const up5mProb = applyBias(up5mRaw.probUp, a.bias);
-    const up15mProb = applyBias(up15mRaw.probUp, a.bias);
+    // Strike (price to beat) per family, anchored to how each market settles:
+    //  5m/15m → Binance candle open proxy for the Chainlink boundary price
+    //  1h     → exact Binance 1h candle open
+    //  1d     → Binance price at the prior noon ET (≈ 1h candle open there)
+    const strikeByRange: Record<RangeId, number> = {
+      '5m': strikeAt(win['5m'].start, fiveMinCandles, minuteCandles, price),
+      '15m': strikeAt(win['15m'].start, fiveMinCandles, minuteCandles, price),
+      '1h':
+        candleOpenAt(hourCandles, win['1h'].start) ??
+        lastCloseBefore(hourCandles, win['1h'].start) ??
+        price,
+      '1d':
+        candleOpenAt(hourCandles, win['1d'].start) ??
+        lastCloseBefore(hourCandles, win['1d'].start) ??
+        price,
+    };
+
+    const order: RangeId[] = ['5m', '15m', '1h', '1d'];
+
+    const markets = await Promise.all(
+      order.map(id => {
+        const w = win[id];
+        const slug = id === '1d' ? slugFor['1d'](w.end) : slugFor[id](w.start);
+        return fetchMarket(slug, w.start, w.end).catch(() => null);
+      })
+    );
+
+    const ranges: RangePrediction[] = order.map((id, i) => {
+      const w = win[id];
+      const strike = strikeByRange[id];
+      const remaining = Math.max(1, Math.round((w.end - now) / 60_000));
+      const endIso = new Date(w.end).toISOString();
+      const probUp = applyBias(
+        predictAbove(model, strike, remaining, endIso).probAbove,
+        a.bias
+      );
+      return {
+        id,
+        label: META[id].label,
+        resolutionSource: META[id].resolutionSource,
+        strikeIsProxy: META[id].strikeIsProxy,
+        horizonMinutes: remaining,
+        probUp,
+        probDown: 1 - probUp,
+        strike,
+        windowStart: new Date(w.start).toISOString(),
+        windowEnd: endIso,
+        forecast: predictPrice(model, remaining, endIso, strike),
+        market: markets[i] ?? undefined,
+      };
+    });
+
+    // Recent price history for client sparklines: last ~120 1m closes, with the
+    // live spot appended so charts end at the current price.
+    const history = minuteCandles.slice(-120).map(c => ({ t: c.openTime, price: c.close }));
+    history.push({ t: now, price });
 
     return {
       asOf: new Date(now).toISOString(),
       symbol: TRADING_SYMBOL,
       stats: model.stats,
-      up5m: { horizonMinutes: 5, probUp: up5mProb, probDown: 1 - up5mProb },
-      up15m: { horizonMinutes: 15, probUp: up15mProb, probDown: 1 - up15mProb },
-      above: predictAbove(model, strike, horizonMin, target.toISOString()),
-      price: predictPrice(model, horizonMin, target.toISOString()),
+      ranges,
       narrative: a.narrative,
       reasoning: a.reasoning,
       llmApplied: a.llmApplied,
+      history,
     };
   });
 }

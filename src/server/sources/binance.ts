@@ -23,7 +23,7 @@ export interface Candle {
 type RawKline = [number, string, string, string, string, ...unknown[]];
 
 export async function fetchCandles(
-  interval: '1m' | '1h',
+  interval: '1m' | '5m' | '1h',
   limit: number
 ): Promise<Candle[]> {
   return cached(`klines:${interval}:${limit}`, TTL, async () => {

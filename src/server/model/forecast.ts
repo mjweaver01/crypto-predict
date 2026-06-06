@@ -1,7 +1,6 @@
 import type { Candle } from '../sources/binance.ts';
 import type {
   AbovePrediction,
-  DirectionPrediction,
   MarketStats,
   PriceForecast,
 } from '../../shared/types.ts';
@@ -90,18 +89,6 @@ export function buildModel(inputs: ModelInputs): Model {
   };
 }
 
-/** Probability price is higher after `horizonMinutes`, using minute stats. */
-export function predictDirection(
-  model: Model,
-  horizonMinutes: number
-): DirectionPrediction {
-  const { mean, std } = model.minute;
-  const driftSum = mean * horizonMinutes;
-  const sigmaSum = std * Math.sqrt(horizonMinutes);
-  const probUp = sigmaSum > 0 ? normCdf(driftSum / sigmaSum) : 0.5;
-  return { horizonMinutes, probUp, probDown: 1 - probUp };
-}
-
 /** Choose the stats appropriate for a horizon (minute vs long-run). */
 function statsFor(model: Model, horizonMinutes: number): ReturnStats {
   return horizonMinutes <= 30 ? model.minute : model.long;
@@ -129,7 +116,8 @@ export function predictAbove(
 export function predictPrice(
   model: Model,
   horizonMinutes: number,
-  targetTime: string
+  targetTime: string,
+  startPrice: number
 ): PriceForecast {
   const { mean, std } = statsFor(model, horizonMinutes);
   const driftSum = mean * horizonMinutes;
@@ -138,6 +126,7 @@ export function predictPrice(
   return {
     targetTime,
     horizonMinutes,
+    startPrice,
     point: price * Math.exp(driftSum),
     low: price * Math.exp(driftSum - 1.96 * sigmaSum),
     high: price * Math.exp(driftSum + 1.96 * sigmaSum),

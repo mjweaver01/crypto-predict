@@ -58,7 +58,7 @@ const server = Bun.serve({
   port: PORT,
   idleTimeout: 0,
   async fetch(req) {
-    const { pathname, searchParams } = new URL(req.url);
+    const { pathname } = new URL(req.url);
 
     // Dev live-reload SSE stream.
     if (IS_DEV && pathname === '/api/__reload' && makeSseResponse) {
@@ -68,15 +68,7 @@ const server = Bun.serve({
     try {
       if (pathname === '/api/health') return json({ ok: true });
       if (pathname === '/api/predict') {
-        const strikeRaw = searchParams.get('strike');
-        const target = searchParams.get('target') ?? undefined;
-        const strike = strikeRaw ? Number(strikeRaw) : undefined;
-        return json(
-          await predict({
-            strike: Number.isFinite(strike) ? strike : undefined,
-            target,
-          })
-        );
+        return json(await predict());
       }
     } catch (err) {
       console.error(err);
