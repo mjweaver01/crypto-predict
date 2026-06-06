@@ -1,5 +1,6 @@
 import { predict } from './routes/predict.ts';
 import { getLedger, resolvePending, summarize } from './model/ledger.ts';
+import { refreshCalibrators } from './model/calibration.ts';
 import { getInsights } from './model/insights.ts';
 import { makePriceStreamResponse } from './sources/priceStream.ts';
 
@@ -109,10 +110,19 @@ const server = Bun.serve({
 console.log(`Bitcoin Predict → http://localhost:${server.port}`);
 
 // Resolve matured predictions on startup and then on a slow cadence, so the
-// track record fills in outcomes without the request path doing it.
-const resolveLoop = () =>
-  resolvePending()
-    .then(n => n > 0 && console.log(`[ledger] resolved ${n} window(s)`))
-    .catch(err => console.warn('[ledger] resolve failed:', err));
+// track record fills in outcomes without the request path doing it. After each
+// resolve pass we refit the calibrators, so freshly settled committed calls feed
+// back into how the model is scored — "better as it sees more outcomes".
+const resolveLoop = async () => {
+  try {
+    const n = await resolvePending();
+    if (n > 0) console.log(`[ledger] resolved ${n} window(s)`);
+  } catch (err) {
+    console.warn('[ledger] resolve failed:', err);
+  }
+  await refreshCalibrators().catch(err =>
+    console.warn('[calibration] refresh failed:', err)
+  );
+};
 void resolveLoop();
 setInterval(resolveLoop, 60_000);

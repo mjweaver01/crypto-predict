@@ -55,6 +55,7 @@ export async function ensureHydrated(): Promise<void> {
       if (commitments.has(id)) continue;
       commitments.set(id, {
         probUp: e.probUp,
+        rawProbUp: e.rawProbUp ?? e.probUp,
         side: e.side,
         confidence: e.confidence,
         strike: e.strike,
@@ -96,6 +97,7 @@ export function decide(
   const side: Side = r.probUp >= 0.5 ? 'UP' : 'DOWN';
   const call: CommittedCall = {
     probUp: r.probUp,
+    rawProbUp: r.rawProbUp,
     side,
     confidence: Math.max(r.probUp, 1 - r.probUp),
     strike: r.strike,

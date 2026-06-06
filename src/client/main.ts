@@ -280,6 +280,18 @@ function renderDetail(p: Prediction) {
   $('d-chart').innerHTML = sparkline(pts, color, { strike: r.strike });
 
   $('d-above').textContent = fmtPct(r.probUp);
+  const calib = $('d-calib');
+  if (r.calibration?.active) {
+    const delta = Math.round((r.probUp - r.rawProbUp) * 100);
+    const adj =
+      delta === 0
+        ? 'no adjustment'
+        : `${delta > 0 ? '+' : ''}${delta} pts vs raw ${fmtPct(r.rawProbUp)}`;
+    calib.textContent = `Calibrated on ${r.calibration.samples} resolved calls · ${adj}`;
+  } else {
+    const have = r.calibration?.samples ?? 0;
+    calib.textContent = `Uncalibrated · learning (${have} resolved calls so far)`;
+  }
   $('d-point').textContent = fmtUsd(r.forecast.point);
   $('d-band').textContent =
     `${fmtUsd(r.forecast.low)} – ${fmtUsd(r.forecast.high)}`;

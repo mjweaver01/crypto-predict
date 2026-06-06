@@ -31,8 +31,10 @@ export interface LedgerEntry {
   windowEnd: string;
   /** Price to beat at the window open. */
   strike: number;
-  /** Model probability of Up frozen at commit time (after LLM bias). */
+  /** Up-probability frozen at commit time (after LLM bias + calibration). */
   probUp: number;
+  /** RAW up-probability before calibration; the signal we fit the calibrator on. */
+  rawProbUp?: number;
   /** Our pick: UP if probUp >= 0.5 else DOWN. */
   side: Side;
   /** Confidence = max(probUp, 1 - probUp). */
@@ -157,8 +159,14 @@ export interface MarketQuote {
  * the window runs out.
  */
 export interface CommittedCall {
-  /** Frozen up-probability at the moment we committed. */
+  /** Frozen up-probability at the moment we committed (after calibration). */
   probUp: number;
+  /**
+   * Frozen RAW model up-probability before calibration. This is what we fit the
+   * calibrator on — keeping it separate from `probUp` keeps the training signal
+   * stationary as the calibrator itself evolves (no double-correction).
+   */
+  rawProbUp: number;
   /** Frozen pick: UP if probUp >= 0.5 else DOWN. */
   side: Side;
   /** Frozen confidence = max(probUp, 1 - probUp). */
@@ -189,8 +197,13 @@ export interface RangePrediction {
   strikeIsProxy: boolean;
   /** Minutes remaining until this window resolves. */
   horizonMinutes: number;
-  /** Model P(close ≥ strike) i.e. P(Up) at the window end, after LLM bias. */
+  /**
+   * P(Up) at the window end, after LLM bias AND learned calibration. This is the
+   * number we display and bet on.
+   */
   probUp: number;
+  /** RAW P(Up) before calibration (post LLM bias). Used to fit the calibrator. */
+  rawProbUp: number;
   /** Convenience: 1 - probUp. */
   probDown: number;
   /** Price to beat: the price at the window open. */
@@ -207,8 +220,18 @@ export interface RangePrediction {
    * first observed too late to make a genuine forward-looking call.
    */
   committed?: CommittedCall;
+  /** How the learned calibrator is currently shaping this range's probability. */
+  calibration?: CalibrationInfo;
   /** Live Polymarket quote for this exact window, when one exists. */
   market?: MarketQuote;
+}
+
+/** Compact, display-friendly summary of a range's active calibrator. */
+export interface CalibrationInfo {
+  /** Number of resolved committed calls the calibrator was fit on. */
+  samples: number;
+  /** True once enough samples exist to actually shape the probability. */
+  active: boolean;
 }
 
 /**

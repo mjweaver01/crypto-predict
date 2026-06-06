@@ -74,6 +74,7 @@ export async function recordPredictions(p: Prediction): Promise<void> {
         windowEnd: r.windowEnd,
         strike: c.strike,
         probUp: c.probUp,
+        rawProbUp: c.rawProbUp,
         side: c.side,
         confidence: c.confidence,
         marketImpliedUp: r.market?.impliedUp,

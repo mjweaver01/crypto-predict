@@ -10,6 +10,11 @@ import { buildModel, predictAbove, predictPrice } from '../model/forecast.ts';
 import { applyBias, assist } from '../model/llmAssist.ts';
 import { recordPredictions } from '../model/ledger.ts';
 import { decide, ensureHydrated } from '../model/commitments.ts';
+import {
+  applyCalibration,
+  calibrationInfo,
+  getCalibrator,
+} from '../model/calibration.ts';
 import { recordInsight } from '../model/insights.ts';
 import {
   fetchMarket,
@@ -247,11 +252,16 @@ export async function predict(): Promise<Prediction> {
       // back toward 50/50. Floor at 1 second to avoid a zero-vol singularity.
       const remaining = Math.max(1 / 60, (w.end - now) / 60_000);
       const endIso = new Date(w.end).toISOString();
-      const probUp = applyBias(
+      // Raw model probability (statistical model + LLM bias), then the learned
+      // calibration fit from our resolved track record. probUp is what we show
+      // and bet on; rawProbUp is preserved so the calibrator keeps training on a
+      // stationary signal rather than its own corrected output.
+      const rawProbUp = applyBias(
         predictAbove(model, strike, remaining, endIso).probAbove,
         a.bias,
         remaining
       );
+      const probUp = applyCalibration(rawProbUp, getCalibrator(id));
       const range: RangePrediction = {
         id,
         label: META[id].label,
@@ -259,11 +269,13 @@ export async function predict(): Promise<Prediction> {
         strikeIsProxy: strikeIsProxyByRange[id],
         horizonMinutes: remaining,
         probUp,
+        rawProbUp,
         probDown: 1 - probUp,
         strike,
         windowStart: new Date(w.start).toISOString(),
         windowEnd: endIso,
         forecast: predictPrice(model, remaining, endIso, strike),
+        calibration: calibrationInfo(id),
         market: markets[i] ?? undefined,
       };
       // Lock in (or recall) the frozen directional call for this window. The
