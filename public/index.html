@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bitcoin Predict</title>
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      :root {
+        --bg: #050a12;
+        --surface: rgba(255, 255, 255, 0.04);
+        --border: rgba(255, 255, 255, 0.08);
+        --border-bright: rgba(255, 255, 255, 0.16);
+        --text: #e8edf5;
+        --text-muted: #7b8fa8;
+        --text-dim: #3d5068;
+        --accent: #f7931a; /* bitcoin orange */
+        --up: #34d399;
+        --down: #f87171;
+        --radius: 16px;
+      }
+
+      html,
+      body {
+        min-height: 100%;
+        background:
+          radial-gradient(1200px 600px at 70% -10%, rgba(247, 147, 26, 0.08), transparent 60%),
+          var(--bg);
+        color: var(--text);
+        font-family:
+          -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      }
+
+      main {
+        max-width: 920px;
+        margin: 0 auto;
+        padding: 32px 20px 60px;
+      }
+
+      /* ── Header ─────────────────────────────────────────────── */
+      header {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 16px;
+        margin-bottom: 8px;
+      }
+
+      .brand {
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--accent);
+      }
+
+      #price {
+        font-size: 52px;
+        font-weight: 700;
+        letter-spacing: -1.5px;
+        line-height: 1;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .meta-row {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        margin-top: 6px;
+      }
+
+      .change,
+      #vol {
+        font-size: 13px;
+        font-variant-numeric: tabular-nums;
+      }
+      .change.up {
+        color: var(--up);
+      }
+      .change.down {
+        color: var(--down);
+      }
+      #vol {
+        color: var(--text-dim);
+      }
+
+      .updated {
+        text-align: right;
+        font-size: 11px;
+        color: var(--text-dim);
+      }
+
+      /* ── Controls ───────────────────────────────────────────── */
+      .controls {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin: 22px 0 18px;
+      }
+
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+      }
+      .field label {
+        font-size: 10px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--text-dim);
+      }
+      .field input {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        color: var(--text);
+        padding: 8px 10px;
+        font-size: 13px;
+        font-family: inherit;
+      }
+      .field input:focus {
+        outline: none;
+        border-color: var(--accent);
+      }
+
+      /* ── Cards ──────────────────────────────────────────────── */
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 14px;
+      }
+
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 18px;
+      }
+
+      .card-title {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .verdict {
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        padding: 2px 9px;
+        border-radius: 100px;
+        border: 1px solid;
+      }
+      .verdict.up {
+        color: var(--up);
+        background: rgba(52, 211, 153, 0.12);
+        border-color: rgba(52, 211, 153, 0.3);
+      }
+      .verdict.down {
+        color: var(--down);
+        background: rgba(248, 113, 113, 0.12);
+        border-color: rgba(248, 113, 113, 0.3);
+      }
+
+      /* Up/Down split bar */
+      .split {
+        display: flex;
+        height: 10px;
+        border-radius: 6px;
+        overflow: hidden;
+        margin: 16px 0 10px;
+        background: rgba(255, 255, 255, 0.05);
+      }
+      .split .up {
+        background: var(--up);
+        transition: width 0.5s ease;
+      }
+      .split .down {
+        background: var(--down);
+        transition: width 0.5s ease;
+      }
+      .split-labels {
+        display: flex;
+        justify-content: space-between;
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+      }
+      .split-labels .up {
+        color: var(--up);
+      }
+      .split-labels .down {
+        color: var(--down);
+      }
+
+      /* Big stat cards */
+      .big {
+        font-size: 40px;
+        font-weight: 700;
+        letter-spacing: -1px;
+        margin: 12px 0 4px;
+        font-variant-numeric: tabular-nums;
+      }
+      .big.accent {
+        color: var(--accent);
+      }
+      .detail {
+        font-size: 12px;
+        color: var(--text-muted);
+      }
+      .track {
+        height: 8px;
+        border-radius: 5px;
+        background: rgba(255, 255, 255, 0.05);
+        overflow: hidden;
+        margin-top: 12px;
+      }
+      .track > div {
+        height: 100%;
+        background: var(--accent);
+        transition: width 0.5s ease;
+      }
+
+      /* ── Narrative ──────────────────────────────────────────── */
+      .narrative-card {
+        margin-top: 14px;
+      }
+      .narrative-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+      }
+      #method {
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: #a78bfa;
+        background: rgba(139, 92, 246, 0.15);
+        border: 1px solid rgba(139, 92, 246, 0.25);
+        padding: 2px 8px;
+        border-radius: 100px;
+      }
+      #narrative {
+        font-size: 13.5px;
+        line-height: 1.6;
+        color: var(--text-muted);
+      }
+      #reasoning {
+        margin-top: 10px;
+        font-size: 12.5px;
+        line-height: 1.65;
+        color: var(--text-dim);
+        font-style: italic;
+        border-left: 2px solid rgba(167, 139, 250, 0.3);
+        padding-left: 10px;
+        display: none;
+      }
+      #reasoning.visible {
+        display: block;
+      }
+
+      #error {
+        color: var(--down);
+        font-size: 12px;
+        min-height: 16px;
+        margin-top: 14px;
+      }
+
+      .app.loading .big,
+      .app.loading #price {
+        opacity: 0.35;
+      }
+
+      @media (max-width: 640px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+        #price {
+          font-size: 42px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main id="app" class="app loading">
+      <header>
+        <div>
+          <div class="brand">Bitcoin Predict · BTC/USDT</div>
+          <div id="price">$—</div>
+          <div class="meta-row">
+            <span id="change" class="change">—</span>
+            <span id="vol">—</span>
+          </div>
+        </div>
+        <div class="updated">updated <span id="updated">—</span></div>
+      </header>
+
+      <div class="controls">
+        <div class="field">
+          <label for="strike">Strike ($)</label>
+          <input id="strike" type="number" inputmode="decimal" placeholder="spot" />
+        </div>
+        <div class="field">
+          <label for="target">Target time</label>
+          <input id="target" type="datetime-local" />
+        </div>
+      </div>
+
+      <div class="grid">
+        <!-- Up/Down 5m -->
+        <div class="card">
+          <div class="card-title">
+            <span>Up / Down · 5 min</span>
+            <span id="m5-verdict" class="verdict">—</span>
+          </div>
+          <div class="split">
+            <div id="m5-up" class="up" style="width: 50%"></div>
+            <div id="m5-down" class="down" style="width: 50%"></div>
+          </div>
+          <div class="split-labels">
+            <span id="m5-up-pct" class="up">Up —</span>
+            <span id="m5-down-pct" class="down">Down —</span>
+          </div>
+        </div>
+
+        <!-- Up/Down 15m -->
+        <div class="card">
+          <div class="card-title">
+            <span>Up / Down · 15 min</span>
+            <span id="m15-verdict" class="verdict">—</span>
+          </div>
+          <div class="split">
+            <div id="m15-up" class="up" style="width: 50%"></div>
+            <div id="m15-down" class="down" style="width: 50%"></div>
+          </div>
+          <div class="split-labels">
+            <span id="m15-up-pct" class="up">Up —</span>
+            <span id="m15-down-pct" class="down">Down —</span>
+          </div>
+        </div>
+
+        <!-- Above strike -->
+        <div class="card">
+          <div class="card-title"><span>Above strike</span></div>
+          <div id="above-pct" class="big accent">—</div>
+          <div id="above-detail" class="detail">—</div>
+          <div class="track"><div id="above-bar" style="width: 0%"></div></div>
+        </div>
+
+        <!-- Price forecast -->
+        <div class="card">
+          <div class="card-title"><span>Price forecast</span></div>
+          <div id="forecast-point" class="big">—</div>
+          <div id="forecast-detail" class="detail">—</div>
+          <div class="detail" style="margin-top: 6px">
+            range <span id="forecast-band">—</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card narrative-card">
+        <div class="narrative-head">
+          <span class="card-title"><span>Model read</span></span>
+          <span id="method">—</span>
+        </div>
+        <p id="narrative">Loading…</p>
+        <p id="reasoning"></p>
+      </div>
+
+      <div id="error"></div>
+    </main>
+
+    <script src="/dist/main.js" type="module"></script>
+  </body>
+</html>
