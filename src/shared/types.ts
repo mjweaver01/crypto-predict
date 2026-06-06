@@ -3,6 +3,16 @@
 /** The recurring Polymarket BTC Up/Down market families we mirror as tabs. */
 export type RangeId = '5m' | '15m' | '1h' | '1d';
 
+/**
+ * Selectable look-back windows for the spot price chart (shortest → longest).
+ * `LIVE` is a client-only view built from streamed ticks (last ~1 minute); the
+ * rest are precomputed server-side from candles.
+ */
+export type SpotRangeId = 'LIVE' | '1H' | '6H' | '1D' | '1W';
+
+/** The look-back windows the server precomputes (everything but the live buffer). */
+export type ServerSpotRangeId = Exclude<SpotRangeId, 'LIVE'>;
+
 /** A directional call: which side we picked. */
 export type Side = 'UP' | 'DOWN';
 
@@ -108,6 +118,20 @@ export interface PricePoint {
   price: number;
 }
 
+/**
+ * A live spot tick streamed to the client (Server-Sent Events), sourced from the
+ * Binance BTC/USDT websocket. Powers the real-time hero price without re-running
+ * a full prediction on every update.
+ */
+export interface PriceTick {
+  /** Latest trade price (USDT). */
+  price: number;
+  /** Rolling 24h % change at the time of the tick. */
+  change24hPct: number;
+  /** epoch ms of the tick (Binance event time). */
+  t: number;
+}
+
 /** Live quote for the matching Polymarket "BTC Up or Down 5m" market. */
 export interface MarketQuote {
   source: 'polymarket';
@@ -159,6 +183,29 @@ export interface RangePrediction {
   market?: MarketQuote;
 }
 
+/**
+ * A compact, point-in-time capture of the model's "read" (narrative, reasoning,
+ * and directional calls) taken each time a fresh prediction is computed. Kept in
+ * a windowed in-memory buffer so the UI can scroll back through how sentiment
+ * evolved without persisting anything to disk.
+ */
+export interface InsightSnapshot {
+  /** ISO timestamp the underlying prediction was generated. */
+  asOf: string;
+  /** Spot price at the time. */
+  price: number;
+  /** 24h % change at the time. */
+  change24hPct: number;
+  /** One-sentence model summary. */
+  narrative: string;
+  /** Optional 2-3 sentence LLM reasoning. */
+  reasoning?: string;
+  /** True when an LLM provider nudged the probabilities. */
+  llmApplied: boolean;
+  /** Per-range directional calls at the time. */
+  calls: { id: RangeId; label: string; probUp: number; side: Side }[];
+}
+
 export interface Prediction {
   /** ISO timestamp the prediction was generated */
   asOf: string;
@@ -174,4 +221,10 @@ export interface Prediction {
   llmApplied: boolean;
   /** Recent 1-minute price history (oldest → newest), for sparklines */
   history: PricePoint[];
+  /**
+   * Spot price series at several look-back windows (oldest → newest, live spot
+   * appended), powering the range toggle on the hero chart. The `LIVE` view is
+   * built client-side from the price stream, so it isn't included here.
+   */
+  spot: Record<ServerSpotRangeId, PricePoint[]>;
 }

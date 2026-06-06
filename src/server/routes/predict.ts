@@ -9,6 +9,7 @@ import {
 import { buildModel, predictAbove, predictPrice } from '../model/forecast.ts';
 import { applyBias, assist } from '../model/llmAssist.ts';
 import { recordPredictions } from '../model/ledger.ts';
+import { recordInsight } from '../model/insights.ts';
 import {
   fetchMarket,
   fetchPolymarketStrike,
@@ -16,8 +17,10 @@ import {
 } from '../sources/polymarket.ts';
 import type {
   Prediction,
+  PricePoint,
   RangeId,
   RangePrediction,
+  ServerSpotRangeId,
 } from '../../shared/types.ts';
 
 const TTL = Number(env('CACHE_TTL_PREDICT', '20'));
@@ -161,7 +164,7 @@ export async function predict(): Promise<Prediction> {
       fetchPrice(),
       fetch24hChangePct(),
       fetchCandles('1m', 240),
-      fetchCandles('5m', 60),
+      fetchCandles('5m', 80),
       fetchCandles('1h', 720),
       fetchCandleAt('1m', win['5m'].start),
       fetchCandleAt('1m', win['15m'].start),
@@ -267,6 +270,21 @@ export async function predict(): Promise<Prediction> {
       .map(c => ({ t: c.openTime, price: c.close }));
     history.push({ t: now, price });
 
+    // Spot chart series at several look-back windows. Each picks the coarsest
+    // candle that still gives enough resolution for that span, with live spot
+    // appended so every series ends at the current price.
+    const toPts = (cs: { openTime: number; close: number }[]) =>
+      cs.map(c => ({ t: c.openTime, price: c.close }));
+    const spot: Record<ServerSpotRangeId, PricePoint[]> = {
+      '1H': toPts(minuteCandles.slice(-60)),
+      '6H': toPts(fiveMinCandles.slice(-72)),
+      '1D': toPts(hourCandles.slice(-24)),
+      '1W': toPts(hourCandles.slice(-168)),
+    };
+    for (const key of Object.keys(spot) as ServerSpotRangeId[]) {
+      spot[key].push({ t: now, price });
+    }
+
     const prediction: Prediction = {
       asOf: new Date(now).toISOString(),
       symbol: TRADING_SYMBOL,
@@ -276,7 +294,12 @@ export async function predict(): Promise<Prediction> {
       reasoning: a.reasoning,
       llmApplied: a.llmApplied,
       history,
+      spot,
     };
+
+    // Capture this fresh read into the windowed in-memory insights log (runs
+    // inside the fetcher, so only on a real recompute — not on cache hits).
+    recordInsight(prediction);
 
     // Record our calls for the open windows (fire-and-forget; never block the
     // response or fail the request on a logging error).

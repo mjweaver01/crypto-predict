@@ -1,8 +1,11 @@
 import type {
+  InsightSnapshot,
   Prediction,
   PricePoint,
+  PriceTick,
   RangeId,
   RangePrediction,
+  SpotRangeId,
 } from '../shared/types.ts';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T =>
@@ -26,6 +29,9 @@ const fmtPct = (p: number) => `${(p * 100).toFixed(1)}%`;
 
 const fmtClock = (iso: string) =>
   new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+
+const fmtDay = (t: number) =>
+  new Date(t).toLocaleDateString([], { month: 'short', day: 'numeric' });
 
 function relTime(targetIso: string): string {
   const mins = Math.round(
@@ -90,6 +96,58 @@ function sparkline(
     ${strikeLine}
     <path d="${d}" fill="none" stroke="${color}" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   </svg>`;
+}
+
+interface HeroRender {
+  /** The chart SVG markup (or an empty-state placeholder). */
+  svg: string;
+  /** Live-dot position (viewBox %) + colour, or null when there's no line. */
+  dot: { x: number; y: number; color: string } | null;
+}
+
+/**
+ * Large Polymarket-style price chart: gradient area + line coloured by the
+ * window's net direction. Drawn in a 0..100 viewBox that stretches to fill its
+ * container (non-scaling stroke keeps the line crisp). The live dot is returned
+ * separately so it can live in a persistent DOM node (its pulse animation must
+ * not restart when the SVG is redrawn each animation frame).
+ */
+function heroRender(points: PricePoint[]): HeroRender {
+  if (points.length < 2) {
+    return { svg: '<div class="chart-empty"></div>', dot: null };
+  }
+  const prices = points.map(p => p.price);
+  const min = Math.min(...prices);
+  const max = Math.max(...prices);
+  const range = max - min || 1;
+  const t0 = points[0]!.t;
+  const span = points[points.length - 1]!.t - t0 || 1;
+  const PAD = 8; // vertical breathing room (viewBox units)
+  const X = (t: number) => ((t - t0) / span) * 100;
+  const Y = (p: number) => PAD + (1 - (p - min) / range) * (100 - 2 * PAD);
+
+  const up = prices[prices.length - 1]! >= prices[0]!;
+  const color = up ? COLORS.up : COLORS.down;
+  const gid = up ? 'heroUp' : 'heroDown';
+
+  const d = points
+    .map((p, i) => `${i ? 'L' : 'M'}${px(X(p.t))} ${px(Y(p.price))}`)
+    .join(' ');
+  const area = `${d} L 100 100 L 0 100 Z`;
+  const last = points[points.length - 1]!;
+
+  const svg = `<svg viewBox="0 0 100 100" preserveAspectRatio="none">
+    <defs>
+      <linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="${color}" stop-opacity="0.28"/>
+        <stop offset="100%" stop-color="${color}" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
+    <path d="${area}" fill="url(#${gid})"/>
+    <path d="${d}" fill="none" stroke="${color}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  </svg>`;
+
+  return { svg, dot: { x: X(last.t), y: Y(last.price), color } };
 }
 
 /** Two comparison bars: market-implied vs our model probability of Up. */
@@ -214,15 +272,116 @@ function renderDetail(p: Prediction) {
   renderMarketBlock(r);
 }
 
+// ── Spot price range toggle (LIVE, 1H … 1W) ──────────────────────────────
+const SPOT_RANGES: SpotRangeId[] = ['LIVE', '1H', '6H', '1D', '1W'];
+let selectedSpot: SpotRangeId = '1D';
+
+// Rolling buffer of streamed ticks for the client-only LIVE (1-minute) view.
+const LIVE_WINDOW_MS = 60_000;
+const liveTicks: PricePoint[] = [];
+
+function renderSpotRanges() {
+  const el = $('spot-ranges');
+  el.innerHTML = SPOT_RANGES.map(
+    id =>
+      `<button data-spot="${id}" class="${id === selectedSpot ? 'active' : ''}">${id}</button>`
+  ).join('');
+  for (const btn of el.querySelectorAll<HTMLButtonElement>('button')) {
+    btn.addEventListener('click', () => {
+      selectedSpot = btn.dataset.spot as SpotRangeId;
+      renderSpotRanges();
+      renderHero();
+    });
+  }
+}
+
+/**
+ * The series for the active range. The trailing edge uses `displayPrice` (an
+ * eased value, see the animation loop) at a continuously-advancing `now`, so the
+ * line scrolls and rises/falls smoothly rather than snapping once per tick.
+ * LIVE is the last ~1m of streamed ticks; server ranges get the edge grafted on.
+ */
+function heroSeries(): PricePoint[] {
+  const edge = displayPrice ?? lastTickPrice;
+  const now = Date.now();
+  if (selectedSpot === 'LIVE') {
+    if (liveTicks.length === 0) return [];
+    return edge !== null ? [...liveTicks, { t: now, price: edge }] : liveTicks;
+  }
+  const base = latest?.spot?.[selectedSpot] ?? latest?.history ?? [];
+  if (edge !== null && base.length) return [...base, { t: now, price: edge }];
+  return base;
+}
+
+function renderHeroChart() {
+  const { svg, dot } = heroRender(heroSeries());
+  $('hero-svg').innerHTML = svg;
+  const dotEl = $('live-dot');
+  if (dot) {
+    dotEl.style.display = '';
+    dotEl.style.left = `${px(dot.x)}%`;
+    dotEl.style.top = `${px(dot.y)}%`;
+    dotEl.style.background = dot.color;
+    dotEl.style.color = dot.color;
+  } else {
+    dotEl.style.display = 'none';
+  }
+}
+
+function renderHeroAxis() {
+  const pts = heroSeries();
+  if (pts.length >= 2) {
+    const prices = pts.map(h => h.price);
+    const hi = Math.max(...prices);
+    const lo = Math.min(...prices);
+    const span = pts[pts.length - 1]!.t - pts[0]!.t;
+    const startLabel =
+      span > 24 * 3_600_000
+        ? fmtDay(pts[0]!.t)
+        : fmtClock(new Date(pts[0]!.t).toISOString());
+    $('hero-axis').innerHTML =
+      `<span>${startLabel}</span>` +
+      `<span class="hl">H <b>${fmtUsd(hi)}</b> · L <b>${fmtUsd(lo)}</b></span>` +
+      `<span>now</span>`;
+  } else {
+    $('hero-axis').innerHTML = '';
+  }
+}
+
+function renderHero() {
+  renderHeroChart();
+  renderHeroAxis();
+}
+
+// Eased price shown at the chart's right edge; chases the latest tick each frame
+// so vertical moves are gradual. Time advances continuously for a smooth scroll.
+let displayPrice: number | null = null;
+const EASE = 0.08; // per-frame approach toward the latest tick (~1s settle)
+
+function animateHero() {
+  requestAnimationFrame(animateHero);
+  if (lastTickPrice === null) return;
+  displayPrice =
+    displayPrice === null
+      ? lastTickPrice
+      : displayPrice + (lastTickPrice - displayPrice) * EASE;
+  renderHeroChart();
+}
+
 function render(p: Prediction) {
   latest = p;
 
-  // Header
-  $('price').textContent = fmtUsd(p.stats.price);
-  const chg = $('change');
-  chg.textContent = `${p.stats.change24hPct >= 0 ? '+' : ''}${p.stats.change24hPct.toFixed(2)}% 24h`;
-  chg.className = `change ${p.stats.change24hPct >= 0 ? 'up' : 'down'}`;
+  // Header. Once the live stream is feeding the price/change, leave those to it
+  // so the (up-to-20s-cached) predict payload doesn't snap them backwards.
+  if (!streaming) {
+    $('price').textContent = fmtUsd(p.stats.price);
+    applyChange(p.stats.change24hPct);
+  }
   $('vol').textContent = `σ ${(p.stats.volPerHour * 100).toFixed(2)}%/h`;
+
+  // Hero price chart: range toggle + selected series
+  renderSpotRanges();
+  renderHero();
 
   // Narrative + method
   $('narrative').textContent = p.narrative;
@@ -243,6 +402,74 @@ function render(p: Prediction) {
   $('app').classList.remove('loading');
 }
 
+// ── Previous reads (windowed in-memory insight history) ──────────────────
+const escapeHtml = (s: string) =>
+  s.replace(
+    /[&<>"']/g,
+    c =>
+      (
+        ({
+          '&': '&amp;',
+          '<': '&lt;',
+          '>': '&gt;',
+          '"': '&quot;',
+          "'": '&#39;',
+        }) as Record<string, string>
+      )[c]!
+  );
+
+let historyOpen = true;
+
+function renderHistory(entries: InsightSnapshot[]) {
+  const list = $('history-list');
+  const empty = $('history-empty');
+  empty.style.display = entries.length ? 'none' : 'block';
+  list.innerHTML = entries
+    .map(e => {
+      const method = e.llmApplied
+        ? '<span class="hist-method llm">LLM</span>'
+        : '<span class="hist-method stats">Stats</span>';
+      const change = `${e.change24hPct >= 0 ? '+' : ''}${e.change24hPct.toFixed(2)}%`;
+      const reasoning = e.reasoning
+        ? `<div class="hist-reasoning">${escapeHtml(e.reasoning)}</div>`
+        : '';
+      const calls = e.calls
+        .map(
+          c =>
+            `<span class="hist-call ${c.side === 'UP' ? 'up' : 'down'}">${c.label} ${c.side} ${fmtPct(c.probUp)}</span>`
+        )
+        .join('');
+      return `<div class="hist">
+        <div class="hist-top">
+          <span class="hist-time">${new Date(e.asOf).toLocaleTimeString()}</span>
+          ${method}
+          <span>${fmtUsd(e.price)} · ${change} 24h</span>
+        </div>
+        <div class="hist-narrative">${escapeHtml(e.narrative)}</div>
+        ${reasoning}
+        <div class="hist-calls">${calls}</div>
+      </div>`;
+    })
+    .join('');
+}
+
+async function refreshHistory() {
+  try {
+    const res = await fetch('/api/insights');
+    if (!res.ok) return;
+    const data = (await res.json()) as { entries: InsightSnapshot[] };
+    renderHistory(data.entries);
+  } catch {
+    // History is best-effort; ignore transient failures.
+  }
+}
+
+$('history-toggle').addEventListener('click', () => {
+  historyOpen = !historyOpen;
+  $('history-list').classList.toggle('collapsed', !historyOpen);
+  $('history-toggle').textContent = historyOpen ? 'Hide' : 'Show';
+});
+
 let inflight = false;
 async function refresh() {
   if (inflight) return;
@@ -252,6 +479,7 @@ async function refresh() {
     if (!res.ok) throw new Error(`predict ${res.status}`);
     render((await res.json()) as Prediction);
     $('error').textContent = '';
+    void refreshHistory();
   } catch (err) {
     $('error').textContent = `Failed to load: ${String(err)}`;
   } finally {
@@ -259,5 +487,45 @@ async function refresh() {
   }
 }
 
+// ── Live spot price stream (SSE) ─────────────────────────────────────────
+// True once the first tick arrives, after which the stream owns #price/#change.
+let streaming = false;
+let lastTickPrice: number | null = null;
+
+function applyChange(pct: number) {
+  const chg = $('change');
+  chg.textContent = `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}% 24h`;
+  chg.className = `change ${pct >= 0 ? 'up' : 'down'}`;
+}
+
+function applyTick(tick: PriceTick) {
+  streaming = true;
+  $('price').textContent = fmtUsd(tick.price);
+  applyChange(tick.change24hPct);
+  lastTickPrice = tick.price;
+
+  // Feed the rolling 1-minute LIVE buffer. The chart itself is redrawn by the
+  // animation loop (eased); here we just refresh the axis H/L once per tick.
+  liveTicks.push({ t: tick.t, price: tick.price });
+  const cutoff = tick.t - LIVE_WINDOW_MS;
+  while (liveTicks.length > 2 && liveTicks[0]!.t < cutoff) liveTicks.shift();
+  renderHeroAxis();
+}
+
+function connectPriceStream() {
+  // EventSource auto-reconnects on transient drops; the server seeds the latest
+  // tick on connect so a reconnect repaints immediately.
+  const es = new EventSource('/api/price/stream');
+  es.onmessage = ev => {
+    try {
+      applyTick(JSON.parse(ev.data) as PriceTick);
+    } catch {
+      // ignore malformed frames
+    }
+  };
+}
+
 refresh();
 setInterval(refresh, 5_000);
+connectPriceStream();
+requestAnimationFrame(animateHero);

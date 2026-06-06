@@ -47,11 +47,11 @@
       /* ── Header ─────────────────────────────────────────────── */
       header {
         display: flex;
-        align-items: flex-end;
+        align-items: center;
         justify-content: space-between;
         flex-wrap: wrap;
         gap: 16px;
-        margin-bottom: 8px;
+        margin-bottom: 14px;
       }
 
       .brand {
@@ -62,12 +62,125 @@
         color: var(--accent);
       }
 
+      /* ── Top row: price chart + model read side by side ─────── */
+      .hero-row {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 14px;
+        align-items: stretch;
+      }
+      .hero-row > .card {
+        margin: 0;
+      }
+      @media (min-width: 760px) {
+        .hero-row {
+          grid-template-columns: 1.15fr 1fr;
+        }
+      }
+
+      /* ── Price hero card (Polymarket-style) ─────────────────── */
+      .price-card {
+        background:
+          radial-gradient(700px 240px at 100% 0%, rgba(247, 147, 26, 0.07), transparent 65%),
+          var(--surface);
+      }
+      .price-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .price-label {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        margin-bottom: 8px;
+      }
+
       #price {
         font-size: 52px;
         font-weight: 700;
         letter-spacing: -1.5px;
         line-height: 1;
         font-variant-numeric: tabular-nums;
+      }
+
+      .range-toggle {
+        display: flex;
+        gap: 3px;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid var(--border);
+        border-radius: 100px;
+        padding: 3px;
+        flex-shrink: 0;
+      }
+      .range-toggle button {
+        appearance: none;
+        cursor: pointer;
+        border: 0;
+        background: transparent;
+        color: var(--text-muted);
+        font-family: inherit;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        padding: 4px 10px;
+        border-radius: 100px;
+        transition:
+          background 0.16s ease,
+          color 0.16s ease;
+      }
+      .range-toggle button:hover {
+        color: var(--text);
+      }
+      .range-toggle button.active {
+        background: rgba(247, 147, 26, 0.16);
+        color: var(--accent);
+      }
+
+      .chart.hero {
+        position: relative;
+        margin-top: 20px;
+      }
+      .chart.hero svg {
+        height: 180px;
+      }
+      .chart.hero .chart-empty {
+        height: 180px;
+      }
+      .live-dot {
+        position: absolute;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        transform: translate(-50%, -50%);
+        animation: pulse 1.8s ease-out infinite;
+      }
+      @keyframes pulse {
+        0% {
+          box-shadow: 0 0 0 0 currentColor;
+        }
+        100% {
+          box-shadow: 0 0 0 10px transparent;
+        }
+      }
+      .hero-axis {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 10px;
+        font-size: 11px;
+        color: var(--text-dim);
+        font-variant-numeric: tabular-nums;
+      }
+      .hero-axis .hl {
+        color: var(--text-muted);
+      }
+      .hero-axis .hl b {
+        font-weight: 600;
+        color: var(--text-muted);
       }
 
       .meta-row {
@@ -408,6 +521,141 @@
         display: block;
       }
 
+      /* ── Insights history (previous model reads) ────────────── */
+      .history-card {
+        margin-top: 22px;
+      }
+      .history-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 4px;
+      }
+      .history-toggle {
+        appearance: none;
+        cursor: pointer;
+        border: 1px solid var(--border);
+        background: rgba(255, 255, 255, 0.05);
+        color: var(--text-muted);
+        font-family: inherit;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        padding: 4px 10px;
+        border-radius: 100px;
+        transition:
+          color 0.18s ease,
+          border-color 0.18s ease;
+      }
+      .history-toggle:hover {
+        color: var(--text);
+        border-color: var(--border-bright);
+      }
+      .history-list {
+        margin-top: 14px;
+        display: flex;
+        flex-direction: column;
+        max-height: 420px;
+        overflow-y: auto;
+        padding-right: 6px;
+      }
+      .history-list::-webkit-scrollbar {
+        width: 8px;
+      }
+      .history-list::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 100px;
+      }
+      .history-list::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      .history-list.collapsed {
+        display: none;
+      }
+      .history-empty {
+        font-size: 12px;
+        color: var(--text-dim);
+        margin-top: 14px;
+      }
+      .hist {
+        padding: 14px 0;
+        border-top: 1px solid var(--border);
+      }
+      .hist:first-child {
+        border-top: 0;
+      }
+      .hist-top {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        font-size: 11px;
+        color: var(--text-dim);
+        font-variant-numeric: tabular-nums;
+      }
+      .hist-time {
+        font-weight: 600;
+        color: var(--text-muted);
+      }
+      .hist-method {
+        font-size: 9px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        padding: 2px 7px;
+        border-radius: 100px;
+      }
+      .hist-method.llm {
+        color: #a78bfa;
+        background: rgba(139, 92, 246, 0.15);
+        border: 1px solid rgba(139, 92, 246, 0.25);
+      }
+      .hist-method.stats {
+        color: var(--text-muted);
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid var(--border);
+      }
+      .hist-narrative {
+        font-size: 14px;
+        font-weight: 500;
+        line-height: 1.5;
+        margin-top: 8px;
+        color: var(--text);
+      }
+      .hist-reasoning {
+        font-size: 12.5px;
+        line-height: 1.6;
+        margin-top: 8px;
+        color: var(--text-muted);
+        border-left: 2px solid rgba(167, 139, 250, 0.4);
+        padding-left: 10px;
+      }
+      .hist-calls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 10px;
+      }
+      .hist-call {
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        padding: 3px 8px;
+        border-radius: 100px;
+        border: 1px solid var(--border);
+        font-variant-numeric: tabular-nums;
+      }
+      .hist-call.up {
+        color: var(--up);
+        background: rgba(52, 211, 153, 0.1);
+        border-color: rgba(52, 211, 153, 0.25);
+      }
+      .hist-call.down {
+        color: var(--down);
+        background: rgba(248, 113, 113, 0.1);
+        border-color: rgba(248, 113, 113, 0.25);
+      }
+
       #error {
         color: var(--down);
         font-size: 12px;
@@ -433,24 +681,38 @@
   <body>
     <main id="app" class="app loading">
       <header>
-        <div>
-          <div class="brand">Bitcoin Predict · BTC/USDT</div>
-          <div id="price">$—</div>
-          <div class="meta-row">
-            <span id="change" class="change">—</span>
-            <span id="vol">—</span>
-          </div>
-        </div>
+        <div class="brand">Bitcoin Predict · BTC/USDT</div>
         <div class="updated">updated <span id="updated">—</span></div>
       </header>
 
-      <div class="card narrative-card">
-        <div class="narrative-head">
-          <span class="card-title"><span>Model read</span></span>
-          <span id="method">—</span>
+      <div class="hero-row">
+        <div class="card price-card">
+          <div class="price-head">
+            <div>
+              <div class="price-label">Bitcoin price · spot</div>
+              <div id="price">$—</div>
+              <div class="meta-row">
+                <span id="change" class="change">—</span>
+                <span id="vol">—</span>
+              </div>
+            </div>
+          <div class="range-toggle" id="spot-ranges"></div>
         </div>
-        <p id="narrative">Loading…</p>
-        <p id="reasoning"></p>
+        <div class="chart hero" id="hero-chart">
+            <div id="hero-svg"><div class="chart-empty"></div></div>
+            <span class="live-dot" id="live-dot" style="display: none"></span>
+          </div>
+          <div class="hero-axis" id="hero-axis"></div>
+        </div>
+
+        <div class="card narrative-card">
+          <div class="narrative-head">
+            <span class="card-title"><span>Model read</span></span>
+            <span id="method">—</span>
+          </div>
+          <p id="narrative">Loading…</p>
+          <p id="reasoning"></p>
+        </div>
       </div>
 
       <!-- Tab strip: one per Polymarket BTC Up/Down market family -->
@@ -505,6 +767,18 @@
         <div class="market-block muted" id="d-nomarket" style="display: none">
           No live Polymarket market for this window right now.
         </div>
+      </div>
+
+      <!-- Previous model reads (windowed in-memory history) -->
+      <div class="card history-card">
+        <div class="history-head">
+          <span class="card-title"><span>Previous reads</span></span>
+          <button id="history-toggle" class="history-toggle" type="button">
+            Hide
+          </button>
+        </div>
+        <div id="history-list" class="history-list"></div>
+        <div id="history-empty" class="history-empty">No history yet.</div>
       </div>
 
       <div id="error"></div>

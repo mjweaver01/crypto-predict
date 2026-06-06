@@ -1,5 +1,7 @@
 import { predict } from './routes/predict.ts';
 import { getLedger, resolvePending, summarize } from './model/ledger.ts';
+import { getInsights } from './model/insights.ts';
+import { makePriceStreamResponse } from './sources/priceStream.ts';
 
 // 8333 is Bitcoin's default P2P network port.
 const PORT = Number(process.env.PORT ?? 8333);
@@ -66,6 +68,9 @@ const server = Bun.serve({
       return makeSseResponse();
     }
 
+    // Live spot price stream (SSE fan-out from one Binance websocket).
+    if (pathname === '/api/price/stream') return makePriceStreamResponse();
+
     try {
       if (pathname === '/api/health') return json({ ok: true });
       if (pathname === '/api/predict') {
@@ -74,6 +79,9 @@ const server = Bun.serve({
       if (pathname === '/api/ledger') {
         const entries = await getLedger();
         return json({ summary: summarize(entries), entries });
+      }
+      if (pathname === '/api/insights') {
+        return json({ entries: getInsights() });
       }
     } catch (err) {
       console.error(err);
