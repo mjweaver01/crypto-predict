@@ -8,7 +8,11 @@ import {
 import { buildModel, predictAbove, predictPrice } from '../model/forecast.ts';
 import { applyBias, assist } from '../model/llmAssist.ts';
 import { fetchMarket, slugFor } from '../sources/polymarket.ts';
-import type { Prediction, RangeId, RangePrediction } from '../../shared/types.ts';
+import type {
+  Prediction,
+  RangeId,
+  RangePrediction,
+} from '../../shared/types.ts';
 
 const TTL = Number(env('CACHE_TTL_PREDICT', '20'));
 const ET = 'America/New_York';
@@ -95,22 +99,41 @@ const MS = { '5m': 5 * 60_000, '15m': 15 * 60_000, '1h': 60 * 60_000 };
 function windowsAt(now: number) {
   const todayNoon = noonEtUtc(now);
   // The active daily market is the one whose closing noon is still ahead.
-  const dayEnd = now >= todayNoon ? noonEtUtc(todayNoon + 30 * 3_600_000) : todayNoon;
-  const dayStart = now >= todayNoon ? todayNoon : noonEtUtc(todayNoon - 18 * 3_600_000);
+  const dayEnd =
+    now >= todayNoon ? noonEtUtc(todayNoon + 30 * 3_600_000) : todayNoon;
+  const dayStart =
+    now >= todayNoon ? todayNoon : noonEtUtc(todayNoon - 18 * 3_600_000);
   return {
-    '5m': { start: floorTo(now, MS['5m']), end: floorTo(now, MS['5m']) + MS['5m'] },
-    '15m': { start: floorTo(now, MS['15m']), end: floorTo(now, MS['15m']) + MS['15m'] },
-    '1h': { start: floorTo(now, MS['1h']), end: floorTo(now, MS['1h']) + MS['1h'] },
+    '5m': {
+      start: floorTo(now, MS['5m']),
+      end: floorTo(now, MS['5m']) + MS['5m'],
+    },
+    '15m': {
+      start: floorTo(now, MS['15m']),
+      end: floorTo(now, MS['15m']) + MS['15m'],
+    },
+    '1h': {
+      start: floorTo(now, MS['1h']),
+      end: floorTo(now, MS['1h']) + MS['1h'],
+    },
     '1d': { start: dayStart, end: dayEnd },
   } as Record<RangeId, { start: number; end: number }>;
 }
 
 const META: Record<
   RangeId,
-  { label: string; resolutionSource: 'chainlink' | 'binance'; strikeIsProxy: boolean }
+  {
+    label: string;
+    resolutionSource: 'chainlink' | 'binance';
+    strikeIsProxy: boolean;
+  }
 > = {
   '5m': { label: '5 min', resolutionSource: 'chainlink', strikeIsProxy: true },
-  '15m': { label: '15 min', resolutionSource: 'chainlink', strikeIsProxy: true },
+  '15m': {
+    label: '15 min',
+    resolutionSource: 'chainlink',
+    strikeIsProxy: true,
+  },
   '1h': { label: 'Hourly', resolutionSource: 'binance', strikeIsProxy: false },
   '1d': { label: 'Daily', resolutionSource: 'binance', strikeIsProxy: false },
 };
@@ -126,7 +149,12 @@ export async function predict(): Promise<Prediction> {
         fetchCandles('1h', 720),
       ]);
 
-    const model = buildModel({ price, change24hPct, minuteCandles, hourCandles });
+    const model = buildModel({
+      price,
+      change24hPct,
+      minuteCandles,
+      hourCandles,
+    });
     const now = Date.now();
     const a = await assist(model);
     const win = windowsAt(now);
@@ -161,11 +189,15 @@ export async function predict(): Promise<Prediction> {
     const ranges: RangePrediction[] = order.map((id, i) => {
       const w = win[id];
       const strike = strikeByRange[id];
-      const remaining = Math.max(1, Math.round((w.end - now) / 60_000));
+      // Precise (possibly sub-minute) horizon: rounding to whole minutes near a
+      // boundary overstates remaining variance and drags near-certain outcomes
+      // back toward 50/50. Floor at 1 second to avoid a zero-vol singularity.
+      const remaining = Math.max(1 / 60, (w.end - now) / 60_000);
       const endIso = new Date(w.end).toISOString();
       const probUp = applyBias(
         predictAbove(model, strike, remaining, endIso).probAbove,
-        a.bias
+        a.bias,
+        remaining
       );
       return {
         id,
@@ -185,7 +217,9 @@ export async function predict(): Promise<Prediction> {
 
     // Recent price history for client sparklines: last ~120 1m closes, with the
     // live spot appended so charts end at the current price.
-    const history = minuteCandles.slice(-120).map(c => ({ t: c.openTime, price: c.close }));
+    const history = minuteCandles
+      .slice(-120)
+      .map(c => ({ t: c.openTime, price: c.close }));
     history.push({ t: now, price });
 
     return {

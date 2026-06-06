@@ -59,10 +59,40 @@ client (browser)
      polls /api/predict every 5s
 
 server (Bun)
-  ├─ sources/binance.ts   → spot price, 24h change, 1m + 1h klines (cached)
-  ├─ model/forecast.ts    → lognormal drift/vol model → 4 predictions
-  ├─ model/llmAssist.ts   → optional LLM read + clamped bias
+  ├─ sources/binance.ts   → spot price, 24h change, OHLC 1m + 1h klines (cached)
+  ├─ model/forecast.ts    → lognormal model (EWMA+Garman-Klass vol, shrunk drift)
+  ├─ model/scoring.ts     → Brier / log-loss / reliability (for the backtest)
+  ├─ model/llmAssist.ts   → optional LLM read + horizon-scaled bias
   └─ routes/predict.ts    → GET /api/predict → Prediction JSON
+```
+
+## Model
+
+Log-returns are treated as ~Normal over the remaining horizon. Two
+accuracy-oriented choices, both validated by the backtest:
+
+- **Volatility** is an EWMA of the **Garman-Klass** range estimator (uses
+  O/H/L/C), which is far more efficient and regime-aware than equal-weighted
+  close-to-close variance.
+- **Drift is off by default** (`MODEL_DRIFT_SHRINK=0`). Trailing drift is mostly
+  noise and, extrapolated over the horizon, biases direction; backtesting shows
+  a driftless random walk scores best. A shrink fraction and a
+  diffusion-relative cap (`MODEL_DRIFT_CAP_SIGMAS`) are available to re-enable
+  and tune it.
+
+Tunables (env): `MODEL_EWMA_LAMBDA` (default `0.94`), `MODEL_DRIFT_SHRINK`
+(`0`), `MODEL_DRIFT_CAP_SIGMAS` (`0.5`).
+
+### Backtesting
+
+`bun run backtest` walk-forward tests the direction model on historical Binance
+klines, sampling decision points inside each 5m/15m window, and scores it
+against the original (full-drift, close-to-close) model and a 0.5 baseline with
+Brier, log-loss, and a calibration curve. Sweep config inline, e.g.:
+
+```bash
+bun run backtest -- --days 5
+MODEL_DRIFT_SHRINK=1 bun run backtest -- --days 5   # compare with full drift
 ```
 
 ## API
@@ -81,6 +111,7 @@ quote when one exists. No query params.
 
 ```bash
 bun run dev         # hot-reload server (client rebuilt + live-reloaded)
+bun run backtest    # walk-forward score the direction model
 bun run typecheck   # TypeScript checks
 bun run lint        # ESLint
 bun run format      # Prettier

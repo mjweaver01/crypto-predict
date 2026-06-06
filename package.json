@@ -6,12 +6,13 @@
   "scripts": {
     "dev": "bun run --watch src/server/index.ts",
     "start": "bun run src/server/index.ts",
+    "backtest": "bun run scripts/backtest.ts",
     "build:client": "bun build src/client/main.ts --outdir public/dist --target browser",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src",
-    "lint:fix": "eslint src --fix",
-    "format": "prettier --write src",
-    "format:check": "prettier --check src"
+    "lint": "eslint src scripts",
+    "lint:fix": "eslint src scripts --fix",
+    "format": "prettier --write src scripts",
+    "format:check": "prettier --check src scripts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

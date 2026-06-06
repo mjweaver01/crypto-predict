@@ -10,12 +10,27 @@ export interface Assist {
   llmApplied: boolean;
 }
 
-/** Max probability nudge applied to the 5m/15m up-probabilities. */
+/** Max probability nudge applied to the up-probabilities (at short horizons). */
 const MAX_NUDGE = 0.08;
 
-/** Apply the LLM bias to an up-probability, clamped to a sane band. */
-export function applyBias(probUp: number, bias: number): number {
-  const nudged = probUp + bias * MAX_NUDGE;
+/**
+ * Horizon (minutes) over which the LLM nudge decays to ~37%. The model is
+ * prompted for a 5-15 minute directional read, so its influence should fade
+ * over longer windows rather than move a 10-hour forecast by the full amount.
+ */
+const NUDGE_DECAY_MIN = 20;
+
+/**
+ * Apply the LLM bias to an up-probability, scaled down with horizon and clamped
+ * to a sane band. `horizonMinutes` defaults to short-horizon (full nudge).
+ */
+export function applyBias(
+  probUp: number,
+  bias: number,
+  horizonMinutes = 0
+): number {
+  const decay = Math.exp(-Math.max(0, horizonMinutes) / NUDGE_DECAY_MIN);
+  const nudged = probUp + bias * MAX_NUDGE * decay;
   return Math.max(0.02, Math.min(0.98, nudged));
 }
 

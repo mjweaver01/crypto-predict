@@ -9,10 +9,18 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string): T =>
   document.getElementById(id) as T;
 
 const fmtUsd = (n: number) =>
-  n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+  n.toLocaleString('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 0,
+  });
 
 const fmtUsd2 = (n: number) =>
-  n.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 });
+  n.toLocaleString('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+  });
 
 const fmtPct = (p: number) => `${(p * 100).toFixed(1)}%`;
 
@@ -20,7 +28,9 @@ const fmtClock = (iso: string) =>
   new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 
 function relTime(targetIso: string): string {
-  const mins = Math.round((new Date(targetIso).getTime() - Date.now()) / 60_000);
+  const mins = Math.round(
+    (new Date(targetIso).getTime() - Date.now()) / 60_000
+  );
   if (mins < 1) return 'now';
   if (mins < 60) return `in ${mins}m`;
   if (mins < 60 * 24) return `in ${(mins / 60).toFixed(1)}h`;
@@ -145,7 +155,8 @@ function renderMarketBlock(r: RangePrediction) {
   block.style.display = 'block';
   none.style.display = 'none';
   $('d-market-q').textContent = m.question;
-  $('d-market-window').textContent = `${fmtClock(m.windowStart)} – ${fmtClock(m.windowEnd)}`;
+  $('d-market-window').textContent =
+    `${fmtClock(m.windowStart)} – ${fmtClock(m.windowEnd)}`;
   $('d-market-bars').innerHTML = compareBars(m.impliedUp, r.probUp);
 
   const edge = r.probUp - m.impliedUp;
@@ -169,8 +180,11 @@ function renderDetail(p: Prediction) {
 
   $('d-title').textContent = `Up / Down · ${r.label}`;
   $('d-source').textContent =
-    r.resolutionSource === 'chainlink' ? 'Chainlink BTC/USD' : 'Binance BTC/USDT';
-  $('d-window').textContent = `${fmtClock(r.windowStart)} → ${fmtClock(r.windowEnd)} · closes ${relTime(r.windowEnd)}`;
+    r.resolutionSource === 'chainlink'
+      ? 'Chainlink BTC/USD'
+      : 'Binance BTC/USDT';
+  $('d-window').textContent =
+    `${fmtClock(r.windowStart)} → ${fmtClock(r.windowEnd)} · closes ${relTime(r.windowEnd)}`;
 
   const verdict = $('d-verdict');
   verdict.textContent = up >= 0.5 ? 'UP' : 'DOWN';
@@ -192,7 +206,8 @@ function renderDetail(p: Prediction) {
 
   $('d-above').textContent = fmtPct(r.probUp);
   $('d-point').textContent = fmtUsd(r.forecast.point);
-  $('d-band').textContent = `${fmtUsd(r.forecast.low)} – ${fmtUsd(r.forecast.high)}`;
+  $('d-band').textContent =
+    `${fmtUsd(r.forecast.low)} – ${fmtUsd(r.forecast.high)}`;
 
   renderMarketBlock(r);
 }

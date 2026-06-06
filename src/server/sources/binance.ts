@@ -3,14 +3,16 @@ import { cached, env } from '../cache.ts';
 // data-api.binance.vision is Binance's public market-data mirror: same
 // /api/v3/* endpoints and BTCUSDT data, but no API key and no geo-block (the
 // main api.binance.com returns HTTP 451 in some regions, e.g. the US).
-const BASE = env('BINANCE_BASE_URL', 'https://data-api.binance.vision');
+export const BASE = env('BINANCE_BASE_URL', 'https://data-api.binance.vision');
 const SYMBOL = env('BTC_SYMBOL', 'BTCUSDT');
 const TTL = Number(env('CACHE_TTL_KLINES', '20')); // seconds
 
-/** A single candle: open/close prices + open time. */
+/** A single OHLC candle + open time. High/low enable range-based volatility. */
 export interface Candle {
   openTime: number;
   open: number;
+  high: number;
+  low: number;
   close: number;
 }
 
@@ -21,6 +23,17 @@ export interface Candle {
  * so we read directly from the same place those markets settle against.
  */
 type RawKline = [number, string, string, string, string, ...unknown[]];
+
+/** Map a raw Binance kline tuple to a typed OHLC candle. */
+export function toCandle(k: RawKline): Candle {
+  return {
+    openTime: k[0],
+    open: parseFloat(k[1]),
+    high: parseFloat(k[2]),
+    low: parseFloat(k[3]),
+    close: parseFloat(k[4]),
+  };
+}
 
 export async function fetchCandles(
   interval: '1m' | '5m' | '1h',
@@ -34,11 +47,7 @@ export async function fetchCandles(
     });
     if (!res.ok) throw new Error(`binance klines ${res.status}`);
     const raw = (await res.json()) as RawKline[];
-    return raw.map(k => ({
-      openTime: k[0],
-      open: parseFloat(k[1]),
-      close: parseFloat(k[4]),
-    }));
+    return raw.map(toCandle);
   });
 }
 
