@@ -52,7 +52,8 @@ export function makeSseResponse(): Response {
 export function watchClientFiles(onRebuild: () => Promise<void>) {
   let timer: ReturnType<typeof setTimeout> | null = null;
 
-  const watcher = watch('src/client', { recursive: true }, () => {
+  // Rebuild the client bundle when its source changes, then reload.
+  const clientWatcher = watch('src/client', { recursive: true }, () => {
     if (timer) clearTimeout(timer);
     timer = setTimeout(async () => {
       timer = null;
@@ -62,5 +63,21 @@ export function watchClientFiles(onRebuild: () => Promise<void>) {
     }, 150);
   });
 
-  process.on('exit', () => watcher.close());
+  // Static assets (index.html, css, etc.) don't need a rebuild — just reload.
+  // Ignore the build output dir so emitting the bundle doesn't loop forever.
+  let publicTimer: ReturnType<typeof setTimeout> | null = null;
+  const publicWatcher = watch('public', { recursive: true }, (_event, file) => {
+    if (file && file.startsWith('dist')) return;
+    if (publicTimer) clearTimeout(publicTimer);
+    publicTimer = setTimeout(() => {
+      publicTimer = null;
+      console.log(`[dev] static asset changed (${file ?? '?'}), reloading…`);
+      notifyReload();
+    }, 150);
+  });
+
+  process.on('exit', () => {
+    clientWatcher.close();
+    publicWatcher.close();
+  });
 }
