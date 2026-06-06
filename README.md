@@ -1,18 +1,28 @@
 # Bitcoin Predict
 
-A small Bun + TypeScript app that predicts near-term Bitcoin moves and renders
-them on a live dashboard. It reads BTC/USDT directly from the Binance public API
-(the same source the related Polymarket markets resolve against) and produces
-four predictions:
+A self-calibrating forecasting engine for near-term Bitcoin direction, rendered
+on a live dashboard. It reads BTC/USDT from the Binance public API — the same
+data the mirrored Polymarket markets settle against — and produces a probability
+of **Up** vs **Down** for each market family, a price-to-beat, and a price
+forecast with a confidence band.
 
-1. **Up / Down — 5 min** — directional probability for the next 5 minutes
-2. **Up / Down — 15 min** — same, 15-minute horizon
-3. **Above strike** — probability BTC closes above a strike at a target time
-4. **Price forecast** — a point estimate + ~95% confidence band
+What sets it apart from a one-shot predictor is the **learning loop**: every call
+is committed early, frozen, graded against the real market outcome, and fed back
+into a calibration layer that continuously corrects the model's confidence and
+bias. The system measurably improves as it accumulates outcomes.
 
-An optional LLM-assist layer adds a short read and a small (clamped) nudge to the
-directional probabilities. With no API key the app runs a transparent, pure
-statistical model.
+It mirrors four recurring Polymarket families:
+
+| Family | Horizon | Settles on |
+| --- | --- | --- |
+| **5 min** | rolling 5-minute window | Chainlink BTC/USD |
+| **15 min** | rolling 15-minute window | Chainlink BTC/USD |
+| **Hourly** | top-of-hour window | Binance BTC/USDT 1h candle |
+| **Daily** | noon-ET to noon-ET | Binance BTC/USDT 1m close at noon ET |
+
+An optional LLM-assist layer adds a short narrative and a small, clamped
+directional nudge. With no API key the app runs a fully transparent statistical
+model.
 
 ## Quick start
 
@@ -24,73 +34,179 @@ bun run dev
 
 Open **http://localhost:8333** (Bitcoin's default P2P port). The dashboard
 auto-refreshes every 5 seconds.
-Type a **strike** and **target time** to drive the "above" and price-forecast
-cards (defaults: spot price, ~next noon).
 
-## How the model works
+To seed the learning loop with history so calibration is active immediately:
 
-Log-returns between consecutive Binance candles are treated as i.i.d. normal with
-a small drift `μ` and volatility `σ` estimated from recent history. Over a horizon
-of `h` periods the cumulative log-return is `~ Normal(μ·h, σ²·h)`, giving:
+```bash
+bun run backfill       # reconstructs ~288 historical committed calls vs outcomes
+```
 
-- **direction:** `P(up) = Φ(μ·h / (σ·√h))`
-- **above strike `K`:** `P(>K) = 1 − Φ((ln(K/price) − μ·h) / (σ·√h))`
+---
+
+## The learning loop
+
+The core design separates three concerns that a naive forecaster conflates, then
+closes the loop between prediction and outcome.
+
+```
+            ┌─────────────────────────────────────────────────────────────┐
+            │                                                               │
+   market   │   1. Statistical model ──► 2. LLM nudge ──► raw probability   │
+   data ───►│            │                                       │          │
+            │            │                          3. Calibration (learned)│
+            │            │                                       │          │
+            │            ▼                                       ▼          │
+            │   4. Commit a frozen call ◄───────────── calibrated probability
+            │            │                                                  │
+            │            ▼                                                  │
+            │   5. Window resolves ──► grade vs real outcome ──► ledger      │
+            │                                       │                       │
+            └───────────────────────────────────────┼──────────────────────┘
+                                                     │
+                          6. Refit calibrators ◄─────┘   (every resolve cycle)
+```
+
+### 1. Statistical core
+
+Log-returns between consecutive Binance candles are modeled as approximately
+normal with a small drift `μ` and volatility `σ`. Over a horizon of `h` periods
+the cumulative log-return is `~ Normal(μ·h, σ²·h)`, giving:
+
+- **direction / above strike `K`:** `P(close > K) = 1 − Φ((ln(K/price) − μ·h) / (σ·√h))`
 - **price point:** `price · exp(μ·h)`, with a lognormal 95% band
+
+Two accuracy-oriented refinements, both validated by the backtest:
+
+- **Volatility** is an EWMA of the **Garman-Klass** range estimator (uses
+  O/H/L/C), far more efficient and regime-aware than close-to-close variance.
+- **Drift is off by default** (`MODEL_DRIFT_SHRINK=0`). Trailing drift is mostly
+  noise and biases direction when extrapolated; a driftless random walk scores
+  best. A shrink fraction and a diffusion-relative cap remain available to tune.
 
 Short horizons (5m/15m) use per-minute stats from 1m candles; longer horizons use
 per-hour stats from 1h candles. See `src/server/model/forecast.ts`.
 
-> Near-term price moves are close to a coin flip, so directional probabilities
-> stay near 50% by design. This is a toy forecaster, not trading advice.
+### 2. LLM-assist (optional)
 
-## Optional LLM-assist
+A configured model returns a terse directional read and a bias in `[-1, 1]`. The
+bias can shift the up-probability by at most **±8%**, decaying with horizon, and
+is clamped — it never overrides the statistical core. Falls back to a stats-only
+narrative with no key. See `src/server/model/llmAssist.ts`.
 
-Set `LLM_MODEL` plus the matching API key in `.env` to enable an LLM read. Models
-are registered in `src/server/ai/providers.ts` (OpenAI, Anthropic, or a local
-LMStudio server). Without a key, the app uses a stats-only narrative. The LLM can
-only nudge directional probabilities by ±8%, clamped — it never overrides the
-statistical core.
+### 3. Committed calls vs. the live read
 
-## Architecture
+A pure snapshot predictor has a UX and a scientific problem: as a window
+approaches expiry the probability of "close above the open" *correctly* collapses
+toward 0 or 1 (it's the delta of a binary option). The number appears to "flip,"
+and grading the last pre-close snapshot peeks at where price already landed —
+inflating apparent accuracy and yielding a bet you could never actually place.
+
+The engine therefore distinguishes two quantities:
+
+- **Committed call** — a single directional bet locked in *early* (while the
+  horizon is still long), then **frozen** until the window resolves. This is the
+  wager we grade and learn from. See `src/server/model/commitments.ts`.
+- **Live read** — the probability recomputed each tick, free to converge toward
+  the outcome. Shown as a "where it stands now" gauge, clearly labeled.
+
+Commitment timing is governed by `COMMIT_BY_FRACTION` (default `0.2`): a call is
+locked in only if the window is first observed within the first 20% of its life,
+which in practice is the first refresh after the window opens. Windows first seen
+too late to make a genuine forward-looking call are not graded. Open commitments
+are hydrated from the ledger on startup, so a restart mid-window keeps its call.
+
+### 4. Self-calibration
+
+This is what makes the model **get better as it sees more outcomes**. For each
+family we fit a mapping from the model's raw probability to the empirically
+observed win frequency, using resolved committed calls — **Platt scaling in logit
+space**:
 
 ```
-client (browser)
-  └─ dashboard: live price + tabs per Polymarket market (5m/15m/hourly/daily),
-     polls /api/predict every 5s
-
-server (Bun)
-  ├─ sources/binance.ts   → spot, 24h change, OHLC klines + exact boundary candle
-  ├─ sources/polymarket.ts→ live odds + historical outcome/price (for backtests)
-  ├─ model/forecast.ts    → lognormal model (EWMA+Garman-Klass vol, shrunk drift)
-  ├─ model/scoring.ts     → Brier / log-loss / reliability (for the backtest)
-  ├─ model/ledger.ts      → records picks vs outcomes → data/ledger.json
-  ├─ model/llmAssist.ts   → optional LLM read + horizon-scaled bias
-  └─ routes/predict.ts    → GET /api/predict → Prediction JSON
+calibrated_logit = a · raw_logit + b
 ```
 
-## Model
+- `a < 1` shrinks overconfident probabilities toward 0.5.
+- `b` corrects a systematic directional / base-rate bias.
 
-Log-returns are treated as ~Normal over the remaining horizon. Two
-accuracy-oriented choices, both validated by the backtest:
+The fit is a **regularized (ridge) logistic regression** whose L2 prior pulls
+`(a, b)` toward the identity `(1, 0)`. With little data it stays ≈ identity, and
+below a minimum sample count it is a strict no-op — so calibration can only help
+once real evidence accumulates and never distorts a thin sample. Each family is
+calibrated independently.
 
-- **Volatility** is an EWMA of the **Garman-Klass** range estimator (uses
-  O/H/L/C), which is far more efficient and regime-aware than equal-weighted
-  close-to-close variance.
-- **Drift is off by default** (`MODEL_DRIFT_SHRINK=0`). Trailing drift is mostly
-  noise and, extrapolated over the horizon, biases direction; backtesting shows
-  a driftless random walk scores best. A shrink fraction and a
-  diffusion-relative cap (`MODEL_DRIFT_CAP_SIGMAS`) are available to re-enable
-  and tune it.
+A deliberate invariant keeps the loop stable: we always store and fit on the
+**raw** probability, never the already-calibrated output. This keeps the training
+signal stationary as the calibrator evolves — otherwise it would compound its own
+corrections. See `src/server/model/calibration.ts`.
 
-Tunables (env): `MODEL_EWMA_LAMBDA` (default `0.94`), `MODEL_DRIFT_SHRINK`
-(`0`), `MODEL_DRIFT_CAP_SIGMAS` (`0.5`).
+### 5–6. Resolution and refit
 
-### Backtesting
+A background loop resolves matured windows against the **real Polymarket
+outcome** (Binance close as a fallback), then refits every family's calibrator
+from the updated track record — so each freshly settled call immediately
+sharpens the next prediction. Calibration status (sample count and the
+adjustment applied) is surfaced per family on the dashboard.
+
+---
+
+## Seeding the loop: backfill
+
+Calibration needs resolved outcomes, which would otherwise take days to
+accumulate (the 1h/1d families especially). `bun run backfill` jump-starts it by
+reconstructing historical **committed calls**: for each recent resolved 5m/15m/1h
+window it rebuilds the model's raw probability *early* in the window — exactly
+mirroring the live commit timing and using only the candles available at that
+instant — and pairs it with the real Polymarket outcome.
+
+The backfill reconstructs short-horizon families from minute candles and
+long-horizon families from real hourly candles, so the reconstruction matches the
+statistics the live model would have used, with no look-ahead. Backfilled rows
+carry the raw probability, so the calibrators pick them up on the next refit.
+
+> Backfilled rows reflect the pure statistical model (the small LLM nudge cannot
+> be replayed historically), so treat them as a strong prior, not ground truth.
+
+---
+
+## Track record (ledger)
+
+Every committed call is logged to `data/ledger.json` with its window, strike,
+side, confidence, and both the calibrated and raw probabilities. Once the window
+closes it is resolved against the real market outcome and scored (Brier / hit
+rate, per family).
+
+```
+GET /api/ledger    → { summary, entries }
+GET /api/insights  → in-memory, windowed log of how the model's read evolved
+```
+
+---
+
+## Strike (price to beat)
+
+Each family's strike matches the venue it settles against, exactly:
+
+| Family | Resolves on | Strike we use | Source |
+| --- | --- | --- | --- |
+| 5m / 15m | Chainlink BTC/USD | Polymarket `crypto-price` **openPrice** | exact¹ |
+| Hourly | Binance BTC/USDT 1h candle | Binance 1h **open** | exact |
+| Daily | Binance BTC/USDT 1m close @ noon ET | Binance 1m **close** at prior noon | exact |
+
+¹ The 5m/15m markets settle on the **Chainlink** BTC/USD stream — a different
+feed than Binance, so a Binance proxy is off by tens of dollars. We read the
+exact Chainlink-derived open from Polymarket's API via `fetchPolymarketStrike`;
+if that fails we fall back to the Binance 1m-open proxy and flag the strike as
+approximate (`strikeIsProxy`).
+
+---
+
+## Backtesting
 
 `bun run backtest` walk-forward tests the direction model on historical Binance
-klines, sampling decision points inside each 5m/15m window, and scores it
-against the original (full-drift, close-to-close) model and a 0.5 baseline with
-Brier, log-loss, and a calibration curve. Sweep config inline, e.g.:
+klines, sampling decision points inside each 5m/15m window, and scores it against
+the original (full-drift, close-to-close) model and a 0.5 baseline with Brier,
+log-loss, and a reliability curve.
 
 ```bash
 bun run backtest -- --days 5
@@ -98,61 +214,60 @@ MODEL_DRIFT_SHRINK=1 bun run backtest -- --days 5   # compare with full drift
 ```
 
 `bun run backtest:market` additionally scores the model against the **real
-historical Polymarket odds** and every model/market blend weight. Result: the
-standalone model beats the market on 5m/15m and blending only hurts, so we do
-**not** ensemble — the market quote is shown for edge, not folded into the model.
+historical Polymarket odds** and every blend weight. Result: the standalone model
+beats the market on 5m/15m and blending only hurts — so we do **not** ensemble;
+the market quote is shown for edge, not folded into the model.
 
-### Strike (price to beat)
+---
 
-Every family's strike now matches Polymarket's own "price to beat" exactly:
-
-| Family | Resolves on | Strike we use | Source |
-| --- | --- | --- | --- |
-| 5m / 15m | Chainlink BTC/USD | Polymarket `crypto-price` **openPrice** | exact¹ |
-| Hourly | Binance BTC/USDT 1h candle | Binance 1h **open** (= 1m open) | exact |
-| Daily | Binance BTC/USDT 1m close @ noon ET | Binance 1m **close** at prior noon | exact |
-
-¹ The 5m/15m markets settle on the **Chainlink** BTC/USD stream — a different
-feed than Binance, so a 1m-open Binance proxy was off by tens of dollars. We now
-read the exact Chainlink-derived open straight from Polymarket's web API
-(`/api/crypto/crypto-price?variant=fiveminute|fifteen`, the same number their UI
-shows) via `fetchPolymarketStrike`. If that call ever fails we fall back to the
-Binance 1m-open proxy and flag the strike as approximate (`strikeIsProxy`).
-Hourly/daily settle on Binance directly, so we pin those to the exact Binance
-boundary candle with `fetchCandleAt`.
-
-## Track record (ledger)
-
-Every pick is logged to `data/ledger.json` with the window, strike, our side,
-and confidence; once the window closes it's resolved against the **real
-Polymarket outcome** (Binance close as fallback) and scored.
+## Architecture
 
 ```
-GET /api/ledger   → { summary, entries }
+client (browser)
+  └─ dashboard: live price + per-family tabs (5m/15m/hourly/daily); shows the
+     committed call, the converging live read, and calibration status; polls
+     /api/predict every 5s
+
+server (Bun)
+  ├─ sources/binance.ts    → spot, 24h change, OHLC klines + exact boundary candle
+  ├─ sources/polymarket.ts → live odds + historical outcome/price + exact strike
+  ├─ model/forecast.ts     → lognormal model (EWMA + Garman-Klass vol, shrunk drift)
+  ├─ model/llmAssist.ts    → optional LLM read + horizon-scaled, clamped bias
+  ├─ model/commitments.ts  → freezes one forward-looking call per window
+  ├─ model/calibration.ts  → learned per-family Platt calibration (the feedback loop)
+  ├─ model/ledger.ts       → committed calls vs real outcomes → data/ledger.json
+  ├─ model/insights.ts     → windowed in-memory log of how the read evolved
+  ├─ model/scoring.ts      → Brier / log-loss / reliability (backtest harness)
+  └─ routes/predict.ts     → GET /api/predict → Prediction JSON
 ```
 
-`bun run backfill` seeds the ledger from recent resolved 5m/15m/1h markets,
-reconstructing the model's pre-close pick paired with the real outcome.
+---
 
-## API
+## Configuration (env)
 
-```
-GET /api/predict
-```
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `LLM_MODEL` + key | — | Enable the LLM-assist read (OpenAI / Anthropic / LMStudio) |
+| `MODEL_EWMA_LAMBDA` | `0.94` | EWMA decay for volatility/drift |
+| `MODEL_DRIFT_SHRINK` | `0` | Fraction of trailing drift retained (0 = driftless) |
+| `MODEL_DRIFT_CAP_SIGMAS` | `0.5` | Cap on drift as a multiple of diffusion |
+| `COMMIT_BY_FRACTION` | `0.2` | How early a window must be seen to commit a call |
+| `CALIB_MIN_SAMPLES` | `25` | Resolved calls required before calibration activates |
+| `CALIB_PRIOR` | `10` | Shrinkage strength toward the identity calibrator |
 
-Returns the full `Prediction` object (see `src/shared/types.ts`). It computes
-one `RangePrediction` per Polymarket BTC Up/Down family — `5m`, `15m`, `1h`
-(hourly), and `1d` (daily) — each with the window-anchored up/down odds, the
-price-to-beat, a price forecast for the window close, and the live Polymarket
-quote when one exists. No query params.
+---
 
 ## Development
 
 ```bash
 bun run dev         # hot-reload server (client rebuilt + live-reloaded)
+bun run backfill    # seed the ledger + calibration with historical calls vs outcomes
 bun run backtest    # walk-forward score the direction model
-bun run backfill    # seed the ledger with historical picks vs outcomes
 bun run typecheck   # TypeScript checks
 bun run lint        # ESLint
 bun run format      # Prettier
 ```
+
+> Near-term BTC direction is close to a coin flip, so committed probabilities sit
+> near 50% by design and calibration mainly corrects confidence and bias. This is
+> a research/forecasting project, not trading advice.

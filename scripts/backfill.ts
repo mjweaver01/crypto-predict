@@ -1,10 +1,18 @@
 /**
- * Backfill the prediction ledger with historical calls vs outcomes.
+ * Backfill the prediction ledger with historical COMMITTED calls vs outcomes,
+ * so the learned calibrator (src/server/model/calibration.ts) has data to fit on
+ * immediately instead of waiting days for live outcomes to accumulate.
  *
- * For recent RESOLVED 5m / 15m / 1h windows we reconstruct the model's pick
- * using only the Binance candles available ~1 minute before the window closed
- * (mirroring our live "most-informed pre-close call"), pair it with the REAL
- * Polymarket resolution, and write it to data/ledger.json.
+ * For recent RESOLVED 5m / 15m / 1h windows we reconstruct the model's RAW
+ * probability EARLY in the window (one minute after the open — mirroring where
+ * we commit a call live, while the horizon is still long), pair it with the REAL
+ * Polymarket resolution, and write it to data/ledger.json with `rawProbUp` set
+ * so refreshCalibrators() picks it up. This matches the distribution the
+ * calibrator is applied to: forward-looking calls, not pre-close snapshots.
+ *
+ * Note: the live committed call also includes a small LLM bias nudge, which we
+ * cannot replay here — backfilled rows reflect the pure statistical model. The
+ * nudge is small (±0.08 max) so the calibration signal is dominated by the model.
  *
  * Usage:  bun run backfill [-- --count5 144 --count15 96 --count1h 48]
  */
@@ -69,39 +77,59 @@ async function main() {
   ).at(-1)!;
   const klStart = oldest1h - (WARMUP_MIN + 5) * MIN;
   console.log('fetching klines…');
-  const candles = await fetchKlineRange('1m', klStart, Date.now());
+  // Fetch 1h candles far enough back that the long-horizon EWMA has warmed up
+  // by the oldest window (the live model uses 720 hourly candles).
+  const HOUR = 60 * MIN;
+  const [candles, hourCandlesAll] = await Promise.all([
+    fetchKlineRange('1m', klStart, Date.now()),
+    fetchKlineRange('1h', oldest1h - 720 * HOUR, Date.now()),
+  ]);
   const byOpen = new Map<number, Candle>();
   for (const c of candles) byOpen.set(c.openTime, c);
   const opens = [...byOpen.keys()].sort((a, b) => a - b);
   const idxOf = new Map<number, number>();
   opens.forEach((t, i) => idxOf.set(t, i));
-  console.log(`fetched ${candles.length} 1m candles\n`);
+  const hourSorted = [...hourCandlesAll].sort((a, b) => a.openTime - b.openTime);
+  console.log(
+    `fetched ${candles.length} 1m + ${hourSorted.length} 1h candles\n`
+  );
 
-  /** Model probUp ~1 minute before window close, using only prior candles. */
-  function modelProbPreClose(startMs: number, endMs: number): number | null {
+  /** Completed hourly candles strictly before an instant (no look-ahead). */
+  function hoursBefore(instantMs: number): Candle[] {
+    return hourSorted.filter(c => c.openTime < instantMs);
+  }
+
+  /**
+   * Raw model probUp committed ~1 minute into the window, using only candles
+   * available by then — mirroring the live committed-call timing (locked in
+   * early, while the horizon is still long). The strike is the window open; the
+   * decision price is the close of the first 1m candle after the open.
+   */
+  function modelProbAtCommit(
+    startMs: number,
+    windowMin: number
+  ): { probUp: number; horizon: number } | null {
     const openCandle = byOpen.get(startMs);
-    const decisionOpen = endMs - 2 * MIN; // candle closing 1 min before window end
-    const idx = idxOf.get(decisionOpen);
-    const decisionCandle = byOpen.get(decisionOpen);
-    if (
-      !openCandle ||
-      idx === undefined ||
-      idx < WARMUP_MIN ||
-      !decisionCandle
-    ) {
-      return null;
-    }
+    const idx = idxOf.get(startMs); // candle opening at the window start
+    if (!openCandle || idx === undefined || idx < WARMUP_MIN) return null;
     const trailing: Candle[] = [];
     for (let j = idx - WARMUP_MIN + 1; j <= idx; j++) {
       trailing.push(byOpen.get(opens[j]!)!);
     }
+    const horizon = windowMin - 1; // one minute elapsed at commit
     const model = buildModel({
-      price: decisionCandle.close,
+      price: openCandle.close, // price one minute into the window
       change24hPct: 0,
       minuteCandles: trailing,
-      hourCandles: [],
+      // Long-horizon families (1h) need real hourly stats; supplying only
+      // completed hours up to the window start avoids look-ahead. 5m/15m use
+      // minute stats so this is harmless for them.
+      hourCandles: hoursBefore(startMs),
     });
-    return predictAbove(model, openCandle.open, 1, '').probAbove;
+    return {
+      probUp: predictAbove(model, openCandle.open, horizon, '').probAbove,
+      horizon,
+    };
   }
 
   const all: LedgerEntry[] = [];
@@ -112,8 +140,9 @@ async function main() {
       const slug = slugFor[fam.id](startMs);
       const outcome = await fetchMarketOutcome(slug);
       if (!outcome) return null;
-      const probUp = modelProbPreClose(startMs, endMs);
-      if (probUp === null) return null;
+      const call = modelProbAtCommit(startMs, fam.windowMin);
+      if (call === null) return null;
+      const probUp = call.probUp;
       const side: Side = probUp >= 0.5 ? 'UP' : 'DOWN';
       const realized: Side = outcome.outcomeUp ? 'UP' : 'DOWN';
       const entry: LedgerEntry = {
@@ -124,10 +153,12 @@ async function main() {
         windowEnd: new Date(endMs).toISOString(),
         strike: byOpen.get(startMs)!.open,
         probUp,
+        // No live calibrator existed historically, so raw == committed prob.
+        rawProbUp: probUp,
         side,
         confidence: Math.max(probUp, 1 - probUp),
-        horizonMinutes: 1,
-        decidedAt: new Date(endMs - MIN).toISOString(),
+        horizonMinutes: call.horizon,
+        decidedAt: new Date(startMs + MIN).toISOString(),
         source: 'backfill',
         outcome: realized,
         correct: side === realized,
