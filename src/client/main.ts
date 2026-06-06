@@ -167,10 +167,12 @@ function renderMarketBlock(r: RangePrediction) {
   edgeEl.className = `edge ${edge >= 0 ? 'up' : 'down'}`;
 
   $('d-note').textContent = r.strikeIsProxy
-    ? 'Resolves on Chainlink BTC/USD; strike shown is a Binance-open proxy for the price to beat.'
-    : r.id === '1d'
-      ? 'Resolves on the Binance BTC/USDT 1m close at noon ET vs the prior noon.'
-      : 'Resolves on the Binance BTC/USDT 1h candle (close vs open).';
+    ? 'Resolves on Chainlink BTC/USD; strike shown is a Binance-open proxy (Polymarket price-to-beat unavailable).'
+    : r.resolutionSource === 'chainlink'
+      ? "Resolves on Chainlink BTC/USD; strike is Polymarket's exact price to beat."
+      : r.id === '1d'
+        ? 'Resolves on the Binance BTC/USDT 1m close at noon ET vs the prior noon.'
+        : 'Resolves on the Binance BTC/USDT 1h candle (close vs open).';
 }
 
 function renderDetail(p: Prediction) {

@@ -13,10 +13,7 @@
  *
  * Usage:  bun run backtest:market [-- --limit 120 --warmup 240]
  */
-import {
-  fetchKlineRange,
-  type Candle,
-} from '../src/server/sources/binance.ts';
+import { fetchKlineRange, type Candle } from '../src/server/sources/binance.ts';
 import {
   fetchMarketOutcome,
   fetchPriceHistory,
@@ -69,7 +66,8 @@ async function mapPool<T, R>(
 function recentWindowStarts(windowMin: number, count: number): number[] {
   const windowMs = windowMin * MIN;
   // Skip the latest 2 windows to allow time for on-chain resolution.
-  const lastClosed = Math.floor(Date.now() / windowMs) * windowMs - 2 * windowMs;
+  const lastClosed =
+    Math.floor(Date.now() / windowMs) * windowMs - 2 * windowMs;
   const out: number[] = [];
   for (let i = 0; i < count; i++) out.push(lastClosed - i * windowMs);
   return out;
@@ -92,7 +90,9 @@ interface Acc {
 }
 
 async function main() {
-  console.log(`Ensemble backtest · ${LIMIT} markets/family · warmup ${WARMUP_MIN}m\n`);
+  console.log(
+    `Ensemble backtest · ${LIMIT} markets/family · warmup ${WARMUP_MIN}m\n`
+  );
 
   // Klines covering the oldest 15m window we'll touch (+ warmup), through now.
   const oldestStart = recentWindowStarts(15, LIMIT).at(-1)!;
@@ -114,7 +114,12 @@ async function main() {
     const idx = idxOf.get(decisionOpen);
     const openCandle = byOpen.get(s);
     const decisionCandle = byOpen.get(decisionOpen);
-    if (idx === undefined || idx < WARMUP_MIN || !openCandle || !decisionCandle) {
+    if (
+      idx === undefined ||
+      idx < WARMUP_MIN ||
+      !openCandle ||
+      !decisionCandle
+    ) {
       return null;
     }
     const trailing: Candle[] = [];
@@ -127,7 +132,8 @@ async function main() {
       minuteCandles: trailing,
       hourCandles: [],
     });
-    return predictAbove(model, openCandle.open, windowMin - offset, '').probAbove;
+    return predictAbove(model, openCandle.open, windowMin - offset, '')
+      .probAbove;
   }
 
   const weights = Array.from({ length: 11 }, (_, i) => i / 10);
@@ -176,7 +182,8 @@ async function main() {
       const blend = acc.model.map((pm, i) => w * acc.market[i]! + (1 - w) * pm);
       const sb = score(blend, acc.outcome);
       const star = sb.logLoss < best.logLoss ? ' *' : '';
-      if (sb.logLoss < best.logLoss) best = { w, logLoss: sb.logLoss, brier: sb.brier };
+      if (sb.logLoss < best.logLoss)
+        best = { w, logLoss: sb.logLoss, brier: sb.brier };
       console.log(
         `    w=${w.toFixed(1)}  brier ${sb.brier.toFixed(4)}  logloss ${sb.logLoss.toFixed(4)}${star}`
       );

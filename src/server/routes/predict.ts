@@ -1,13 +1,19 @@
 import { cached, env } from '../cache.ts';
 import {
   fetch24hChangePct,
+  fetchCandleAt,
   fetchCandles,
   fetchPrice,
   TRADING_SYMBOL,
 } from '../sources/binance.ts';
 import { buildModel, predictAbove, predictPrice } from '../model/forecast.ts';
 import { applyBias, assist } from '../model/llmAssist.ts';
-import { fetchMarket, slugFor } from '../sources/polymarket.ts';
+import { recordPredictions } from '../model/ledger.ts';
+import {
+  fetchMarket,
+  fetchPolymarketStrike,
+  slugFor,
+} from '../sources/polymarket.ts';
 import type {
   Prediction,
   RangeId,
@@ -122,32 +128,53 @@ function windowsAt(now: number) {
 
 const META: Record<
   RangeId,
-  {
-    label: string;
-    resolutionSource: 'chainlink' | 'binance';
-    strikeIsProxy: boolean;
-  }
+  { label: string; resolutionSource: 'chainlink' | 'binance' }
 > = {
-  '5m': { label: '5 min', resolutionSource: 'chainlink', strikeIsProxy: true },
-  '15m': {
-    label: '15 min',
-    resolutionSource: 'chainlink',
-    strikeIsProxy: true,
-  },
-  '1h': { label: 'Hourly', resolutionSource: 'binance', strikeIsProxy: false },
-  '1d': { label: 'Daily', resolutionSource: 'binance', strikeIsProxy: false },
+  '5m': { label: '5 min', resolutionSource: 'chainlink' },
+  '15m': { label: '15 min', resolutionSource: 'chainlink' },
+  '1h': { label: 'Hourly', resolutionSource: 'binance' },
+  '1d': { label: 'Daily', resolutionSource: 'binance' },
 };
 
 export async function predict(): Promise<Prediction> {
   return cached('predict:ranges', TTL, async () => {
-    const [price, change24hPct, minuteCandles, fiveMinCandles, hourCandles] =
-      await Promise.all([
-        fetchPrice(),
-        fetch24hChangePct(),
-        fetchCandles('1m', 240),
-        fetchCandles('5m', 60),
-        fetchCandles('1h', 720),
-      ]);
+    const now = Date.now();
+    const win = windowsAt(now);
+
+    // Fetch market data plus the EXACT boundary candle for each window, so the
+    // strike is the precise Binance price at the boundary rather than whatever
+    // is cached / live spot. open5m etc. are the 1m candle that opens at each
+    // window start; openDay is the 1m candle at the prior noon ET.
+    const [
+      price,
+      change24hPct,
+      minuteCandles,
+      fiveMinCandles,
+      hourCandles,
+      open5m,
+      open15m,
+      open1h,
+      openDay,
+      pmStrike5m,
+      pmStrike15m,
+    ] = await Promise.all([
+      fetchPrice(),
+      fetch24hChangePct(),
+      fetchCandles('1m', 240),
+      fetchCandles('5m', 60),
+      fetchCandles('1h', 720),
+      fetchCandleAt('1m', win['5m'].start),
+      fetchCandleAt('1m', win['15m'].start),
+      fetchCandleAt('1m', win['1h'].start),
+      fetchCandleAt('1m', win['1d'].start),
+      // Polymarket's exact Chainlink-derived "price to beat" for 5m/15m.
+      fetchPolymarketStrike('5m', win['5m'].start, win['5m'].end).catch(
+        () => undefined
+      ),
+      fetchPolymarketStrike('15m', win['15m'].start, win['15m'].end).catch(
+        () => undefined
+      ),
+    ]);
 
     const model = buildModel({
       price,
@@ -155,25 +182,43 @@ export async function predict(): Promise<Prediction> {
       minuteCandles,
       hourCandles,
     });
-    const now = Date.now();
     const a = await assist(model);
-    const win = windowsAt(now);
 
     // Strike (price to beat) per family, anchored to how each market settles:
-    //  5m/15m → Binance candle open proxy for the Chainlink boundary price
-    //  1h     → exact Binance 1h candle open
-    //  1d     → Binance price at the prior noon ET (≈ 1h candle open there)
+    //  5m/15m → Chainlink BTC/USD. We read Polymarket's EXACT openPrice from
+    //           their crypto-price API; only if it's unavailable do we fall
+    //           back to the Binance 1m-open proxy (which carries a basis error).
+    //  1h     → Binance BTC/USDT 1h candle OPEN = exact (1m open at boundary).
+    //  1d     → Binance BTC/USDT 1m candle CLOSE at the prior noon ET = exact.
     const strikeByRange: Record<RangeId, number> = {
-      '5m': strikeAt(win['5m'].start, fiveMinCandles, minuteCandles, price),
-      '15m': strikeAt(win['15m'].start, fiveMinCandles, minuteCandles, price),
+      '5m':
+        pmStrike5m ??
+        open5m?.open ??
+        strikeAt(win['5m'].start, fiveMinCandles, minuteCandles, price),
+      '15m':
+        pmStrike15m ??
+        open15m?.open ??
+        strikeAt(win['15m'].start, fiveMinCandles, minuteCandles, price),
       '1h':
+        open1h?.open ??
         candleOpenAt(hourCandles, win['1h'].start) ??
         lastCloseBefore(hourCandles, win['1h'].start) ??
         price,
       '1d':
+        openDay?.close ??
         candleOpenAt(hourCandles, win['1d'].start) ??
         lastCloseBefore(hourCandles, win['1d'].start) ??
         price,
+    };
+
+    // 5m/15m strikes are only a "proxy" when we couldn't get Polymarket's exact
+    // openPrice and fell back to the Binance boundary candle. 1h/1d are always
+    // exact Binance settlement prices.
+    const strikeIsProxyByRange: Record<RangeId, boolean> = {
+      '5m': pmStrike5m === undefined,
+      '15m': pmStrike15m === undefined,
+      '1h': false,
+      '1d': false,
     };
 
     const order: RangeId[] = ['5m', '15m', '1h', '1d'];
@@ -203,7 +248,7 @@ export async function predict(): Promise<Prediction> {
         id,
         label: META[id].label,
         resolutionSource: META[id].resolutionSource,
-        strikeIsProxy: META[id].strikeIsProxy,
+        strikeIsProxy: strikeIsProxyByRange[id],
         horizonMinutes: remaining,
         probUp,
         probDown: 1 - probUp,
@@ -222,7 +267,7 @@ export async function predict(): Promise<Prediction> {
       .map(c => ({ t: c.openTime, price: c.close }));
     history.push({ t: now, price });
 
-    return {
+    const prediction: Prediction = {
       asOf: new Date(now).toISOString(),
       symbol: TRADING_SYMBOL,
       stats: model.stats,
@@ -232,5 +277,13 @@ export async function predict(): Promise<Prediction> {
       llmApplied: a.llmApplied,
       history,
     };
+
+    // Record our calls for the open windows (fire-and-forget; never block the
+    // response or fail the request on a logging error).
+    void recordPredictions(prediction).catch(err =>
+      console.warn('[ledger] record failed:', err)
+    );
+
+    return prediction;
   });
 }

@@ -3,6 +3,68 @@
 /** The recurring Polymarket BTC Up/Down market families we mirror as tabs. */
 export type RangeId = '5m' | '15m' | '1h' | '1d';
 
+/** A directional call: which side we picked. */
+export type Side = 'UP' | 'DOWN';
+
+/**
+ * One row of our prediction track record: the directional "bet" we made for a
+ * window and, once it closes, what actually happened. Persisted to disk so we
+ * accumulate a verifiable history of calls vs outcomes.
+ */
+export interface LedgerEntry {
+  /** Stable id: `${rangeId}:${windowStartMs}`. */
+  id: string;
+  rangeId: RangeId;
+  /** Polymarket slug for this window, when known. */
+  slug?: string;
+  windowStart: string;
+  windowEnd: string;
+  /** Price to beat at the window open. */
+  strike: number;
+  /** Model probability of Up at decision time (after LLM bias). */
+  probUp: number;
+  /** Our pick: UP if probUp >= 0.5 else DOWN. */
+  side: Side;
+  /** Confidence = max(probUp, 1 - probUp). */
+  confidence: number;
+  /** Market-implied Up at decision time, if a live market existed. */
+  marketImpliedUp?: number;
+  /** Minutes left in the window when this call was last updated. */
+  horizonMinutes: number;
+  /** ISO time the call was last (re)recorded while the window was open. */
+  decidedAt: string;
+  /** How the outcome was determined once resolved. */
+  source?: 'live' | 'backfill';
+
+  // ── Filled in once the window resolves ──────────────────────────────
+  /** Realized direction, or null while still open. */
+  outcome?: Side | null;
+  /** Settlement price used to resolve (close at window end). */
+  closePrice?: number;
+  /** Whether our pick matched the outcome. */
+  correct?: boolean | null;
+  /** Where the outcome came from: the real market, or a Binance proxy. */
+  resolvedBy?: 'polymarket' | 'binance';
+  /** ISO time the outcome was recorded. */
+  resolvedAt?: string;
+}
+
+/** Aggregate stats over a set of resolved ledger entries. */
+export interface LedgerSummary {
+  total: number;
+  resolved: number;
+  correct: number;
+  /** Hit rate over resolved entries. */
+  accuracy: number;
+  /** Mean Brier score over resolved entries. */
+  brier: number;
+  /** Per-range breakdown. */
+  byRange: Record<
+    RangeId,
+    { resolved: number; correct: number; accuracy: number }
+  >;
+}
+
 /** Probability that BTC is above a strike at a target time. */
 export interface AbovePrediction {
   strike: number;

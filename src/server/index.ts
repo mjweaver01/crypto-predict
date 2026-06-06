@@ -1,4 +1,5 @@
 import { predict } from './routes/predict.ts';
+import { getLedger, resolvePending, summarize } from './model/ledger.ts';
 
 // 8333 is Bitcoin's default P2P network port.
 const PORT = Number(process.env.PORT ?? 8333);
@@ -70,6 +71,10 @@ const server = Bun.serve({
       if (pathname === '/api/predict') {
         return json(await predict());
       }
+      if (pathname === '/api/ledger') {
+        const entries = await getLedger();
+        return json({ summary: summarize(entries), entries });
+      }
     } catch (err) {
       console.error(err);
       return json({ error: String(err) }, 500);
@@ -94,3 +99,12 @@ const server = Bun.serve({
 });
 
 console.log(`Bitcoin Predict → http://localhost:${server.port}`);
+
+// Resolve matured predictions on startup and then on a slow cadence, so the
+// track record fills in outcomes without the request path doing it.
+const resolveLoop = () =>
+  resolvePending()
+    .then(n => n > 0 && console.log(`[ledger] resolved ${n} window(s)`))
+    .catch(err => console.warn('[ledger] resolve failed:', err));
+void resolveLoop();
+setInterval(resolveLoop, 60_000);

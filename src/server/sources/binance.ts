@@ -52,6 +52,32 @@ export async function fetchCandles(
 }
 
 /**
+ * Fetch the single candle whose openTime is exactly `openTimeMs` for an
+ * interval, or null if Binance doesn't have it yet. Used to pin a window's
+ * exact boundary price (the "price to beat") instead of relying on whatever
+ * happens to be cached. Cached briefly since a past candle never changes.
+ */
+export async function fetchCandleAt(
+  interval: '1m' | '5m' | '1h',
+  openTimeMs: number
+): Promise<Candle | null> {
+  return cached(`kline-at:${interval}:${openTimeMs}`, TTL, async () => {
+    const url =
+      `${BASE}/api/v3/klines?symbol=${SYMBOL}&interval=${interval}` +
+      `&startTime=${openTimeMs}&limit=1`;
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'bitcoin-predict/1.0' },
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!res.ok) throw new Error(`binance kline-at ${res.status}`);
+    const raw = (await res.json()) as RawKline[];
+    if (raw.length === 0) return null;
+    const c = toCandle(raw[0]!);
+    return c.openTime === openTimeMs ? c : null;
+  });
+}
+
+/**
  * Fetch all klines over [startMs, endMs) with pagination (Binance caps each
  * call at 1000). Uncached — intended for backtests / historical analysis.
  */

@@ -1,5 +1,5 @@
 import { cached, env } from '../cache.ts';
-import type { MarketQuote } from '../../shared/types.ts';
+import type { MarketQuote, RangeId } from '../../shared/types.ts';
 
 // Polymarket runs four recurring "BTC Up or Down" market families:
 //   5m     → slug btc-updown-5m-{startUnix}        (Chainlink BTC/USD)
@@ -12,6 +12,9 @@ import type { MarketQuote } from '../../shared/types.ts';
 // the window bounds (and its own strike proxy).
 const GAMMA = env('POLYMARKET_GAMMA_URL', 'https://gamma-api.polymarket.com');
 const CLOB = env('POLYMARKET_CLOB_URL', 'https://clob.polymarket.com');
+// Polymarket's own web API exposes the exact settlement "open" (price to beat)
+// for the Chainlink-resolved 5m/15m markets via /api/crypto/crypto-price.
+const SITE = env('POLYMARKET_SITE_URL', 'https://polymarket.com');
 const TTL = Number(env('CACHE_TTL_POLYMARKET', '5')); // seconds
 const ET = 'America/New_York';
 
@@ -74,6 +77,56 @@ export const slugFor = {
     return `bitcoin-up-or-down-on-${month}-${day}-${year}`;
   },
 };
+
+// crypto-price `variant` query value per family. Only the Chainlink-resolved
+// 5m/15m markets are served from this endpoint; hourly/daily proxy Binance
+// (and 451 from most regions), so we settle those off our own Binance candles.
+const CRYPTO_PRICE_VARIANT: Partial<Record<RangeId, string>> = {
+  '5m': 'fiveminute',
+  '15m': 'fifteen',
+};
+
+/** Polymarket's ISO format for crypto-price (whole seconds, trailing Z). */
+function isoSec(ms: number): string {
+  return new Date(ms).toISOString().slice(0, 19) + 'Z';
+}
+
+/**
+ * The EXACT "price to beat" Polymarket shows for a Chainlink-resolved window
+ * (5m/15m), read straight from their crypto-price API's `openPrice`. This is the
+ * same Chainlink BTC/USD value the market settles against, so it removes the
+ * Binance↔Chainlink basis that plagued our 1m-open proxy. Returns undefined for
+ * families this endpoint doesn't serve, or if it's unavailable.
+ */
+export async function fetchPolymarketStrike(
+  rangeId: RangeId,
+  windowStartMs: number,
+  windowEndMs: number
+): Promise<number | undefined> {
+  const variant = CRYPTO_PRICE_VARIANT[rangeId];
+  if (!variant) return undefined;
+  const url =
+    `${SITE}/api/crypto/crypto-price?symbol=BTC` +
+    `&eventStartTime=${isoSec(windowStartMs)}` +
+    `&variant=${variant}` +
+    `&endDate=${isoSec(windowEndMs)}`;
+  // Throw on failure so `cached` never stores a bad/undefined strike (it can
+  // serve a prior good one instead) and the caller falls back to its proxy.
+  return cached(`pmstrike:${rangeId}:${windowStartMs}`, TTL, async () => {
+    let lastErr: unknown;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const data = (await getJson(url)) as { openPrice?: number };
+        const open = Number(data?.openPrice);
+        if (Number.isFinite(open) && open > 0) return open;
+        lastErr = new Error(`crypto-price openPrice missing for ${variant}`);
+      } catch (err) {
+        lastErr = err;
+      }
+    }
+    throw lastErr;
+  });
+}
 
 /**
  * Fetch a Polymarket BTC Up/Down market by slug and return the window bounds +
