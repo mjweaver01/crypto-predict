@@ -10,8 +10,8 @@ import { getActiveModel } from '../ai/providers.ts';
  */
 const AssistSchema = z.object({
   bias: z.number().min(-1).max(1).describe('lean: -1 bearish .. 1 bullish'),
-  narrative: z.string().describe('one-sentence read'),
-  reasoning: z.string().describe('2-3 sentences'),
+  narrative: z.string().max(160).describe('one terse sentence'),
+  reasoning: z.string().max(320).describe('1-2 short sentences'),
 });
 
 export interface Assist {
@@ -81,7 +81,7 @@ async function llmAssist(
   // Compact prompt: terse stats, no JSON-format instructions (the schema
   // handles shape). Fewer input tokens + grammar-constrained output = faster.
   const prompt =
-    `BTC/USDT $${s.price.toFixed(0)}. Next 5-15min directional read. ` +
+    `BTC/USDT $${s.price.toFixed(0)}. Next 5-15min directional read. Be terse.\n` +
     `Short-horizon moves are near-random; keep bias small unless momentum is clear.\n` +
     `drift ${(s.driftPerMin * 1e4).toFixed(2)}bp/min, ` +
     `vol/min ${(s.volPerMin * 100).toFixed(3)}%, ` +
@@ -92,7 +92,8 @@ async function llmAssist(
     model: llm,
     schema: AssistSchema,
     prompt,
-    maxOutputTokens: 256,
+    maxOutputTokens: 220,
+    temperature: 0.2,
     providerOptions: { lmstudio: { enable_thinking: false } },
   });
 
