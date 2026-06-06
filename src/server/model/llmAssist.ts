@@ -6,12 +6,23 @@ import { getActiveModel } from '../ai/providers.ts';
 /**
  * Schema for the LLM's structured read. Sent to LM Studio as a JSON Schema so
  * decoding is grammar-constrained — output is guaranteed valid and typed, with
- * no regex extraction or `<think>` stripping needed.
+ * no regex extraction or `<think>` stripping needed. Tight length caps force a
+ * concise, decisive read rather than hedged filler.
  */
 const AssistSchema = z.object({
   bias: z.number().min(-1).max(1).describe('lean: -1 bearish .. 1 bullish'),
-  narrative: z.string().max(160).describe('one terse sentence'),
-  reasoning: z.string().max(320).describe('1-2 short sentences'),
+  narrative: z
+    .string()
+    .max(140)
+    .describe(
+      'one decisive sentence: the directional lean and the key price level driving it'
+    ),
+  reasoning: z
+    .string()
+    .max(200)
+    .describe(
+      'one sentence: the single strongest reason for the lean, citing a concrete number'
+    ),
 });
 
 export interface Assist {
@@ -20,6 +31,28 @@ export interface Assist {
   narrative: string;
   reasoning?: string;
   llmApplied: boolean;
+}
+
+/** The model's base directional read for one window, used to ground the LLM. */
+export interface WindowRead {
+  /** Human label, e.g. "5 min". */
+  label: string;
+  /** Minutes remaining until the window resolves. */
+  horizonMin: number;
+  /** Price to beat at the window open. */
+  strike: number;
+  /** Base model P(up) before any LLM bias. */
+  probUp: number;
+  /** Market-implied P(up), when a live market exists. */
+  marketImpliedUp?: number;
+}
+
+/** Concrete context handed to the LLM so its read references real levels. */
+export interface AssistContext {
+  /** Current spot price. */
+  price: number;
+  /** Per-window base reads, shortest horizon first. */
+  reads: WindowRead[];
 }
 
 /** Max probability nudge applied to the up-probabilities (at short horizons). */
@@ -48,45 +81,86 @@ export function applyBias(
 
 /**
  * Optional reasoning layer. Asks the configured model for a short read on
- * near-term direction and a small bias. Falls back to a transparent,
+ * near-term direction and a small bias, grounded in the model's own per-window
+ * calls so the narrative cites real levels. Falls back to a transparent,
  * stats-only narrative when no provider is available.
  */
-export async function assist(model: Model): Promise<Assist> {
+export async function assist(
+  model: Model,
+  ctx?: AssistContext
+): Promise<Assist> {
   try {
     const llm = getActiveModel();
-    return await llmAssist(model, llm);
+    return await llmAssist(model, llm, ctx);
   } catch (err) {
     console.warn('[llmAssist] LLM unavailable, using stats narrative:', err);
-    return heuristic(model);
+    return heuristic(model, ctx);
   }
 }
 
-function heuristic(model: Model): Assist {
-  const { change24hPct, driftPerMin, volPerMin } = model.stats;
-  const dir = driftPerMin > 0 ? 'slight upward' : 'slight downward';
-  const narrative =
-    `Recent 1m drift is ${dir} (${(driftPerMin * 1e4).toFixed(2)} bp/min) ` +
-    `with ${(volPerMin * 100).toFixed(3)}% per-minute volatility; ` +
-    `BTC is ${change24hPct >= 0 ? 'up' : 'down'} ${Math.abs(change24hPct).toFixed(2)}% over 24h. ` +
-    `(Set LLM_MODEL for LLM-assisted reasoning — e.g. a local LM Studio model like ` +
-    `qwen/qwen3-4b (no key), or a hosted model with its API key.)`;
+const pct = (p: number) => Math.round(Math.max(p, 1 - p) * 100);
+const dirOf = (p: number) => (p >= 0.5 ? 'UP' : 'DOWN');
+
+/**
+ * Render the model's per-window calls as terse lines the LLM (or fallback) can
+ * anchor to, e.g. `5 min: spot above $104,230 strike, model 58% UP, mkt 53%`.
+ */
+function readLines(ctx: AssistContext): string {
+  return ctx.reads
+    .map(r => {
+      const vs = ctx.price >= r.strike ? 'above' : 'below';
+      const mkt =
+        r.marketImpliedUp != null
+          ? `, mkt ${Math.round(r.marketImpliedUp * 100)}% up`
+          : '';
+      return (
+        `${r.label}: spot ${vs} $${r.strike.toLocaleString('en-US', { maximumFractionDigits: 0 })} strike, ` +
+        `model ${pct(r.probUp)}% ${dirOf(r.probUp)}${mkt}`
+      );
+    })
+    .join('\n');
+}
+
+function heuristic(model: Model, ctx?: AssistContext): Assist {
+  const { change24hPct, driftPerMin } = model.stats;
+  const change = `${change24hPct >= 0 ? '+' : ''}${change24hPct.toFixed(2)}% on 24h`;
+  const lead = ctx?.reads[0];
+  if (lead && ctx) {
+    const vs = ctx.price >= lead.strike ? 'above' : 'below';
+    const strike = lead.strike.toLocaleString('en-US', {
+      maximumFractionDigits: 0,
+    });
+    const narrative =
+      `Leaning ${dirOf(lead.probUp)} on the ${lead.label} (${pct(lead.probUp)}%): ` +
+      `spot ${vs} the $${strike} strike, drift ${(driftPerMin * 1e4).toFixed(2)}bp/min, ${change}.`;
+    return { bias: 0, narrative, llmApplied: false };
+  }
+  const dir = driftPerMin > 0 ? 'upward' : 'downward';
+  const narrative = `Near-flat read: ${dir} 1m drift of ${(driftPerMin * 1e4).toFixed(2)}bp/min, BTC ${change}.`;
   return { bias: 0, narrative, llmApplied: false };
 }
 
 async function llmAssist(
   model: Model,
-  llm: Parameters<typeof generateObject>[0]['model']
+  llm: Parameters<typeof generateObject>[0]['model'],
+  ctx?: AssistContext
 ): Promise<Assist> {
   const s = model.stats;
-  // Compact prompt: terse stats, no JSON-format instructions (the schema
-  // handles shape). Fewer input tokens + grammar-constrained output = faster.
+  // Compact prompt: terse stats + the model's own per-window calls (so the read
+  // can cite concrete levels), no JSON-format instructions (the schema handles
+  // shape). Fewer input tokens + grounded context = faster, sharper output.
+  const reads = ctx
+    ? `\nModel calls (price to beat = strike):\n${readLines(ctx)}`
+    : '';
   const prompt =
-    `BTC/USDT $${s.price.toFixed(0)}. Next 5-15min directional read. Be terse.\n` +
-    `Short-horizon moves are near-random; keep bias small unless momentum is clear.\n` +
+    `BTC/USDT $${s.price.toFixed(0)}, 24h ${s.change24hPct.toFixed(2)}%. ` +
     `drift ${(s.driftPerMin * 1e4).toFixed(2)}bp/min, ` +
     `vol/min ${(s.volPerMin * 100).toFixed(3)}%, ` +
-    `vol/hr ${(s.volPerHour * 100).toFixed(2)}%, ` +
-    `24h ${s.change24hPct.toFixed(2)}%`;
+    `vol/hr ${(s.volPerHour * 100).toFixed(2)}%.${reads}\n\n` +
+    `Short-horizon moves are near-random; only show conviction when momentum and ` +
+    `the level (spot vs strike) clearly agree, and keep bias small otherwise.\n` +
+    `Give a concise, specific read a trader can act on: state the lean and the single ` +
+    `strongest reason, citing concrete levels. No hedging, no filler, no restating the stats.`;
 
   const { object } = await generateObject({
     model: llm,

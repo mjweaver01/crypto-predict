@@ -5525,7 +5525,11 @@
     "horizonMinutes": 35.13511666666667,
     "decidedAt": "2026-06-06T15:24:51.893Z",
     "source": "live",
-    "outcome": null
+    "outcome": "UP",
+    "closePrice": 60784,
+    "correct": true,
+    "resolvedBy": "binance",
+    "resolvedAt": "2026-06-06T16:00:02.902Z"
   },
   "5m:1780756800000": {
     "id": "5m:1780756800000",
@@ -5739,7 +5743,11 @@
     "horizonMinutes": 35.13511666666667,
     "decidedAt": "2026-06-06T15:24:51.893Z",
     "source": "live",
-    "outcome": null
+    "outcome": "DOWN",
+    "closePrice": 60784,
+    "correct": true,
+    "resolvedBy": "binance",
+    "resolvedAt": "2026-06-06T16:00:02.968Z"
   },
   "5m:1780758300000": {
     "id": "5m:1780758300000",
@@ -6021,7 +6029,11 @@
     "horizonMinutes": 14.957166666666666,
     "decidedAt": "2026-06-06T15:45:02.570Z",
     "source": "live",
-    "outcome": null
+    "outcome": "DOWN",
+    "closePrice": 60784,
+    "correct": false,
+    "resolvedBy": "binance",
+    "resolvedAt": "2026-06-06T16:00:03.029Z"
   },
   "5m:1780761000000": {
     "id": "5m:1780761000000",
@@ -6723,6 +6735,78 @@
     "marketImpliedUp": 0.385,
     "horizonMinutes": 4.694,
     "decidedAt": "2026-06-06T15:55:18.360Z",
+    "source": "live",
+    "outcome": "UP",
+    "closePrice": 60784,
+    "correct": true,
+    "resolvedBy": "binance",
+    "resolvedAt": "2026-06-06T16:00:03.098Z"
+  },
+  "5m:1780761600000": {
+    "id": "5m:1780761600000",
+    "rangeId": "5m",
+    "slug": "btc-updown-5m-1780761600",
+    "windowStart": "2026-06-06T16:00:00.000Z",
+    "windowEnd": "2026-06-06T16:05:00.000Z",
+    "strike": 60753.11858467638,
+    "probUp": 0.5021244408800813,
+    "rawProbUp": 0.4935101511094042,
+    "side": "UP",
+    "confidence": 0.5021244408800813,
+    "marketImpliedUp": 0.205,
+    "horizonMinutes": 4.915,
+    "decidedAt": "2026-06-06T16:00:05.100Z",
+    "source": "live",
+    "outcome": null
+  },
+  "15m:1780761600000": {
+    "id": "15m:1780761600000",
+    "rangeId": "15m",
+    "slug": "btc-updown-15m-1780761600",
+    "windowStart": "2026-06-06T16:00:00.000Z",
+    "windowEnd": "2026-06-06T16:15:00.000Z",
+    "strike": 60753.356155501824,
+    "probUp": 0.48866472136240546,
+    "rawProbUp": 0.4954760246255576,
+    "side": "DOWN",
+    "confidence": 0.5113352786375945,
+    "marketImpliedUp": 0.315,
+    "horizonMinutes": 14.915,
+    "decidedAt": "2026-06-06T16:00:05.100Z",
+    "source": "live",
+    "outcome": null
+  },
+  "1h:1780761600000": {
+    "id": "1h:1780761600000",
+    "rangeId": "1h",
+    "slug": "bitcoin-up-or-down-june-6-2026-12pm-et",
+    "windowStart": "2026-06-06T16:00:00.000Z",
+    "windowEnd": "2026-06-06T17:00:00.000Z",
+    "strike": 60784.01,
+    "probUp": 0.44027593589268904,
+    "rawProbUp": 0.4748765308561608,
+    "side": "DOWN",
+    "confidence": 0.5597240641073109,
+    "marketImpliedUp": 0.455,
+    "horizonMinutes": 59.915,
+    "decidedAt": "2026-06-06T16:00:05.100Z",
+    "source": "live",
+    "outcome": null
+  },
+  "1d:1780761600000": {
+    "id": "1d:1780761600000",
+    "rangeId": "1d",
+    "slug": "bitcoin-up-or-down-on-june-7-2026",
+    "windowStart": "2026-06-06T16:00:00.000Z",
+    "windowEnd": "2026-06-07T16:00:00.000Z",
+    "strike": 60752.01,
+    "probUp": 0.4654853528317828,
+    "rawProbUp": 0.49999999947519136,
+    "side": "DOWN",
+    "confidence": 0.5345146471682172,
+    "marketImpliedUp": 0.495,
+    "horizonMinutes": 1439.915,
+    "decidedAt": "2026-06-06T16:00:05.100Z",
     "source": "live",
     "outcome": null
   }

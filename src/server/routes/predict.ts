@@ -180,7 +180,6 @@ export async function predict(): Promise<Prediction> {
       minuteCandles,
       hourCandles,
     });
-    const a = await assist(model);
 
     // Strike (price to beat) per family, anchored to how each market settles:
     //  5m/15m → Chainlink BTC/USD. We read Polymarket's EXACT openPrice from
@@ -228,6 +227,29 @@ export async function predict(): Promise<Prediction> {
         return fetchMarket(slug, w.start, w.end).catch(() => null);
       })
     );
+
+    // Ground the LLM read in the model's own per-window calls (base P(up) before
+    // bias, the price to beat, and market-implied odds) so the narrative cites
+    // concrete levels instead of restating raw stats.
+    const reads = order.map((id, i) => {
+      const w = win[id];
+      const remaining = Math.max(1 / 60, (w.end - now) / 60_000);
+      const strike = strikeByRange[id];
+      const probUp = predictAbove(
+        model,
+        strike,
+        remaining,
+        new Date(w.end).toISOString()
+      ).probAbove;
+      return {
+        label: META[id].label,
+        horizonMin: remaining,
+        strike,
+        probUp,
+        marketImpliedUp: markets[i]?.impliedUp,
+      };
+    });
+    const a = await assist(model, { price, reads });
 
     const ranges: RangePrediction[] = order.map((id, i) => {
       const w = win[id];
