@@ -1,5 +1,6 @@
 import { predict } from './routes/predict.ts';
 import { getLedger, resolvePending, summarize } from './model/ledger.ts';
+import { env } from './cache.ts';
 import { refreshCalibrators } from './model/calibration.ts';
 import { getInsights } from './model/insights.ts';
 import { makePriceStreamResponse } from './sources/priceStream.ts';
@@ -126,3 +127,24 @@ const resolveLoop = async () => {
 };
 void resolveLoop();
 setInterval(resolveLoop, 60_000);
+
+// Commit ticker: drive predict() on a fixed cadence so committed calls are
+// locked in (and the ledger keeps growing) even when no browser is polling the
+// dashboard. recordPredictions() runs inside predict() on each real recompute,
+// so this is what makes the system "learn on its own" while running unattended.
+// The cadence must be short enough to catch each window early — a 5m window
+// commits within its first 20% (≈1 min), so 30s guarantees a forward-looking
+// call. predict() is internally cached, so this never hammers the upstream APIs.
+const COMMIT_TICK_MS = Math.max(
+  5_000,
+  Number(env('COMMIT_TICK_SECONDS', '30')) * 1000 || 30_000
+);
+const commitLoop = async () => {
+  try {
+    await predict();
+  } catch (err) {
+    console.warn('[commit] tick failed:', err);
+  }
+};
+void commitLoop();
+setInterval(commitLoop, COMMIT_TICK_MS);

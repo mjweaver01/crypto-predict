@@ -215,13 +215,21 @@ function renderMarketBlock(r: RangePrediction) {
   $('d-market-q').textContent = m.question;
   $('d-market-window').textContent =
     `${fmtClock(m.windowStart)} – ${fmtClock(m.windowEnd)}`;
-  $('d-market-bars').innerHTML = compareBars(m.impliedUp, r.probUp);
 
-  const edge = r.probUp - m.impliedUp;
+  // The wager is the COMMITTED call (frozen early), so the edge that informs a
+  // bet is the committed probability vs the live market price — NOT the live
+  // read, which collapses toward 0/1 near expiry and would inflate the "edge"
+  // exactly when the bet is no longer placeable. Fall back to the live read only
+  // when no call was committed for this window.
+  const wagerUp = r.committed ? r.committed.probUp : r.probUp;
+  $('d-market-bars').innerHTML = compareBars(m.impliedUp, wagerUp);
+
+  const edge = wagerUp - m.impliedUp;
   const edgeEl = $('d-edge');
+  const basis = r.committed ? 'committed' : 'live read';
   edgeEl.textContent = `Edge vs market: ${edge >= 0 ? '+' : ''}${(edge * 100).toFixed(1)} pts ${
     edge >= 0 ? '(model favors Up)' : '(model favors Down)'
-  }`;
+  } · ${basis}`;
   edgeEl.className = `edge ${edge >= 0 ? 'up' : 'down'}`;
 
   $('d-note').textContent = r.strikeIsProxy

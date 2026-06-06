@@ -14,15 +14,27 @@
  * cannot replay here — backfilled rows reflect the pure statistical model. The
  * nudge is small (±0.08 max) so the calibration signal is dominated by the model.
  *
- * Usage:  bun run backfill [-- --count5 144 --count15 96 --count1h 48]
+ * The daily (1d) family is handled separately: its windows are noon-ET to
+ * noon-ET, it settles on the Binance 1m close at noon, and it forecasts over a
+ * ~24h horizon (long-run hourly stats). We reconstruct each daily call ~1 min
+ * after the noon open using only candles available by then, pair it with the
+ * real Polymarket daily outcome, and write it with `rawProbUp` set so the daily
+ * calibrator activates immediately instead of taking ~25 days to accumulate.
+ *
+ * Usage:  bun run backfill [-- --count5 144 --count15 96 --count1h 48 --count1d 35]
  */
-import { fetchKlineRange, type Candle } from '../src/server/sources/binance.ts';
+import {
+  fetchCandleAt,
+  fetchKlineRange,
+  type Candle,
+} from '../src/server/sources/binance.ts';
 import {
   fetchMarketOutcome,
   slugFor,
 } from '../src/server/sources/polymarket.ts';
 import { buildModel, predictAbove } from '../src/server/model/forecast.ts';
 import { addEntries } from '../src/server/model/ledger.ts';
+import { dailyWindowAt, noonEtUtc } from '../src/server/model/windows.ts';
 import type { LedgerEntry, RangeId, Side } from '../src/shared/types.ts';
 
 const MIN = 60_000;
@@ -69,6 +81,27 @@ function recentWindowStarts(windowMin: number, count: number): number[] {
   return Array.from({ length: count }, (_, i) => lastClosed - i * windowMs);
 }
 
+const COUNT_1D = arg('count1d', 35);
+
+/**
+ * The most recent `count` CLOSED daily windows (noon ET → noon ET), newest
+ * first. The active window's start is the most recent past noon, i.e. the end
+ * of the last closed window; we then walk back one ET day at a time (snapping to
+ * noon each step so DST transitions stay aligned).
+ */
+function recentDailyWindows(
+  count: number
+): { start: number; end: number }[] {
+  const out: { start: number; end: number }[] = [];
+  let end = dailyWindowAt(Date.now()).start; // last closed window's close
+  for (let i = 0; i < count; i++) {
+    const start = noonEtUtc(end - 18 * 3_600_000); // the noon before `end`
+    out.push({ start, end });
+    end = start;
+  }
+  return out;
+}
+
 async function main() {
   // Oldest 1m candle we need: oldest 1h window start - warmup.
   const oldest1h = recentWindowStarts(
@@ -76,13 +109,18 @@ async function main() {
     FAMS.find(f => f.id === '1h')!.count
   ).at(-1)!;
   const klStart = oldest1h - (WARMUP_MIN + 5) * MIN;
+  // Daily windows reach much further back than the 1h family, so the hourly
+  // warmup must cover the oldest daily start too.
+  const dailyWindows = recentDailyWindows(COUNT_1D);
+  const oldestDailyStart = dailyWindows.at(-1)!.start;
   console.log('fetching klines…');
   // Fetch 1h candles far enough back that the long-horizon EWMA has warmed up
   // by the oldest window (the live model uses 720 hourly candles).
   const HOUR = 60 * MIN;
+  const hourStart = Math.min(oldest1h, oldestDailyStart) - 720 * HOUR;
   const [candles, hourCandlesAll] = await Promise.all([
     fetchKlineRange('1m', klStart, Date.now()),
-    fetchKlineRange('1h', oldest1h - 720 * HOUR, Date.now()),
+    fetchKlineRange('1h', hourStart, Date.now()),
   ]);
   const byOpen = new Map<number, Candle>();
   for (const c of candles) byOpen.set(c.openTime, c);
@@ -176,6 +214,64 @@ async function main() {
     );
     all.push(...got);
   }
+
+  // ── Daily family (noon ET → noon ET) ──────────────────────────────────────
+  // Reconstruct each daily call ~1 min after the noon open: strike = the 1m
+  // close at noon (how the daily market settles), decision price = the 1m close
+  // one minute later, horizon = the rest of the ~24h window. Long-horizon stats
+  // come from completed hourly candles strictly before the open (no look-ahead);
+  // minute stats are unused at this horizon, so we don't fetch a 1m history.
+  const dailyRows = await mapPool(dailyWindows, 6, async ({ start, end }) => {
+    const slug = slugFor['1d'](end);
+    const outcome = await fetchMarketOutcome(slug);
+    if (!outcome) return null;
+    const [noonCandle, decisionCandle] = await Promise.all([
+      fetchCandleAt('1m', start).catch(() => null),
+      fetchCandleAt('1m', start + MIN).catch(() => null),
+    ]);
+    if (!noonCandle || !decisionCandle) return null;
+    const strike = noonCandle.close; // daily settles on the 1m close at noon
+    const price = decisionCandle.close; // price ~1 min into the window
+    const windowMin = Math.round((end - start) / MIN);
+    const horizon = windowMin - 1;
+    const model = buildModel({
+      price,
+      change24hPct: 0,
+      minuteCandles: [], // unused at a 24h horizon (long-run hourly stats)
+      hourCandles: hourSorted.filter(c => c.openTime < start),
+    });
+    const probUp = predictAbove(model, strike, horizon, '').probAbove;
+    const side: Side = probUp >= 0.5 ? 'UP' : 'DOWN';
+    const realized: Side = outcome.outcomeUp ? 'UP' : 'DOWN';
+    const entry: LedgerEntry = {
+      id: `1d:${start}`,
+      rangeId: '1d',
+      slug,
+      windowStart: new Date(start).toISOString(),
+      windowEnd: new Date(end).toISOString(),
+      strike,
+      probUp,
+      rawProbUp: probUp,
+      side,
+      confidence: Math.max(probUp, 1 - probUp),
+      horizonMinutes: horizon,
+      decidedAt: new Date(start + MIN).toISOString(),
+      source: 'backfill',
+      outcome: realized,
+      correct: side === realized,
+      resolvedBy: 'polymarket',
+      resolvedAt: new Date().toISOString(),
+    };
+    return entry;
+  });
+  const dailyGot = dailyRows.filter((r): r is LedgerEntry => r !== null);
+  const dailyCorrect = dailyGot.filter(e => e.correct).length;
+  console.log(
+    `1d: ${dailyGot.length}/${COUNT_1D} resolved · accuracy ${
+      dailyGot.length ? ((dailyCorrect / dailyGot.length) * 100).toFixed(1) : '—'
+    }%`
+  );
+  all.push(...dailyGot);
 
   await addEntries(all);
   console.log(`\nwrote ${all.length} backfilled entries to the ledger.`);

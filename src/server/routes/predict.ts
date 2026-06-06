@@ -16,6 +16,7 @@ import {
   getCalibrator,
 } from '../model/calibration.ts';
 import { recordInsight } from '../model/insights.ts';
+import { dailyWindowAt } from '../model/windows.ts';
 import {
   fetchMarket,
   fetchPolymarketStrike,
@@ -30,7 +31,6 @@ import type {
 } from '../../shared/types.ts';
 
 const TTL = Number(env('CACHE_TTL_PREDICT', '20'));
-const ET = 'America/New_York';
 
 /** Open price of the candle whose openTime is exactly `startMs`, if present. */
 function candleOpenAt(
@@ -84,40 +84,12 @@ function strikeAt(
   );
 }
 
-/** ET wall-clock offset (local - UTC) in ms at a given instant. */
-function etOffsetMs(utcMs: number): number {
-  const d = new Date(utcMs);
-  const loc = new Date(d.toLocaleString('en-US', { timeZone: ET }));
-  const utc = new Date(d.toLocaleString('en-US', { timeZone: 'UTC' }));
-  return loc.getTime() - utc.getTime();
-}
-
-/** UTC instant for 12:00 ET on the ET calendar date containing `refMs`. */
-function noonEtUtc(refMs: number): number {
-  const [y, m, d] = new Intl.DateTimeFormat('en-CA', {
-    timeZone: ET,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  })
-    .format(new Date(refMs))
-    .split('-')
-    .map(Number);
-  const wallAsUtc = Date.UTC(y!, m! - 1, d!, 12, 0, 0);
-  return wallAsUtc - etOffsetMs(wallAsUtc);
-}
-
 const floorTo = (n: number, step: number) => Math.floor(n / step) * step;
 const MS = { '5m': 5 * 60_000, '15m': 15 * 60_000, '1h': 60 * 60_000 };
 
 /** Window bounds (start/end epoch ms) for each market family at `now`. */
 function windowsAt(now: number) {
-  const todayNoon = noonEtUtc(now);
-  // The active daily market is the one whose closing noon is still ahead.
-  const dayEnd =
-    now >= todayNoon ? noonEtUtc(todayNoon + 30 * 3_600_000) : todayNoon;
-  const dayStart =
-    now >= todayNoon ? todayNoon : noonEtUtc(todayNoon - 18 * 3_600_000);
+  const day = dailyWindowAt(now);
   return {
     '5m': {
       start: floorTo(now, MS['5m']),
@@ -131,7 +103,7 @@ function windowsAt(now: number) {
       start: floorTo(now, MS['1h']),
       end: floorTo(now, MS['1h']) + MS['1h'],
     },
-    '1d': { start: dayStart, end: dayEnd },
+    '1d': { start: day.start, end: day.end },
   } as Record<RangeId, { start: number; end: number }>;
 }
 
