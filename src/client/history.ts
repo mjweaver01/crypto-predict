@@ -4,7 +4,17 @@ import type {
   LedgerSummary,
   RangeId,
 } from '../shared/types.ts';
-import { $, escapeHtml, fmtDateTime, fmtPct, fmtUsd, fmtUsd2 } from './format.ts';
+import {
+  $,
+  COLORS,
+  escapeHtml,
+  fmtDateTime,
+  fmtDay,
+  fmtPct,
+  fmtUsd,
+  fmtUsd2,
+  px,
+} from './format.ts';
 
 // ── Previous reads (windowed in-memory insight history) ──────────────────
 let historyOpen = true;
@@ -100,8 +110,89 @@ function renderRecordFilters() {
       recordFilter = btn.dataset.rf as RecordFilter;
       renderRecordFilters();
       renderRecordList();
+      renderHitRateChart();
     });
   }
+}
+
+// ── Hit rate over time (accuracy-over-time line chart) ───────────────────
+// Rolling window (in resolved calls) for the recent-form line.
+const ROLL_N = 25;
+
+/** Resolved entries for the active filter, oldest → newest. */
+function resolvedForChart(): LedgerEntry[] {
+  return ledgerEntries
+    .filter(
+      e =>
+        e.outcome != null &&
+        (recordFilter === 'ALL' || e.rangeId === recordFilter)
+    )
+    .sort((a, b) => Date.parse(a.windowStart) - Date.parse(b.windowStart));
+}
+
+/**
+ * Inline SVG line chart of accuracy over time: a cumulative hit rate (overall
+ * trend) and a rolling hit rate (recent form), against a dashed 50% baseline.
+ * Drawn in a 0..100 viewBox stretched to fill the card.
+ */
+function hitRateChart(entries: LedgerEntry[]): string {
+  if (entries.length < 2) return '<div class="chart-empty"></div>';
+
+  let correct = 0;
+  const pts = entries.map((e, i) => {
+    if (e.correct) correct++;
+    const cum = correct / (i + 1);
+    const from = Math.max(0, i - ROLL_N + 1);
+    let rollCorrect = 0;
+    for (let j = from; j <= i; j++) if (entries[j]!.correct) rollCorrect++;
+    const roll = rollCorrect / (i - from + 1);
+    return { cum, roll };
+  });
+
+  // X is the resolved-call sequence (evenly spaced), so bursts of backfilled
+  // calls don't bunch the line — each call is one step along the track record.
+  const W = 100;
+  const H = 100;
+  const PADX = 1.5;
+  const PADTOP = 8;
+  const PADBOT = 8;
+  const lastIdx = pts.length - 1 || 1;
+  const X = (i: number) => PADX + (i / lastIdx) * (W - 2 * PADX);
+  const Y = (a: number) => PADTOP + (1 - a) * (H - PADTOP - PADBOT);
+
+  const line = (key: 'cum' | 'roll') =>
+    pts
+      .map((p, i) => `${i ? 'L' : 'M'}${px(X(i))} ${px(Y(p[key]))}`)
+      .join(' ');
+
+  const yMid = px(Y(0.5));
+  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+    <line x1="0" y1="${yMid}" x2="${W}" y2="${yMid}" stroke="${COLORS.muted}" stroke-width="1" stroke-dasharray="3 3" opacity="0.4" vector-effect="non-scaling-stroke"/>
+    <path d="${line('cum')}" fill="none" stroke="${COLORS.muted}" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round" opacity="0.7" vector-effect="non-scaling-stroke"/>
+    <path d="${line('roll')}" fill="none" stroke="${COLORS.accent}" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  </svg>`;
+}
+
+function renderHitRateChart() {
+  const entries = resolvedForChart();
+  $('hr-chart').innerHTML = hitRateChart(entries);
+
+  const axis = $('hr-axis');
+  if (entries.length >= 2) {
+    const first = entries[0]!;
+    const last = entries[entries.length - 1]!;
+    axis.innerHTML =
+      `<span>${fmtDay(Date.parse(first.windowStart))}</span>` +
+      `<span class="hl">100% / 50% / 0%</span>` +
+      `<span>${fmtDay(Date.parse(last.windowStart))}</span>`;
+  } else {
+    axis.innerHTML = '<span>Not enough resolved calls to chart yet.</span>';
+  }
+
+  $('hr-legend').innerHTML = `
+    <span class="key"><span class="swatch" style="background:${COLORS.accent}"></span>Recent form (last ${ROLL_N})</span>
+    <span class="key"><span class="swatch" style="background:${COLORS.muted}"></span>Cumulative</span>
+    <span class="key"><span class="swatch dashed"></span>50% baseline</span>`;
 }
 
 function recordRow(e: LedgerEntry): string {
@@ -168,6 +259,7 @@ async function refreshRecord() {
     renderRecordSummary();
     renderRecordFilters();
     renderRecordList();
+    renderHitRateChart();
     $('updated').textContent = new Date().toLocaleTimeString();
     $('app').classList.remove('loading');
   } catch {

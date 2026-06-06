@@ -19,30 +19,42 @@
         <div class="updated">updated <span id="updated">—</span></div>
       </header>
 
-      <!-- Track record: historical calls vs realized outcomes (persisted ledger) -->
-      <div class="card record-card">
-        <div class="record-head">
+      <!-- Hit-rate hero: headline stats + accuracy-over-time chart -->
+      <div class="card hr-card">
+        <div class="hr-top">
           <div>
-            <span class="card-title"><span>Track record</span></span>
+            <span class="card-title"><span>Hit rate over time</span></span>
             <div class="record-sub" id="rec-sub">—</div>
           </div>
           <div class="record-stats" id="rec-stats"></div>
         </div>
         <div class="record-filters" id="rec-filters"></div>
-        <div class="record-list" id="rec-list"></div>
-        <div class="record-empty" id="rec-empty">No resolved calls yet.</div>
+        <div class="chart hr-chart" id="hr-chart">
+          <div class="chart-empty"></div>
+        </div>
+        <div class="hr-axis" id="hr-axis"></div>
+        <div class="hr-legend" id="hr-legend"></div>
       </div>
 
-      <!-- Previous model reads (windowed in-memory history) -->
-      <div class="card history-card">
-        <div class="history-head">
-          <span class="card-title"><span>Previous reads</span></span>
-          <button id="history-toggle" class="history-toggle" type="button">
-            Hide
-          </button>
+      <div class="history-grid">
+        <!-- Chronological log of calls vs realized outcomes (persisted ledger) -->
+        <div class="card record-card">
+          <div class="card-title record-list-title"><span>Call history</span></div>
+          <div class="record-list" id="rec-list"></div>
+          <div class="record-empty" id="rec-empty">No resolved calls yet.</div>
         </div>
-        <div id="history-list" class="history-list"></div>
-        <div id="history-empty" class="history-empty">No history yet.</div>
+
+        <!-- Previous model reads (windowed in-memory history) -->
+        <div class="card history-card">
+          <div class="history-head">
+            <span class="card-title"><span>Previous reads</span></span>
+            <button id="history-toggle" class="history-toggle" type="button">
+              Hide
+            </button>
+          </div>
+          <div id="history-list" class="history-list"></div>
+          <div id="history-empty" class="history-empty">No history yet.</div>
+        </div>
       </div>
 
       <div id="error"></div>
