@@ -256,6 +256,21 @@
         border-color: rgba(248, 113, 113, 0.3);
       }
 
+      .detail-window.committed {
+        margin-top: 3px;
+        font-weight: 700;
+      }
+      .detail-window.committed.up {
+        color: var(--up);
+      }
+      .detail-window.committed.down {
+        color: var(--down);
+      }
+      .detail-window.committed.muted {
+        font-weight: 500;
+        opacity: 0.6;
+      }
+
       /* Up/Down split bar */
       .split {
         display: flex;
@@ -727,10 +742,12 @@
               <span id="d-source" class="src-tag"></span>
             </div>
             <div class="detail-window" id="d-window">—</div>
+            <div class="detail-window" id="d-committed">—</div>
           </div>
           <span id="d-verdict" class="verdict">—</span>
         </div>
 
+        <div class="detail" id="d-live-label">Live read · converges to the outcome as the window closes</div>
         <div class="split">
           <div id="d-up" class="up" style="width: 50%"></div>
           <div id="d-down" class="down" style="width: 50%"></div>

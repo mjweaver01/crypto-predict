@@ -31,17 +31,17 @@ export interface LedgerEntry {
   windowEnd: string;
   /** Price to beat at the window open. */
   strike: number;
-  /** Model probability of Up at decision time (after LLM bias). */
+  /** Model probability of Up frozen at commit time (after LLM bias). */
   probUp: number;
   /** Our pick: UP if probUp >= 0.5 else DOWN. */
   side: Side;
   /** Confidence = max(probUp, 1 - probUp). */
   confidence: number;
-  /** Market-implied Up at decision time, if a live market existed. */
+  /** Market-implied Up captured at commit time, if a live market existed. */
   marketImpliedUp?: number;
-  /** Minutes left in the window when this call was last updated. */
+  /** Minutes left in the window at the moment we committed the call. */
   horizonMinutes: number;
-  /** ISO time the call was last (re)recorded while the window was open. */
+  /** ISO time the call was committed (≈ window open, frozen thereafter). */
   decidedAt: string;
   /** How the outcome was determined once resolved. */
   source?: 'live' | 'backfill';
@@ -150,6 +150,28 @@ export interface MarketQuote {
 }
 
 /**
+ * The directional call we locked in early in a window and will NOT change until
+ * the window resolves. This is the "bet" we actually grade — frozen while the
+ * horizon was still long, before price action near expiry reveals the outcome.
+ * Distinct from the live `probUp`, which legitimately converges toward 0/1 as
+ * the window runs out.
+ */
+export interface CommittedCall {
+  /** Frozen up-probability at the moment we committed. */
+  probUp: number;
+  /** Frozen pick: UP if probUp >= 0.5 else DOWN. */
+  side: Side;
+  /** Frozen confidence = max(probUp, 1 - probUp). */
+  confidence: number;
+  /** Price to beat captured at commit time. */
+  strike: number;
+  /** ISO time the call was committed (≈ window open). */
+  decidedAt: string;
+  /** Minutes left in the window at the moment we committed. */
+  horizonMinutes: number;
+}
+
+/**
  * A full prediction for one Polymarket BTC Up/Down family (one tab): the
  * window-anchored up/down odds, the price-to-beat, a price forecast for the
  * window end, and the live market quote when one exists.
@@ -179,6 +201,12 @@ export interface RangePrediction {
   windowEnd: string;
   /** Point price forecast + 95% band at the window end. */
   forecast: PriceForecast;
+  /**
+   * The frozen directional call for this window, locked in early (while the
+   * horizon was long) and unchanged thereafter. Absent only when the window was
+   * first observed too late to make a genuine forward-looking call.
+   */
+  committed?: CommittedCall;
   /** Live Polymarket quote for this exact window, when one exists. */
   market?: MarketQuote;
 }

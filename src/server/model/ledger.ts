@@ -49,34 +49,37 @@ function slugForRange(id: RangeId, startMs: number, endMs: number): string {
 }
 
 /**
- * Upsert ledger entries for the open windows in a prediction. We keep updating
- * a window's call until it closes (so the stored bet is our most-informed
- * pre-close call), then freeze it once an outcome is recorded.
+ * Persist the frozen committed call for each open window. The call is locked in
+ * once (early, while the horizon is long) and written here exactly once — never
+ * overwritten by later ticks — so the graded bet is a genuine forward-looking
+ * wager rather than a peek at where price ended up. Windows without a committed
+ * call (first observed too late to decide) are skipped entirely.
  */
 export async function recordPredictions(p: Prediction): Promise<void> {
   await withLock(async () => {
     const store = await load();
     for (const r of p.ranges) {
+      const c = r.committed;
+      if (!c) continue; // no genuine forward-looking call → don't grade it
       const startMs = Date.parse(r.windowStart);
       const endMs = Date.parse(r.windowEnd);
       const id = `${r.id}:${startMs}`;
       const existing = store[id];
-      if (existing && existing.outcome != null) continue; // already resolved
-      const side: Side = r.probUp >= 0.5 ? 'UP' : 'DOWN';
+      if (existing) continue; // call already committed & recorded (or resolved)
       store[id] = {
         id,
         rangeId: r.id,
         slug: r.market?.slug ?? slugForRange(r.id, startMs, endMs),
         windowStart: r.windowStart,
         windowEnd: r.windowEnd,
-        strike: r.strike,
-        probUp: r.probUp,
-        side,
-        confidence: Math.max(r.probUp, 1 - r.probUp),
+        strike: c.strike,
+        probUp: c.probUp,
+        side: c.side,
+        confidence: c.confidence,
         marketImpliedUp: r.market?.impliedUp,
-        horizonMinutes: r.horizonMinutes,
-        decidedAt: p.asOf,
-        source: existing?.source ?? 'live',
+        horizonMinutes: c.horizonMinutes,
+        decidedAt: c.decidedAt,
+        source: 'live',
         outcome: null,
       };
     }

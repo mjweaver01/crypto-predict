@@ -9,6 +9,7 @@ import {
 import { buildModel, predictAbove, predictPrice } from '../model/forecast.ts';
 import { applyBias, assist } from '../model/llmAssist.ts';
 import { recordPredictions } from '../model/ledger.ts';
+import { decide, ensureHydrated } from '../model/commitments.ts';
 import { recordInsight } from '../model/insights.ts';
 import {
   fetchMarket,
@@ -144,6 +145,10 @@ export async function predict(): Promise<Prediction> {
     const now = Date.now();
     const win = windowsAt(now);
 
+    // Load any still-open committed calls from the ledger before we decide, so
+    // a restart mid-window keeps the call we already locked in.
+    await ensureHydrated();
+
     // Fetch market data plus the EXACT boundary candle for each window, so the
     // strike is the precise Binance price at the boundary rather than whatever
     // is cached / live spot. open5m etc. are the 1m candle that opens at each
@@ -247,7 +252,7 @@ export async function predict(): Promise<Prediction> {
         a.bias,
         remaining
       );
-      return {
+      const range: RangePrediction = {
         id,
         label: META[id].label,
         resolutionSource: META[id].resolutionSource,
@@ -261,6 +266,11 @@ export async function predict(): Promise<Prediction> {
         forecast: predictPrice(model, remaining, endIso, strike),
         market: markets[i] ?? undefined,
       };
+      // Lock in (or recall) the frozen directional call for this window. The
+      // live probUp above keeps converging toward the outcome; `committed` is
+      // the forward-looking bet we actually grade.
+      range.committed = decide(range, now);
+      return range;
     });
 
     // Recent price history for client sparklines: last ~120 1m closes, with the

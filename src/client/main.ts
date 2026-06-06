@@ -246,9 +246,24 @@ function renderDetail(p: Prediction) {
   $('d-window').textContent =
     `${fmtClock(r.windowStart)} → ${fmtClock(r.windowEnd)} · closes ${relTime(r.windowEnd)}`;
 
+  // The headline verdict is the COMMITTED call (locked in early, never flips).
+  // Fall back to the live read only when no genuine call was committed.
+  const c = r.committed;
+  const verdictUp = c ? c.side === 'UP' : up >= 0.5;
   const verdict = $('d-verdict');
-  verdict.textContent = up >= 0.5 ? 'UP' : 'DOWN';
-  verdict.className = `verdict ${up >= 0.5 ? 'up' : 'down'}`;
+  verdict.textContent = verdictUp ? 'UP' : 'DOWN';
+  verdict.className = `verdict ${verdictUp ? 'up' : 'down'}`;
+
+  const committedEl = $('d-committed');
+  if (c) {
+    committedEl.textContent =
+      `Committed ${c.side} ${fmtPct(c.confidence)} · locked at ${fmtClock(c.decidedAt)} ` +
+      `(${c.horizonMinutes.toFixed(1)}m left)`;
+    committedEl.className = `detail-window committed ${c.side === 'UP' ? 'up' : 'down'}`;
+  } else {
+    committedEl.textContent = 'No committed call — window opened before tracking began';
+    committedEl.className = 'detail-window committed muted';
+  }
 
   const upPct = Math.round(up * 100);
   $('d-up').style.width = `${upPct}%`;
