@@ -18,6 +18,10 @@ const hasKey = (key: string | undefined): boolean => Boolean(key);
 const lmstudio = createOpenAICompatible({
   name: 'lmstudio',
   baseURL: process.env.LMSTUDIO_BASE_URL ?? 'http://localhost:1234/v1',
+  // LM Studio requires response_format.type === 'json_schema' for structured
+  // output (it rejects the default 'json_object' mode). This makes
+  // generateObject send a real JSON Schema for grammar-constrained decoding.
+  supportsStructuredOutputs: true,
 });
 
 /**

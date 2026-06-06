@@ -121,3 +121,65 @@ export async function fetchMarket(
     };
   });
 }
+
+// ── Historical helpers (uncached) — used by the ensemble backtest ──────────
+
+export interface ResolvedMarket {
+  /** CLOB token id for the "Up" outcome. */
+  upTokenId: string;
+  /** Realized outcome: 1 if the market resolved Up, 0 if Down. */
+  outcomeUp: number;
+}
+
+/**
+ * Resolve a market slug to its "Up" token id and realized outcome, or null if
+ * it doesn't exist or hasn't settled to a definitive 0/1. Uncached.
+ */
+export async function fetchMarketOutcome(
+  slug: string
+): Promise<ResolvedMarket | null> {
+  let m: (GammaMarket & { outcomePrices?: string; closed?: boolean }) | null;
+  try {
+    m = (await getJson(`${GAMMA}/markets/slug/${slug}`)) as typeof m;
+  } catch {
+    return null;
+  }
+  if (!m || !m.closed || !m.outcomes || !m.clobTokenIds || !m.outcomePrices) {
+    return null;
+  }
+  let outcomes: string[];
+  let tokenIds: string[];
+  let prices: string[];
+  try {
+    outcomes = JSON.parse(m.outcomes) as string[];
+    tokenIds = JSON.parse(m.clobTokenIds) as string[];
+    prices = JSON.parse(m.outcomePrices) as string[];
+  } catch {
+    return null;
+  }
+  const upIdx = outcomes.findIndex(o => o.toLowerCase() === 'up');
+  if (upIdx < 0 || !tokenIds[upIdx]) return null;
+  const upPrice = Number(prices[upIdx]);
+  if (upPrice !== 0 && upPrice !== 1) return null; // not a clean resolution
+  return { upTokenId: tokenIds[upIdx], outcomeUp: upPrice };
+}
+
+/** A single historical CLOB price point: unix seconds + price (0..1). */
+export interface PricePointRaw {
+  t: number;
+  p: number;
+}
+
+/** Fetch the full CLOB midpoint price history for a token. Uncached. */
+export async function fetchPriceHistory(
+  tokenId: string
+): Promise<PricePointRaw[]> {
+  const url = `${CLOB}/prices-history?market=${tokenId}&interval=max&fidelity=1`;
+  let data: { history?: PricePointRaw[] };
+  try {
+    data = (await getJson(url)) as { history?: PricePointRaw[] };
+  } catch {
+    return [];
+  }
+  return Array.isArray(data?.history) ? data.history : [];
+}

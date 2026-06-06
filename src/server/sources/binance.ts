@@ -51,6 +51,36 @@ export async function fetchCandles(
   });
 }
 
+/**
+ * Fetch all klines over [startMs, endMs) with pagination (Binance caps each
+ * call at 1000). Uncached — intended for backtests / historical analysis.
+ */
+export async function fetchKlineRange(
+  interval: '1m' | '5m' | '1h',
+  startMs: number,
+  endMs: number
+): Promise<Candle[]> {
+  const stepMs = { '1m': 60_000, '5m': 300_000, '1h': 3_600_000 }[interval];
+  const out: Candle[] = [];
+  let cursor = startMs;
+  while (cursor < endMs) {
+    const url =
+      `${BASE}/api/v3/klines?symbol=${SYMBOL}&interval=${interval}` +
+      `&startTime=${cursor}&endTime=${endMs}&limit=1000`;
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'bitcoin-predict/1.0' },
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (!res.ok) throw new Error(`binance klines ${res.status}`);
+    const raw = (await res.json()) as RawKline[];
+    if (raw.length === 0) break;
+    for (const k of raw) out.push(toCandle(k));
+    cursor = raw[raw.length - 1]![0] + stepMs;
+    if (raw.length < 1000) break;
+  }
+  return out;
+}
+
 /** Latest spot price. */
 export async function fetchPrice(): Promise<number> {
   return cached('price', TTL, async () => {

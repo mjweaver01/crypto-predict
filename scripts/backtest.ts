@@ -17,7 +17,7 @@
  *
  * Usage:  bun run backtest [-- --days N --warmup M]
  */
-import { BASE, toCandle, type Candle } from '../src/server/sources/binance.ts';
+import { fetchKlineRange, type Candle } from '../src/server/sources/binance.ts';
 import {
   buildModel,
   predictAbove,
@@ -36,29 +36,6 @@ function arg(name: string, fallback: number): number {
 
 const DAYS = arg('days', Number(process.env.BACKTEST_DAYS ?? 3));
 const WARMUP_MIN = arg('warmup', 240); // trailing minute-candles per decision
-
-/** Fetch 1m klines over [startMs, endMs) with pagination (max 1000/call). */
-async function fetchRange(startMs: number, endMs: number): Promise<Candle[]> {
-  const out: Candle[] = [];
-  let cursor = startMs;
-  while (cursor < endMs) {
-    const url =
-      `${BASE}/api/v3/klines?symbol=${SYMBOL}&interval=1m` +
-      `&startTime=${cursor}&endTime=${endMs}&limit=1000`;
-    const res = await fetch(url, {
-      headers: { 'User-Agent': 'bitcoin-predict/1.0' },
-      signal: AbortSignal.timeout(20_000),
-    });
-    if (!res.ok) throw new Error(`binance klines ${res.status}`);
-    const raw = (await res.json()) as Parameters<typeof toCandle>[0][];
-    if (raw.length === 0) break;
-    for (const k of raw) out.push(toCandle(k));
-    const last = raw[raw.length - 1]![0];
-    cursor = last + MIN;
-    if (raw.length < 1000) break;
-  }
-  return out;
-}
 
 // ── Naive (original) forecaster, for an apples-to-apples comparison ────────
 function naiveStats(candles: Candle[]): { mean: number; std: number } {
@@ -174,7 +151,7 @@ async function main() {
       `DRIFT_CAP_SIGMAS=${process.env.MODEL_DRIFT_CAP_SIGMAS ?? '0.5'}\n`
   );
 
-  const candles = await fetchRange(start, now);
+  const candles = await fetchKlineRange('1m', start, now);
   if (candles.length < WARMUP_MIN + 100) {
     throw new Error(`not enough candles (${candles.length})`);
   }
