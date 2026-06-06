@@ -9,6 +9,7 @@
     "backtest": "bun run scripts/backtest.ts",
     "backtest:market": "bun run scripts/backtest-market.ts",
     "backfill": "bun run scripts/backfill.ts",
+    "backfill:gaps": "bun run scripts/backfill-gaps.ts",
     "build:client": "bun build src/client/live.ts src/client/history.ts --outdir public/dist --target browser",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src scripts",
