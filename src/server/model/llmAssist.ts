@@ -13,15 +13,15 @@ const AssistSchema = z.object({
   bias: z.number().min(-1).max(1).describe('lean: -1 bearish .. 1 bullish'),
   narrative: z
     .string()
-    .max(140)
+    .max(220)
     .describe(
       'one decisive sentence: the directional lean and the key price level driving it'
     ),
   reasoning: z
     .string()
-    .max(200)
+    .max(320)
     .describe(
-      'one sentence: the single strongest reason for the lean, citing a concrete number'
+      'one or two sentences: the strongest reasons for the lean, citing concrete numbers'
     ),
 });
 
@@ -157,16 +157,17 @@ async function llmAssist(
     `drift ${(s.driftPerMin * 1e4).toFixed(2)}bp/min, ` +
     `vol/min ${(s.volPerMin * 100).toFixed(3)}%, ` +
     `vol/hr ${(s.volPerHour * 100).toFixed(2)}%.${reads}\n\n` +
-    `Short-horizon moves are near-random; only show conviction when momentum and ` +
-    `the level (spot vs strike) clearly agree, and keep bias small otherwise.\n` +
-    `Give a concise, specific read a trader can act on: state the lean and the single ` +
-    `strongest reason, citing concrete levels. No hedging, no filler, no restating the stats.`;
+    `Rules (hard limits — stop writing when reached):\n` +
+    `- narrative: ONE sentence, ≤180 chars. Lean + the single key level. No sub-clauses.\n` +
+    `- reasoning: ONE sentence, ≤260 chars. The strongest supporting number. Stop after the period.\n` +
+    `- bias: small nudge only; short-horizon moves are near-random.\n` +
+    `No hedging, no filler, no repeating the stats above.`;
 
   const { object } = await generateObject({
     model: llm,
     schema: AssistSchema,
     prompt,
-    maxOutputTokens: 220,
+    maxOutputTokens: 400,
     temperature: 0.2,
     providerOptions: { lmstudio: { enable_thinking: false } },
   });
