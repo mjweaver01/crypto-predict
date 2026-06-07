@@ -17,7 +17,6 @@ import {
 } from './format.ts';
 
 // ── Previous reads (windowed in-memory insight history) ──────────────────
-let historyOpen = true;
 
 function renderHistory(entries: InsightSnapshot[]) {
   const list = $('history-list');
@@ -62,12 +61,6 @@ async function refreshHistory() {
     // History is best-effort; ignore transient failures.
   }
 }
-
-$('history-toggle').addEventListener('click', () => {
-  historyOpen = !historyOpen;
-  $('history-list').classList.toggle('collapsed', !historyOpen);
-  $('history-toggle').textContent = historyOpen ? 'Hide' : 'Show';
-});
 
 // ── Track record (persisted calls vs realized outcomes) ──────────────────
 const RECORD_RANGES: RangeId[] = ['5m', '15m', '1h', '1d'];

@@ -157,11 +157,12 @@ async function llmAssist(
     `drift ${(s.driftPerMin * 1e4).toFixed(2)}bp/min, ` +
     `vol/min ${(s.volPerMin * 100).toFixed(3)}%, ` +
     `vol/hr ${(s.volPerHour * 100).toFixed(2)}%.${reads}\n\n` +
-    `Rules (hard limits — stop writing when reached):\n` +
-    `- narrative: ONE sentence, ≤180 chars. Lean + the single key level. No sub-clauses.\n` +
-    `- reasoning: ONE sentence, ≤260 chars. The strongest supporting number. Stop after the period.\n` +
-    `- bias: small nudge only; short-horizon moves are near-random.\n` +
-    `No hedging, no filler, no repeating the stats above.`;
+    `Short-horizon moves are near-random; only show conviction when momentum and ` +
+    `the level (spot vs strike) clearly agree, and keep bias small otherwise.\n` +
+    `Give a concise, specific read a trader can act on: state the lean and the single ` +
+    `strongest reason, citing concrete levels. No hedging, no filler, no restating the stats.` +
+    `Keep the narrative and reasoning concise and specific.` +
+    `Narrative should be two sentences, maximum. Supporting information should be in reasoning.`;
 
   const { object } = await generateObject({
     model: llm,
