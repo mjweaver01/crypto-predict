@@ -58,13 +58,19 @@ export const MODEL_PROVIDERS: ModelProvider[] = [
     model: anthropic('claude-sonnet-4-6'),
   },
   {
+    id: 'qwen/qwen3-1.7b',
+    name: 'Qwen3.1.7B (LMStudio)',
+    available: true,
+    keyStatus: 'no key needed',
+    model: lmstudio('qwen/qwen3-1.7b'),
+  },
+  {
     id: 'qwen/qwen3-4b',
     name: 'Qwen3.4B (LMStudio)',
     available: true,
     keyStatus: 'no key needed',
     model: lmstudio('qwen/qwen3-4b'),
   },
-
   {
     id: 'lmstudio/qwen3.5-9b',
     name: 'Qwen3.5-9B (LMStudio)',
