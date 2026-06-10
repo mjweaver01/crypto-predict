@@ -6,22 +6,23 @@ import { getActiveModel } from '../ai/providers.ts';
 /**
  * Schema for the LLM's structured read. Sent to LM Studio as a JSON Schema so
  * decoding is grammar-constrained — output is guaranteed valid and typed, with
- * no regex extraction or `<think>` stripping needed. Tight length caps force a
- * concise, decisive read rather than hedged filler.
+ * no regex extraction or `<think>` stripping needed. The headline stays tightly
+ * capped so it never truncates mid-sentence; the report gets room to breathe
+ * (the UI clamps it behind a "read more").
  */
 const AssistSchema = z.object({
   bias: z.number().min(-1).max(1).describe('lean: -1 bearish .. 1 bullish'),
   narrative: z
     .string()
-    .max(220)
+    .max(160)
     .describe(
-      'one decisive sentence: the directional lean and the key price level driving it'
+      'punchy headline, ONE short sentence under 120 characters: the lean and the single key level'
     ),
   reasoning: z
     .string()
-    .max(320)
+    .max(2400)
     .describe(
-      'one or two sentences: the strongest reasons for the lean, citing concrete numbers'
+      'full report in short paragraphs: momentum and volatility read, each window call with its level, where the market disagrees, and the main risk to the lean'
     ),
 });
 
@@ -121,6 +122,15 @@ function readLines(ctx: AssistContext): string {
     .join('\n');
 }
 
+/**
+ * The dependency-free stats narrative, exported as the cold-start fallback for
+ * the stale-while-revalidate read in routes/predict.ts (no prior LLM read to
+ * serve while the first generation is still running).
+ */
+export function statsAssist(model: Model, ctx?: AssistContext): Assist {
+  return heuristic(model, ctx);
+}
+
 function heuristic(model: Model, ctx?: AssistContext): Assist {
   const { change24hPct, driftPerMin } = model.stats;
   const change = `${change24hPct >= 0 ? '+' : ''}${change24hPct.toFixed(2)}% on 24h`;
@@ -159,16 +169,18 @@ async function llmAssist(
     `vol/hr ${(s.volPerHour * 100).toFixed(2)}%.${reads}\n\n` +
     `Short-horizon moves are near-random; only show conviction when momentum and ` +
     `the level (spot vs strike) clearly agree, and keep bias small otherwise.\n` +
-    `Give a concise, specific read a trader can act on: state the lean and the single ` +
-    `strongest reason, citing concrete levels. No hedging, no filler, no restating the stats.` +
-    `Keep the narrative and reasoning concise and specific.` +
-    `Narrative should be two sentences, maximum. Supporting information should be in reasoning.`;
+    `narrative: a punchy headline — ONE short sentence (under 120 characters) with ` +
+    `the lean and the single key level. It must stand alone.\n` +
+    `reasoning: a full trader's report in short paragraphs — the momentum/volatility ` +
+    `read, each window's call with its level, where the market price disagrees with ` +
+    `the model and why, and the main risk that would flip the lean. Cite concrete ` +
+    `numbers throughout. No hedging or filler, and don't restate the raw stats.`;
 
   const { object } = await generateObject({
     model: llm,
     schema: AssistSchema,
     prompt,
-    maxOutputTokens: 400,
+    maxOutputTokens: 1600,
     temperature: 0.2,
     providerOptions: { lmstudio: { enable_thinking: false } },
   });

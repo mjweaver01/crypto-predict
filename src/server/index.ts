@@ -1,4 +1,9 @@
-import { getLatestPrediction, predict, refreshRead } from './routes/predict.ts';
+import {
+  getLatestPrediction,
+  msToNextBoundary,
+  predict,
+  refreshRead,
+} from './routes/predict.ts';
 import { getLedger, resolvePending, summarize } from './model/ledger.ts';
 import { env } from './cache.ts';
 import { refreshCalibrators } from './model/calibration.ts';
@@ -166,3 +171,17 @@ const commitLoop = async () => {
 };
 void commitLoop();
 setInterval(commitLoop, COMMIT_TICK_MS);
+
+// Boundary kick: the fixed tick can land up to COMMIT_TICK_MS after a market
+// window closes, leaving the old window on screen. Recompute right after every
+// 5m boundary (the lattice all windows close on) so the new window's strike and
+// committed call exist the moment a countdown hits zero. The small cushion lets
+// the boundary 1m candle land first.
+const BOUNDARY_CUSHION_MS = 500;
+const scheduleBoundaryKick = () => {
+  setTimeout(async () => {
+    await commitLoop();
+    scheduleBoundaryKick();
+  }, msToNextBoundary() + BOUNDARY_CUSHION_MS);
+};
+scheduleBoundaryKick();

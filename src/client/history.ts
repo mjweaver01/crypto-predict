@@ -18,7 +18,11 @@ import {
   px,
 } from './format.ts';
 
-// ── Previous reads (windowed in-memory insight history) ──────────────────
+// ── Previous reads (windowed insight history) ─────────────────────────────
+
+// Entries whose full report is expanded, keyed by snapshot time so the state
+// survives the periodic re-render.
+const expandedReads = new Set<string>();
 
 function renderHistory(entries: InsightSnapshot[]) {
   const list = $('history-list');
@@ -30,8 +34,10 @@ function renderHistory(entries: InsightSnapshot[]) {
         ? '<span class="hist-method llm">LLM</span>'
         : '<span class="hist-method stats">Stats</span>';
       const change = `${e.change24hPct >= 0 ? '+' : ''}${e.change24hPct.toFixed(2)}%`;
+      const expanded = expandedReads.has(e.asOf);
       const reasoning = e.reasoning
-        ? `<div class="hist-reasoning">${escapeHtml(e.reasoning)}</div>`
+        ? `<div class="hist-reasoning${expanded ? '' : ' clamped'}">${escapeHtml(e.reasoning)}</div>` +
+          `<button class="read-more" data-read="${e.asOf}">${expanded ? 'Show less' : 'Read more'}</button>`
         : '';
       const calls = e.calls
         .map(
@@ -51,6 +57,24 @@ function renderHistory(entries: InsightSnapshot[]) {
       </div>`;
     })
     .join('');
+  for (const btn of list.querySelectorAll<HTMLButtonElement>('[data-read]')) {
+    // Hide the toggle when the clamp isn't actually hiding anything.
+    const body = btn.previousElementSibling as HTMLElement | null;
+    if (
+      body &&
+      !expandedReads.has(btn.dataset.read!) &&
+      body.scrollHeight <= body.clientHeight + 1
+    ) {
+      btn.style.display = 'none';
+      continue;
+    }
+    btn.addEventListener('click', () => {
+      const key = btn.dataset.read!;
+      if (expandedReads.has(key)) expandedReads.delete(key);
+      else expandedReads.add(key);
+      renderHistory(entries);
+    });
+  }
 }
 
 async function refreshHistory() {

@@ -199,16 +199,24 @@ function fmtCountdown(msLeft: number): string {
  * Repaint every element carrying a `data-end` window close time. Elements are
  * re-created by renderTabs/renderDetail each refresh, so this just queries the
  * DOM — no bookkeeping. Goes "closing" (red, pulsing) inside the last minute.
+ *
+ * When any countdown hits zero the window has rolled over, so fetch right away
+ * instead of waiting out the 5s poll. This re-fires on each 1s tick while
+ * expired windows are still on screen (refresh() is inflight-guarded), and
+ * stops naturally once the new window's data replaces the old `data-end`s.
  */
 function tickCountdowns() {
   const now = Date.now();
+  let expired = false;
   for (const el of document.querySelectorAll<HTMLElement>('[data-end]')) {
     const end = Date.parse(el.dataset.end ?? '');
     if (!Number.isFinite(end)) continue;
     const left = end - now;
     el.textContent = fmtCountdown(left);
     el.classList.toggle('closing', left <= 60_000 && left > 0);
+    if (left <= 0) expired = true;
   }
+  if (expired) void refresh();
 }
 
 function renderMarketBlock(r: RangePrediction) {
@@ -432,13 +440,7 @@ function render(p: Prediction) {
 
   // Narrative + method
   $('narrative').textContent = p.narrative;
-  const reasoning = $('reasoning');
-  if (p.reasoning) {
-    reasoning.textContent = p.reasoning;
-    reasoning.classList.add('visible');
-  } else {
-    reasoning.classList.remove('visible');
-  }
+  renderReasoning(p.reasoning);
   $('method').textContent = p.llmApplied ? 'LLM-assisted' : 'Stats-only';
 
   // Tabs + selected range detail
@@ -465,14 +467,60 @@ async function refresh() {
   }
 }
 
+// ── Full LLM report, clamped behind a "read more" toggle ─────────────────
+// Collapsed by default; expansion survives the 5s refresh (the read itself
+// only changes every 5m window or on manual refresh) and resets on new text.
+let reasoningExpanded = false;
+let lastReasoning = '';
+
+function renderReasoning(text: string | undefined) {
+  const el = $('reasoning');
+  const toggle = $<HTMLButtonElement>('reasoning-toggle');
+  if (!text) {
+    el.classList.remove('visible');
+    el.textContent = '';
+    toggle.style.display = 'none';
+    lastReasoning = '';
+    return;
+  }
+  if (text !== lastReasoning) {
+    lastReasoning = text;
+    reasoningExpanded = false; // fresh read → collapse again
+  }
+  el.textContent = text;
+  el.classList.add('visible');
+  el.classList.toggle('clamped', !reasoningExpanded);
+  // Show the toggle only when the clamp actually hides content (or when
+  // expanded, so it can be collapsed back). The clamp height comes from the
+  // parent card, so this is re-checked on resize too.
+  const overflows = el.scrollHeight > el.clientHeight + 1;
+  el.classList.toggle('truncated', !reasoningExpanded && overflows);
+  toggle.style.display = reasoningExpanded || overflows ? '' : 'none';
+  toggle.textContent = reasoningExpanded ? 'Show less' : 'Read more';
+}
+
+function wireReasoningToggle() {
+  $<HTMLButtonElement>('reasoning-toggle').addEventListener('click', () => {
+    reasoningExpanded = !reasoningExpanded;
+    renderReasoning(lastReasoning);
+  });
+  // The available height depends on the layout, so re-evaluate the clamp
+  // whenever the viewport changes.
+  window.addEventListener('resize', () => {
+    if (lastReasoning) renderReasoning(lastReasoning);
+  });
+}
+
 // On-demand LLM read: the server refreshes its read once per 5m window (at the
 // commit boundary); this button forces a brand-new read right now.
 function wireReadRefresh() {
   const btn = $<HTMLButtonElement>('read-refresh');
+  const card = btn.closest('.narrative-card');
   btn.addEventListener('click', async () => {
     if (btn.disabled) return;
     btn.disabled = true;
-    btn.classList.add('spinning');
+    btn.classList.add('loading');
+    card?.classList.add('refreshing');
     try {
       const res = await fetch('/api/read/refresh', { method: 'POST' });
       if (!res.ok) throw new Error(`refresh ${res.status}`);
@@ -482,7 +530,8 @@ function wireReadRefresh() {
       $('error').textContent = `Failed to refresh read: ${String(err)}`;
     } finally {
       btn.disabled = false;
-      btn.classList.remove('spinning');
+      btn.classList.remove('loading');
+      card?.classList.remove('refreshing');
     }
   });
 }
@@ -529,5 +578,6 @@ refresh();
 setInterval(refresh, 5_000);
 setInterval(tickCountdowns, 1_000);
 wireReadRefresh();
+wireReasoningToggle();
 connectPriceStream();
 requestAnimationFrame(animateHero);

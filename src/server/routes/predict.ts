@@ -13,7 +13,12 @@ import {
   sigmaPerMinFor,
 } from '../model/forecast.ts';
 import { extractFeatures } from '../model/features.ts';
-import { applyBias, assist } from '../model/llmAssist.ts';
+import {
+  applyBias,
+  assist,
+  statsAssist,
+  type Assist,
+} from '../model/llmAssist.ts';
 import { recordPredictions } from '../model/ledger.ts';
 import { decide, ensureHydrated } from '../model/commitments.ts';
 import {
@@ -46,20 +51,48 @@ const TTL = Number(env('CACHE_TTL_PREDICT', '20'));
  */
 let latest: Prediction | null = null;
 
-/** The latest server-computed prediction, or null before the first cycle. */
+/**
+ * The latest server-computed prediction, or null before the first cycle — or
+ * when the snapshot straddles a window boundary (some window already closed).
+ * Returning null in that case makes the API path recompute immediately, so the
+ * dashboard shows the new window's wager as soon as the countdown hits zero
+ * instead of waiting out the commit tick.
+ */
 export function getLatestPrediction(): Prediction | null {
-  return latest;
+  if (!latest) return null;
+  const now = Date.now();
+  const stale = latest.ranges.some(r => Date.parse(r.windowEnd) <= now);
+  return stale ? null : latest;
 }
 
 /**
+ * How long the regular tick waits for a fresh LLM read before serving the
+ * previous one (stale-while-revalidate). Hosted APIs usually finish within
+ * this; a slow local model keeps generating in the background and its read is
+ * picked up on a later tick — the 20s commit cadence is never blocked.
+ */
+const ASSIST_FRESH_WAIT_MS = 2_000;
+/** The manual refresh button is explicitly asking for a NEW read: wait for it. */
+const ASSIST_REFRESH_WAIT_MS = 120_000;
+
+/** Last completed LLM read, served while a newer generation is in flight. */
+let lastAssist: Assist | null = null;
+
+const delay = (ms: number) =>
+  new Promise<null>(res => setTimeout(() => res(null), ms));
+
+/**
  * Force a fresh LLM read on demand (the dashboard's refresh button): drop the
- * current 5m window's cached assist plus the prediction snapshot, then
- * recompute. Committed calls are unaffected — they were frozen at commit.
+ * current 5m window's cached assist plus the prediction snapshot, recompute,
+ * and WAIT for the new read (unlike the tick path, which serves the previous
+ * read while regenerating). Committed calls are unaffected — they were frozen.
  */
 export async function refreshRead(): Promise<Prediction> {
   invalidate(`assist:${floorTo(Date.now(), MS['5m'])}`);
   invalidate('predict:ranges');
-  return predict();
+  const p = await computePrediction(ASSIST_REFRESH_WAIT_MS);
+  latest = p;
+  return p;
 }
 
 /** Open price of the candle whose openTime is exactly `startMs`, if present. */
@@ -147,8 +180,26 @@ const META: Record<
   '1d': { label: 'Daily', resolutionSource: 'binance' },
 };
 
+/** Ms until the next 5m boundary — the lattice every market window closes on
+ * (15m/1h are multiples; the daily noon-ET close is on the hour). */
+export function msToNextBoundary(now = Date.now()): number {
+  return floorTo(now, MS['5m']) + MS['5m'] - now;
+}
+
 export async function predict(): Promise<Prediction> {
-  const p = await cached('predict:ranges', TTL, async () => {
+  // Never let a cached snapshot outlive a window boundary: clamp the TTL so the
+  // entry expires the moment any market window closes and the next call
+  // recomputes with the new window's strike + committed call.
+  const ttl = Math.max(1, Math.min(TTL, Math.ceil(msToNextBoundary() / 1000)));
+  const p = await cached('predict:ranges', ttl, () =>
+    computePrediction(ASSIST_FRESH_WAIT_MS)
+  );
+  latest = p;
+  return p;
+}
+
+async function computePrediction(assistWaitMs: number): Promise<Prediction> {
+  {
     const now = Date.now();
     const win = windowsAt(now);
 
@@ -267,13 +318,23 @@ export async function predict(): Promise<Prediction> {
       };
     });
     // Refresh the LLM read once per 5m window — at the boundary where the 5m
-    // commitment is placed — instead of on every 20s tick. The read (and its
-    // small bias) stays frozen for the window, which matches the committed-call
-    // semantics and cuts LLM traffic ~15x. The dashboard's refresh button can
-    // force a new read via refreshRead() below.
-    const a = await cached(`assist:${win['5m'].start}`, 360, () =>
+    // commitment is placed — instead of on every 20s tick. The cache is
+    // single-flight, so concurrent ticks join one generation rather than
+    // stampeding the provider. Stale-while-revalidate: if the fresh read isn't
+    // ready within `assistWaitMs`, serve the previous read and let the
+    // generation finish in the background — the commit cadence never blocks on
+    // a slow local model.
+    const assistPromise = cached(`assist:${win['5m'].start}`, 360, () =>
       assist(model, { price, reads })
     );
+    assistPromise.then(
+      v => (lastAssist = v),
+      () => {}
+    );
+    const a =
+      (await Promise.race([assistPromise, delay(assistWaitMs)])) ??
+      lastAssist ??
+      statsAssist(model, { price, reads });
 
     const ranges: RangePrediction[] = order.map((id, i) => {
       const w = win[id];
@@ -375,7 +436,5 @@ export async function predict(): Promise<Prediction> {
     );
 
     return prediction;
-  });
-  latest = p;
-  return p;
+  }
 }
