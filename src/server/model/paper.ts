@@ -29,11 +29,26 @@ export function getPolicy(): PaperPolicy {
     const v = Number(env(key, String(fallback)));
     return Number.isFinite(v) ? v : fallback;
   };
+  // Per-family edge gates, calibrated by the backfilled edge report: 5m has
+  // measured tradable edge at 2¢; the others were flat-to-negative below 5¢,
+  // so they carry the higher bar until they prove otherwise. PAPER_MIN_EDGE
+  // (if set) overrides any family without its own PAPER_MIN_EDGE_<FAM>.
+  const baseRaw = env('PAPER_MIN_EDGE', '');
+  const base = baseRaw === '' ? NaN : Number(baseRaw); // Number('') is 0!
+  const fam = (key: string, fallback: number) =>
+    num(key, Number.isFinite(base) ? base : fallback);
   return {
     startBankroll: num('PAPER_START_BANKROLL', 1000),
-    minEdge: num('PAPER_MIN_EDGE', 0.02),
+    minEdge: {
+      '5m': fam('PAPER_MIN_EDGE_5M', 0.02),
+      '15m': fam('PAPER_MIN_EDGE_15M', 0.05),
+      '1h': fam('PAPER_MIN_EDGE_1H', 0.05),
+      '1d': fam('PAPER_MIN_EDGE_1D', 0.05),
+    },
     kellyFraction: num('PAPER_KELLY_FRACTION', 0.25),
-    maxStakeFraction: num('PAPER_MAX_STAKE_FRACTION', 0.1),
+    // A ~6% edge does not justify 10% swings: the backfilled replay hit a 48%
+    // drawdown at 0.10. Half the cap costs little growth, halves the pain.
+    maxStakeFraction: num('PAPER_MAX_STAKE_FRACTION', 0.05),
   };
 }
 
@@ -63,6 +78,7 @@ export function kellyFraction(p: number, cost: number): number {
 export function decideBet(
   probUp: number,
   side: Side,
+  family: RangeId,
   bidUp: number | undefined,
   askUp: number | undefined,
   policy: PaperPolicy = getPolicy()
@@ -73,7 +89,7 @@ export function decideBet(
   }
   const pSide = side === 'UP' ? probUp : 1 - probUp;
   const edge = pSide - cost;
-  if (edge < policy.minEdge) {
+  if (edge < policy.minEdge[family]) {
     return {
       action: 'PASS',
       side,
@@ -123,7 +139,14 @@ export function simulatePaper(
   );
 
   for (const e of book) {
-    const d = decideBet(e.probUp, e.side, e.marketBidUp, e.marketAskUp, policy);
+    const d = decideBet(
+      e.probUp,
+      e.side,
+      e.rangeId,
+      e.marketBidUp,
+      e.marketAskUp,
+      policy
+    );
     const resolved = e.outcome != null && e.correct != null;
     if (resolved) sources[e.bookSource === 'trades' ? 'trades' : 'live']++;
     if (d.action === 'PASS') {

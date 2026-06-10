@@ -393,7 +393,13 @@ async function computePrediction(assistWaitMs: number): Promise<Prediction> {
       // the paper-trading replay makes, surfaced live.
       if (range.committed) {
         const c = range.committed;
-        range.paper = decideBet(c.probUp, c.side, c.marketBidUp, c.marketAskUp);
+        range.paper = decideBet(
+          c.probUp,
+          c.side,
+          id,
+          c.marketBidUp,
+          c.marketAskUp
+        );
       }
       return range;
     });

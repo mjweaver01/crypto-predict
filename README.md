@@ -249,10 +249,11 @@ The EV decision layer, simulated with no money at risk. Each committed call
 gets a frozen verdict (`src/server/model/paper.ts`, surfaced live on the
 dashboard and on every range as `paper`):
 
-- **BET** when `edge = P(side) − cost` at the commit-time book clears
-  `PAPER_MIN_EDGE` (default 2¢), staking fractional Kelly
-  (`PAPER_KELLY_FRACTION`, default ¼) capped at `PAPER_MAX_STAKE_FRACTION`
-  (default 10%) of the bankroll;
+- **BET** when `edge = P(side) − cost` at the commit-time book clears the
+  family's minimum edge (`PAPER_MIN_EDGE_5M/15M/1H/1D`, defaults 2/5/5/5¢ —
+  calibrated by the backfilled edge report; `PAPER_MIN_EDGE` overrides all),
+  staking fractional Kelly (`PAPER_KELLY_FRACTION`, default ¼) capped at
+  `PAPER_MAX_STAKE_FRACTION` (default 5%) of the bankroll;
 - **PASS** otherwise — abstention is the discipline that converts calibration
   into profit.
 

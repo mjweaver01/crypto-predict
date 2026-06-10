@@ -235,8 +235,11 @@ export interface PaperDecision {
 /** Paper-trading policy (env-tunable); echoed in the API for transparency. */
 export interface PaperPolicy {
   startBankroll: number;
-  /** Minimum edge (probability − cost) required to take a bet. */
-  minEdge: number;
+  /**
+   * Minimum edge (probability − cost) required to take a bet, per family.
+   * Families with unproven tradable edge carry a higher bar.
+   */
+  minEdge: Record<RangeId, number>;
   /** Fraction of full Kelly actually staked (e.g. 0.25 = quarter-Kelly). */
   kellyFraction: number;
   /** Hard cap on the fraction of bankroll staked on any single bet. */

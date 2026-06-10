@@ -358,11 +358,13 @@ function renderPaper() {
   const axis = $('pt-axis');
   const legend = $('pt-legend');
   const betsEl = $('pt-bets');
-  const polTxt =
-    `min edge ${(pol.minEdge * 100).toFixed(0)}¢ · ` +
-    `${(pol.kellyFraction * 100).toFixed(0)}% Kelly, ≤${(pol.maxStakeFraction * 100).toFixed(0)}%/bet`;
-
   const famFilter = recordFilter !== 'ALL';
+  const meTxt = famFilter
+    ? `min edge ${(pol.minEdge[recordFilter as RangeId] * 100).toFixed(0)}¢`
+    : `min edge ${RECORD_RANGES.map(id => (pol.minEdge[id] * 100).toFixed(0)).join('/')}¢ (${RECORD_RANGES.join('/')})`;
+  const polTxt =
+    `${meTxt} · ` +
+    `${(pol.kellyFraction * 100).toFixed(0)}% Kelly, ≤${(pol.maxStakeFraction * 100).toFixed(0)}%/bet`;
   const bets = famFilter
     ? p.bets.filter(b => b.rangeId === recordFilter)
     : p.bets;
