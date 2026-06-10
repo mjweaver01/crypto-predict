@@ -236,7 +236,8 @@ function renderDetail(p: Prediction) {
       `(${c.horizonMinutes.toFixed(1)}m left)`;
     committedEl.className = `detail-window committed ${c.side === 'UP' ? 'up' : 'down'}`;
   } else {
-    committedEl.textContent = 'No committed call — window opened before tracking began';
+    committedEl.textContent =
+      'No committed call — window opened before tracking began';
     committedEl.className = 'detail-window committed muted';
   }
 
@@ -420,6 +421,28 @@ async function refresh() {
   }
 }
 
+// On-demand LLM read: the server refreshes its read once per 5m window (at the
+// commit boundary); this button forces a brand-new read right now.
+function wireReadRefresh() {
+  const btn = $<HTMLButtonElement>('read-refresh');
+  btn.addEventListener('click', async () => {
+    if (btn.disabled) return;
+    btn.disabled = true;
+    btn.classList.add('spinning');
+    try {
+      const res = await fetch('/api/read/refresh', { method: 'POST' });
+      if (!res.ok) throw new Error(`refresh ${res.status}`);
+      render((await res.json()) as Prediction);
+      $('error').textContent = '';
+    } catch (err) {
+      $('error').textContent = `Failed to refresh read: ${String(err)}`;
+    } finally {
+      btn.disabled = false;
+      btn.classList.remove('spinning');
+    }
+  });
+}
+
 // ── Live spot price stream (SSE) ─────────────────────────────────────────
 // True once the first tick arrives, after which the stream owns #price/#change.
 let streaming = false;
@@ -460,5 +483,6 @@ function connectPriceStream() {
 
 refresh();
 setInterval(refresh, 5_000);
+wireReadRefresh();
 connectPriceStream();
 requestAnimationFrame(animateHero);

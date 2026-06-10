@@ -1,4 +1,4 @@
-import { getLatestPrediction, predict } from './routes/predict.ts';
+import { getLatestPrediction, predict, refreshRead } from './routes/predict.ts';
 import { getLedger, resolvePending, summarize } from './model/ledger.ts';
 import { env } from './cache.ts';
 import { refreshCalibrators } from './model/calibration.ts';
@@ -92,6 +92,10 @@ const server = Bun.serve({
       if (pathname === '/api/metrics') {
         // Prequential learning-curve scores (raw vs calibrated vs market).
         return json(await computeMetrics());
+      }
+      if (pathname === '/api/read/refresh' && req.method === 'POST') {
+        // Force a fresh LLM read now (normally refreshed once per 5m window).
+        return json(await refreshRead());
       }
     } catch (err) {
       console.error(err);

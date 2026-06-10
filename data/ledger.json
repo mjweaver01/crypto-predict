@@ -21102,7 +21102,11 @@
     "horizonMinutes": 4.809583333333333,
     "decidedAt": "2026-06-10T04:05:11.425Z",
     "source": "live",
-    "outcome": null
+    "outcome": "UP",
+    "closePrice": 61553.99,
+    "correct": true,
+    "resolvedBy": "binance",
+    "resolvedAt": "2026-06-10T04:10:07.442Z"
   },
   "5m:1781063400000": {
     "id": "5m:1781063400000",
@@ -21223,5 +21227,32 @@
     "correct": false,
     "resolvedBy": "polymarket",
     "resolvedAt": "2026-06-10T04:07:24.870Z"
+  },
+  "5m:1781064600000": {
+    "id": "5m:1781064600000",
+    "rangeId": "5m",
+    "slug": "btc-updown-5m-1781064600",
+    "windowStart": "2026-06-10T04:10:00.000Z",
+    "windowEnd": "2026-06-10T04:15:00.000Z",
+    "strike": 61504.64882,
+    "probUp": 0.9546712324239371,
+    "rawProbUp": 0.9582751076061261,
+    "side": "UP",
+    "confidence": 0.9546712324239371,
+    "marketImpliedUp": 0.505,
+    "features": {
+      "z": 1.4488138142383586,
+      "m15": 0.5436034371794399,
+      "m60": 0.9867974163967032,
+      "m240": 0,
+      "vr": -0.4720534791433677,
+      "todSin": 0.8870108331782217,
+      "todCos": 0.4617486132350339,
+      "mkt": 0.020000666706669435
+    },
+    "horizonMinutes": 4.4816666666666665,
+    "decidedAt": "2026-06-10T04:10:31.100Z",
+    "source": "live",
+    "outcome": null
   }
 }

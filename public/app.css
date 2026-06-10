@@ -562,6 +562,46 @@ header {
   padding: 3px 10px;
   border-radius: 100px;
 }
+.narrative-tags {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.read-refresh {
+  appearance: none;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 100px;
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+.read-refresh:hover {
+  color: var(--accent);
+  border-color: rgba(247, 147, 26, 0.4);
+}
+.read-refresh:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+.read-refresh.spinning {
+  animation: read-spin 0.9s linear infinite;
+}
+@keyframes read-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 #narrative {
   font-size: 21px;
   font-weight: 600;

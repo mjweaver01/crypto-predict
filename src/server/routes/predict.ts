@@ -1,4 +1,4 @@
-import { cached, env } from '../cache.ts';
+import { cached, env, invalidate } from '../cache.ts';
 import {
   fetch24hChangePct,
   fetchCandleAt,
@@ -49,6 +49,17 @@ let latest: Prediction | null = null;
 /** The latest server-computed prediction, or null before the first cycle. */
 export function getLatestPrediction(): Prediction | null {
   return latest;
+}
+
+/**
+ * Force a fresh LLM read on demand (the dashboard's refresh button): drop the
+ * current 5m window's cached assist plus the prediction snapshot, then
+ * recompute. Committed calls are unaffected — they were frozen at commit.
+ */
+export async function refreshRead(): Promise<Prediction> {
+  invalidate(`assist:${floorTo(Date.now(), MS['5m'])}`);
+  invalidate('predict:ranges');
+  return predict();
 }
 
 /** Open price of the candle whose openTime is exactly `startMs`, if present. */
@@ -255,7 +266,14 @@ export async function predict(): Promise<Prediction> {
         marketImpliedUp: markets[i]?.impliedUp,
       };
     });
-    const a = await assist(model, { price, reads });
+    // Refresh the LLM read once per 5m window — at the boundary where the 5m
+    // commitment is placed — instead of on every 20s tick. The read (and its
+    // small bias) stays frozen for the window, which matches the committed-call
+    // semantics and cuts LLM traffic ~15x. The dashboard's refresh button can
+    // force a new read via refreshRead() below.
+    const a = await cached(`assist:${win['5m'].start}`, 360, () =>
+      assist(model, { price, reads })
+    );
 
     const ranges: RangePrediction[] = order.map((id, i) => {
       const w = win[id];

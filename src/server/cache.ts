@@ -30,6 +30,11 @@ export async function cached<T>(
   }
 }
 
+/** Drop a cached entry so the next `cached()` call recomputes it. */
+export function invalidate(key: string): void {
+  store.delete(key);
+}
+
 export function env(key: string, fallback = ''): string {
   return process.env[key] ?? fallback;
 }
