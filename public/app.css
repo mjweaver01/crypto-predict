@@ -422,6 +422,28 @@ header {
 .edge.down {
   color: var(--down);
 }
+/* EV-layer verdict chip on the committed call: bet vs abstain. */
+.paper-chip {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  padding: 2px 7px;
+  border-radius: 100px;
+  border: 1px solid;
+  margin-right: 6px;
+  vertical-align: 1px;
+}
+.paper-chip.bet {
+  color: var(--accent);
+  background: rgba(247, 147, 26, 0.12);
+  border-color: rgba(247, 147, 26, 0.35);
+}
+.paper-chip.pass {
+  color: var(--text-dim);
+  background: transparent;
+  border-color: var(--border);
+}
 
 /* ── Tabs + detail panel ────────────────────────────────── */
 /* Each family tab is a mini stat-card: label + call chip on top, a large
@@ -773,8 +795,10 @@ header {
 }
 
 /* ── Hit-rate hero (headline stats + accuracy-over-time chart) ── */
+/* History-page cards stack directly in <main>, so each carries the page's
+   14px vertical rhythm itself (matches .history-grid's gap). */
 .hr-card {
-  margin-top: 0;
+  margin-top: 14px;
 }
 .hr-top {
   display: flex;

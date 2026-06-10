@@ -4,6 +4,7 @@ import type {
   LedgerEntry,
   LedgerSummary,
   MetricsResponse,
+  PaperResponse,
   RangeId,
 } from '../shared/types.ts';
 import {
@@ -244,6 +245,116 @@ async function refreshMetrics() {
   }
 }
 
+// ── Paper trading (EV policy replayed at real order-book costs) ───────────
+
+/** Equity curve: bankroll after each resolved bet vs the starting baseline. */
+function equityChart(p: PaperResponse): string {
+  const pts = p.equity;
+  if (pts.length < 2) return '<div class="chart-empty"></div>';
+
+  const W = 100;
+  const H = 100;
+  const PADX = 1.5;
+  const PADTOP = 8;
+  const PADBOT = 8;
+  const start = p.policy.startBankroll;
+  const vals = pts.map(x => x.bankroll).concat(start);
+  const lo = Math.min(...vals);
+  const hi = Math.max(...vals);
+  const span = Math.max(hi - lo, 1e-9);
+  const lastIdx = pts.length - 1;
+  const X = (i: number) => PADX + (i / lastIdx) * (W - 2 * PADX);
+  const Y = (v: number) =>
+    PADTOP + (1 - (v - lo) / span) * (H - PADTOP - PADBOT);
+
+  const line = pts
+    .map((x, i) => `${i ? 'L' : 'M'}${px(X(i))} ${px(Y(x.bankroll))}`)
+    .join(' ');
+  const yBase = px(Y(start));
+  const color =
+    pts[pts.length - 1]!.bankroll >= start ? COLORS.up : COLORS.down;
+  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+    <line x1="0" y1="${yBase}" x2="${W}" y2="${yBase}" stroke="${COLORS.muted}" stroke-width="1" stroke-dasharray="3 3" opacity="0.4" vector-effect="non-scaling-stroke"/>
+    <path d="${line}" fill="none" stroke="${color}" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  </svg>`;
+}
+
+function renderPaper(p: PaperResponse) {
+  const s = p.summary;
+  const pol = p.policy;
+  const sub = $('pt-sub');
+  const stats = $('pt-stats');
+  const chart = $('pt-chart');
+  const axis = $('pt-axis');
+  const legend = $('pt-legend');
+  const polTxt =
+    `min edge ${(pol.minEdge * 100).toFixed(0)}¢ · ` +
+    `${(pol.kellyFraction * 100).toFixed(0)}% Kelly, ≤${(pol.maxStakeFraction * 100).toFixed(0)}%/bet`;
+
+  if (s.bets === 0) {
+    sub.textContent =
+      `No resolved paper bets yet · ${p.open.length} open · ${polTxt} — ` +
+      'accumulates as commits with real bid/ask resolve.';
+    stats.innerHTML = '';
+    chart.innerHTML = '<div class="chart-empty"></div>';
+    axis.innerHTML = '';
+    legend.innerHTML = '';
+    return;
+  }
+
+  sub.textContent =
+    `${s.bets} bets (${s.wins}W–${s.bets - s.wins}L) · ` +
+    `${s.passes} passes · ${p.open.length} open · ${polTxt}`;
+  const sign = s.pnl >= 0 ? '+' : '';
+  stats.innerHTML = `
+    <div>
+      <div class="rstat-label">Bankroll</div>
+      <div class="rstat-val accent">${fmtUsd2(s.bankroll)}</div>
+    </div>
+    <div>
+      <div class="rstat-label">P&amp;L</div>
+      <div class="rstat-val" style="color:${s.pnl >= 0 ? COLORS.up : COLORS.down}">${sign}${fmtUsd2(s.pnl)}</div>
+    </div>
+    <div>
+      <div class="rstat-label">ROI</div>
+      <div class="rstat-val">${fmtPct(s.roi)}</div>
+    </div>
+    <div>
+      <div class="rstat-label">Max DD</div>
+      <div class="rstat-val">${fmtPct(s.maxDrawdown)}</div>
+    </div>`;
+
+  chart.innerHTML = equityChart(p);
+  if (p.equity.length >= 2) {
+    const first = p.equity[0]!;
+    const last = p.equity[p.equity.length - 1]!;
+    axis.innerHTML =
+      `<span>${fmtDay(first.t)}</span>` +
+      `<span class="hl">bankroll per resolved bet</span>` +
+      `<span>${fmtDay(last.t)}</span>`;
+  } else {
+    axis.innerHTML = '<span>Not enough resolved bets to chart yet.</span>';
+  }
+  legend.innerHTML = p.families
+    .map(f => {
+      const sgn = f.pnl >= 0 ? '+' : '';
+      return `<span class="key"><span class="swatch" style="background:${
+        f.pnl >= 0 ? COLORS.up : COLORS.down
+      }"></span>${f.rangeId}: ${sgn}${fmtUsd2(f.pnl)} (${f.wins}/${f.bets}, roi ${fmtPct(f.roi)})</span>`;
+    })
+    .join('');
+}
+
+async function refreshPaper() {
+  try {
+    const res = await fetch('/api/paper');
+    if (!res.ok) return;
+    renderPaper((await res.json()) as PaperResponse);
+  } catch {
+    // Paper scoreboard is best-effort; ignore transient failures.
+  }
+}
+
 // ── Hit rate over time (accuracy-over-time line chart) ───────────────────
 // Rolling window (in resolved calls) for the recent-form line.
 const ROLL_N = 25;
@@ -402,5 +513,7 @@ setInterval(refreshHistory, 5_000);
 // the same resolutions, so they share that cadence.
 refreshRecord();
 refreshMetrics();
+refreshPaper();
 setInterval(refreshRecord, 30_000);
 setInterval(refreshMetrics, 30_000);
+setInterval(refreshPaper, 30_000);

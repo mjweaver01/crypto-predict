@@ -42,6 +42,21 @@ export interface LedgerEntry {
   /** Market-implied Up captured at commit time, if a live market existed. */
   marketImpliedUp?: number;
   /**
+   * Tradable CLOB prices for the UP token captured at commit time: the bet we
+   * grade is only as real as the price we could have executed at. Buying Up
+   * costs `marketAskUp`; buying Down costs `1 - marketBidUp`.
+   */
+  marketBidUp?: number;
+  marketAskUp?: number;
+  /** ISO time the commit-time order book was read (staleness audit). */
+  marketQuotedAt?: string;
+  /**
+   * Where the tradable prices came from: a live order-book snapshot at commit,
+   * or a backfill from real executed fills early in the window (conservative —
+   * worst fill price — but still an approximation of the commit-instant book).
+   */
+  bookSource?: 'live' | 'trades';
+  /**
    * Commit-time feature record (see server features.ts) frozen with the call —
    * the inputs the learned layer trains on. Absent on legacy rows.
    */
@@ -154,6 +169,12 @@ export interface MarketQuote {
   impliedUp: number;
   /** Convenience: 1 - impliedUp */
   impliedDown: number;
+  /** Best bid for the UP token (0..1) — the price you could SELL Up at. */
+  upBestBid?: number;
+  /** Best ask for the UP token (0..1) — the price you could BUY Up at. */
+  upBestAsk?: number;
+  /** ISO time the order book was read, to audit staleness vs commit time. */
+  quotedAt?: string;
 }
 
 /**
@@ -184,6 +205,99 @@ export interface CommittedCall {
   decidedAt: string;
   /** Minutes left in the window at the moment we committed. */
   horizonMinutes: number;
+  /**
+   * Tradable CLOB prices for the UP token frozen with the call. The paper bet
+   * is priced off these — never off a later (less forward-looking) book.
+   */
+  marketBidUp?: number;
+  marketAskUp?: number;
+}
+
+/**
+ * The EV layer's verdict on a committed call: whether the frozen probability
+ * beats the frozen tradable price by enough to be worth a (paper) bet, and how
+ * much of the bankroll fractional Kelly would stake on it.
+ */
+export interface PaperDecision {
+  action: 'BET' | 'PASS';
+  /** Side the bet would take (the committed side). */
+  side: Side;
+  /** Cost (0..1) per $1 of payout at the frozen book, when computable. */
+  cost?: number;
+  /** Model probability of `side` minus `cost`. */
+  edge?: number;
+  /** Fraction of bankroll staked (fractional Kelly, capped). 0 when PASS. */
+  stakeFraction: number;
+  /** Why a PASS passed: no book at commit, or edge below the minimum. */
+  reason?: 'no-book' | 'edge-below-min';
+}
+
+/** Paper-trading policy (env-tunable); echoed in the API for transparency. */
+export interface PaperPolicy {
+  startBankroll: number;
+  /** Minimum edge (probability − cost) required to take a bet. */
+  minEdge: number;
+  /** Fraction of full Kelly actually staked (e.g. 0.25 = quarter-Kelly). */
+  kellyFraction: number;
+  /** Hard cap on the fraction of bankroll staked on any single bet. */
+  maxStakeFraction: number;
+}
+
+/** One simulated bet in the paper-trading replay. */
+export interface PaperBet {
+  id: string;
+  rangeId: RangeId;
+  decidedAt: string;
+  windowEnd: string;
+  side: Side;
+  /** Cost (0..1) per $1 of payout at the commit-time book. */
+  cost: number;
+  /** Model probability of the side taken, frozen at commit. */
+  pSide: number;
+  edge: number;
+  /** Dollars staked (bankroll × stake fraction at the time of the bet). */
+  stake: number;
+  /** Realized profit/loss in dollars; undefined while the window is open. */
+  pnl?: number;
+  bankrollAfter?: number;
+  won?: boolean;
+}
+
+export interface PaperFamilyStats {
+  rangeId: RangeId;
+  bets: number;
+  wins: number;
+  staked: number;
+  pnl: number;
+  /** pnl / staked. */
+  roi: number;
+}
+
+export interface PaperResponse {
+  policy: PaperPolicy;
+  summary: {
+    bankroll: number;
+    pnl: number;
+    /** pnl / total staked (return on turnover). */
+    roi: number;
+    /** Worst peak-to-trough bankroll loss, as a fraction of the peak. */
+    maxDrawdown: number;
+    bets: number;
+    wins: number;
+    /** Resolved real-book calls that failed the min-edge test. */
+    passes: number;
+    /** Resolved real-book calls scored (bets + passes). */
+    evaluated: number;
+    /** Where evaluated rows' tradable prices came from. */
+    sources: { live: number; trades: number };
+  };
+  families: PaperFamilyStats[];
+  /** Bankroll after each resolved bet, for the equity curve. */
+  equity: { t: number; bankroll: number }[];
+  /** Most recent resolved bets, newest first. */
+  bets: PaperBet[];
+  /** Bets on still-open windows (stake priced at the current bankroll). */
+  open: PaperBet[];
 }
 
 /**
@@ -233,6 +347,8 @@ export interface RangePrediction {
   calibration?: CalibrationInfo;
   /** Live Polymarket quote for this exact window, when one exists. */
   market?: MarketQuote;
+  /** EV verdict on the committed call (absent when nothing was committed). */
+  paper?: PaperDecision;
 }
 
 /** Compact, display-friendly summary of a range's active calibrator. */

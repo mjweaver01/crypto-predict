@@ -62,6 +62,8 @@ export async function ensureHydrated(): Promise<void> {
         features: e.features,
         decidedAt: e.decidedAt,
         horizonMinutes: e.horizonMinutes,
+        marketBidUp: e.marketBidUp,
+        marketAskUp: e.marketAskUp,
       });
     }
   } catch (err) {
@@ -105,6 +107,10 @@ export function decide(
     features: r.features,
     decidedAt: new Date(now).toISOString(),
     horizonMinutes: r.horizonMinutes,
+    // Freeze the tradable book with the call: the paper bet must be priced at
+    // what was executable when the wager was made, not a later (wiser) quote.
+    marketBidUp: r.market?.upBestBid,
+    marketAskUp: r.market?.upBestAsk,
   };
   commitments.set(id, call);
   return call;

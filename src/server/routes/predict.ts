@@ -21,6 +21,7 @@ import {
 } from '../model/llmAssist.ts';
 import { recordPredictions } from '../model/ledger.ts';
 import { decide, ensureHydrated } from '../model/commitments.ts';
+import { decideBet } from '../model/paper.ts';
 import {
   applyCalibration,
   calibrationInfo,
@@ -388,6 +389,12 @@ async function computePrediction(assistWaitMs: number): Promise<Prediction> {
       // live probUp above keeps converging toward the outcome; `committed` is
       // the forward-looking bet we actually grade.
       range.committed = decide(range, now);
+      // EV verdict on the frozen call at its frozen book — the same decision
+      // the paper-trading replay makes, surfaced live.
+      if (range.committed) {
+        const c = range.committed;
+        range.paper = decideBet(c.probUp, c.side, c.marketBidUp, c.marketAskUp);
+      }
       return range;
     });
 

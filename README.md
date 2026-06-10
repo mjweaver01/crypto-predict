@@ -219,6 +219,51 @@ GET /api/insights  → windowed log of how the model's read evolved
                      (persisted across restarts)
 ```
 
+### Tradable edge (`bun run edge`)
+
+Hit rate vs a coin flip pays nothing — a call only has value if our probability
+beats the price the order book would actually fill at (buy Up at the **ask**,
+buy Down at **1 − bid**). Each committed call therefore freezes the Polymarket
+CLOB **best bid/ask** for the Up token (`marketBidUp` / `marketAskUp`, with
+`marketQuotedAt` to audit staleness) alongside the midpoint.
+
+`bun run edge` re-scores the whole ledger against those tradable prices:
+simulated P&L/ROI per family at real order-book costs, a half-spread
+sensitivity sweep for legacy midpoint-only rows, and a min-edge abstention
+sweep (only "take" bets whose model-vs-cost edge clears a threshold). The
+real-book section is the verdict; it accumulates from the moment this feature
+ships.
+
+**Backfilling tradable prices** (`bun run backfill:book`): the CLOB book has
+no history, but executed fills do — Polymarket's trade tape (data-api
+`/trades`) proves what each side actually cost. For every legacy row the
+script collects fills inside the window's genuine commit span (the first
+`COMMIT_BY_FRACTION` of its life, the same rule the live wager obeys) and
+takes the **worst** executable price per side, so backfilled costs never
+flatter the edge. Rows are marked `bookSource: 'trades'` (vs `'live'` for
+real commit-time book snapshots) and every scoreboard reports the split.
+
+### Paper trading (`GET /api/paper`)
+
+The EV decision layer, simulated with no money at risk. Each committed call
+gets a frozen verdict (`src/server/model/paper.ts`, surfaced live on the
+dashboard and on every range as `paper`):
+
+- **BET** when `edge = P(side) − cost` at the commit-time book clears
+  `PAPER_MIN_EDGE` (default 2¢), staking fractional Kelly
+  (`PAPER_KELLY_FRACTION`, default ¼) capped at `PAPER_MAX_STAKE_FRACTION`
+  (default 10%) of the bankroll;
+- **PASS** otherwise — abstention is the discipline that converts calibration
+  into profit.
+
+The scoreboard is a deterministic replay of this policy over every resolved
+ledger entry carrying real commit-time bid/ask (legacy midpoint-only rows are
+excluded — they are not bankable evidence). Nothing is stored: the ledger
+stays the single source of truth, and a policy change re-scores all history.
+The history page renders the equity curve, bankroll, ROI on turnover, max
+drawdown, and per-family P&L (starting bankroll `PAPER_START_BANKROLL`,
+default $1,000).
+
 ---
 
 ## Strike (price to beat)

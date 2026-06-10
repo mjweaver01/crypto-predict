@@ -78,6 +78,16 @@ export async function recordPredictions(p: Prediction): Promise<void> {
         side: c.side,
         confidence: c.confidence,
         marketImpliedUp: r.market?.impliedUp,
+        // Prefer the book frozen with the call: after a restart this tick's
+        // live quote is later than the commit instant the call came from.
+        marketBidUp: c.marketBidUp ?? r.market?.upBestBid,
+        marketAskUp: c.marketAskUp ?? r.market?.upBestAsk,
+        marketQuotedAt: r.market?.quotedAt,
+        bookSource:
+          (c.marketBidUp ?? r.market?.upBestBid) !== undefined ||
+          (c.marketAskUp ?? r.market?.upBestAsk) !== undefined
+            ? 'live'
+            : undefined,
         features: c.features,
         horizonMinutes: c.horizonMinutes,
         decidedAt: c.decidedAt,

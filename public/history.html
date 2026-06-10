@@ -53,6 +53,24 @@
         <div class="hr-legend" id="lc-legend"></div>
       </div>
 
+      <!-- Paper trading: the EV policy (min edge + fractional Kelly) replayed
+           over every resolved call with REAL commit-time order-book prices.
+           Simulated profit is the scoreboard that matters; no money at risk -->
+      <div class="card hr-card">
+        <div class="hr-top">
+          <div>
+            <span class="card-title"><span>Paper trading · real order-book costs</span></span>
+            <div class="record-sub" id="pt-sub">—</div>
+          </div>
+          <div class="record-stats" id="pt-stats"></div>
+        </div>
+        <div class="chart hr-chart" id="pt-chart">
+          <div class="chart-empty"></div>
+        </div>
+        <div class="hr-axis" id="pt-axis"></div>
+        <div class="hr-legend" id="pt-legend"></div>
+      </div>
+
       <div class="history-grid">
         <!-- Chronological log of calls vs realized outcomes (persisted ledger) -->
         <div class="card record-card">

@@ -5,6 +5,7 @@ import {
   refreshRead,
 } from './routes/predict.ts';
 import { getLedger, resolvePending, summarize } from './model/ledger.ts';
+import { simulatePaper } from './model/paper.ts';
 import { env } from './cache.ts';
 import { refreshCalibrators } from './model/calibration.ts';
 import { computeMetrics } from './model/metrics.ts';
@@ -97,6 +98,12 @@ const server = Bun.serve({
       if (pathname === '/api/metrics') {
         // Prequential learning-curve scores (raw vs calibrated vs market).
         return json(await computeMetrics());
+      }
+      if (pathname === '/api/paper') {
+        // Paper-trading replay: the EV policy run over every resolved call
+        // with real commit-time order-book prices. Deterministic from the
+        // ledger, so it is recomputed on demand rather than stored.
+        return json(simulatePaper(await getLedger()));
       }
       if (pathname === '/api/read/refresh' && req.method === 'POST') {
         // Force a fresh LLM read now (normally refreshed once per 5m window).

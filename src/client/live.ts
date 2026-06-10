@@ -242,13 +242,68 @@ function renderMarketBlock(r: RangePrediction) {
   const wagerUp = r.committed ? r.committed.probUp : r.probUp;
   $('d-market-bars').innerHTML = compareBars(m.impliedUp, wagerUp);
 
-  const edge = wagerUp - m.impliedUp;
+  // The midpoint is not a price anyone fills at — surface the actual order
+  // book and price the wager's side off it: Up costs the ask, Down costs
+  // 1 - bid. Only when the book is unavailable fall back to midpoint edge.
+  const cents = (v: number) => `${(v * 100).toFixed(1)}¢`;
+  const bookEl = $('d-book');
+  if (m.upBestBid !== undefined || m.upBestAsk !== undefined) {
+    bookEl.style.display = 'block';
+    bookEl.textContent =
+      `Book (Up token): ${m.upBestBid !== undefined ? cents(m.upBestBid) : '—'} bid / ` +
+      `${m.upBestAsk !== undefined ? cents(m.upBestAsk) : '—'} ask`;
+  } else {
+    bookEl.style.display = 'none';
+  }
+
   const edgeEl = $('d-edge');
   const basis = r.committed ? 'committed' : 'live read';
-  edgeEl.textContent = `Edge vs market: ${edge >= 0 ? '+' : ''}${(edge * 100).toFixed(1)} pts ${
-    edge >= 0 ? '(model favors Up)' : '(model favors Down)'
-  } · ${basis}`;
-  edgeEl.className = `edge ${edge >= 0 ? 'up' : 'down'}`;
+  const side = wagerUp >= 0.5 ? 'UP' : 'DOWN';
+  const cost =
+    side === 'UP'
+      ? m.upBestAsk
+      : m.upBestBid !== undefined
+        ? 1 - m.upBestBid
+        : undefined;
+  if (cost !== undefined && cost > 0 && cost < 1) {
+    const pSide = side === 'UP' ? wagerUp : 1 - wagerUp;
+    const edge = pSide - cost;
+    edgeEl.textContent =
+      `Tradable edge: ${edge >= 0 ? '+' : ''}${cents(edge)} on ${side} ` +
+      `(costs ${cents(cost)}, model ${fmtPct(pSide)}) · ${basis}`;
+    edgeEl.className = `edge ${edge >= 0 ? 'up' : 'down'}`;
+  } else {
+    const edge = wagerUp - m.impliedUp;
+    edgeEl.textContent = `Edge vs market: ${edge >= 0 ? '+' : ''}${(edge * 100).toFixed(1)} pts ${
+      edge >= 0 ? '(model favors Up)' : '(model favors Down)'
+    } · ${basis}`;
+    edgeEl.className = `edge ${edge >= 0 ? 'up' : 'down'}`;
+  }
+
+  // The EV layer's frozen verdict on the committed call: bet (with Kelly
+  // sizing) or abstain. This is the same decision the paper-trading replay
+  // grades, so the live chip and the scoreboard always agree.
+  const paperEl = $('d-paper');
+  const pd = r.paper;
+  if (!pd) {
+    paperEl.style.display = 'none';
+  } else {
+    paperEl.style.display = 'block';
+    if (pd.action === 'BET') {
+      paperEl.innerHTML =
+        `<span class="paper-chip bet">PAPER BET</span>` +
+        `${pd.side} at ${cents(pd.cost!)} · edge +${cents(pd.edge!)} · ` +
+        `stake ${(pd.stakeFraction * 100).toFixed(1)}% of bankroll`;
+    } else {
+      const why =
+        pd.reason === 'no-book'
+          ? 'no order book at commit'
+          : `edge ${pd.edge !== undefined && pd.edge >= 0 ? '+' : ''}${
+              pd.edge !== undefined ? cents(pd.edge) : '—'
+            } below minimum`;
+      paperEl.innerHTML = `<span class="paper-chip pass">NO BET</span>${why}`;
+    }
+  }
 
   $('d-note').textContent = r.strikeIsProxy
     ? 'Resolves on Chainlink BTC/USD; strike shown is a Binance-open proxy (Polymarket price-to-beat unavailable).'

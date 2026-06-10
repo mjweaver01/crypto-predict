@@ -42,6 +42,48 @@ async function midpoint(tokenId: string): Promise<number | undefined> {
   return Number.isFinite(mid) ? mid : undefined;
 }
 
+interface ClobBookLevel {
+  price?: string;
+  size?: string;
+}
+
+/**
+ * Best bid/ask (0..1) for a token from the CLOB order book — the prices a bet
+ * could actually execute at, unlike the midpoint. Levels are scanned for the
+ * extremes rather than trusting order. `quotedAt` is the book's own timestamp.
+ */
+async function bookTop(
+  tokenId: string
+): Promise<{ bid?: number; ask?: number; quotedAt?: string } | undefined> {
+  const data = (await getJson(`${CLOB}/book?token_id=${tokenId}`)) as {
+    timestamp?: string | number;
+    bids?: ClobBookLevel[];
+    asks?: ClobBookLevel[];
+  };
+  const best = (
+    levels: ClobBookLevel[] | undefined,
+    pick: (a: number, b: number) => number
+  ): number | undefined => {
+    let out: number | undefined;
+    for (const l of levels ?? []) {
+      const p = Number(l.price);
+      if (!Number.isFinite(p) || p <= 0 || p >= 1) continue;
+      out = out === undefined ? p : pick(out, p);
+    }
+    return out;
+  };
+  const bid = best(data.bids, Math.max);
+  const ask = best(data.asks, Math.min);
+  if (bid === undefined && ask === undefined) return undefined;
+  const ts = Number(data.timestamp);
+  return {
+    bid,
+    ask,
+    quotedAt:
+      Number.isFinite(ts) && ts > 0 ? new Date(ts).toISOString() : undefined,
+  };
+}
+
 /** ET calendar parts for an instant, used to build human-dated slugs. */
 function etParts(ms: number) {
   const parts = new Intl.DateTimeFormat('en-US', {
@@ -160,7 +202,13 @@ export async function fetchMarket(
     const upIdx = outcomes.findIndex(o => o.toLowerCase() === 'up');
     if (upIdx < 0 || !tokenIds[upIdx]) return null;
 
-    const impliedUp = await midpoint(tokenIds[upIdx]).catch(() => undefined);
+    // Prefer the order book: it yields the tradable bid/ask AND the midpoint in
+    // one call. Fall back to the midpoint endpoint when the book is empty.
+    const top = await bookTop(tokenIds[upIdx]).catch(() => undefined);
+    const impliedUp =
+      top?.bid !== undefined && top?.ask !== undefined
+        ? (top.bid + top.ask) / 2
+        : await midpoint(tokenIds[upIdx]).catch(() => undefined);
     if (impliedUp === undefined) return null;
 
     return {
@@ -171,6 +219,9 @@ export async function fetchMarket(
       windowEnd: new Date(windowEndMs).toISOString(),
       impliedUp,
       impliedDown: 1 - impliedUp,
+      upBestBid: top?.bid,
+      upBestAsk: top?.ask,
+      quotedAt: top?.quotedAt ?? new Date().toISOString(),
     };
   });
 }
