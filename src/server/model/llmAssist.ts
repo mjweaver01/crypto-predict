@@ -6,23 +6,21 @@ import { getActiveModel } from '../ai/providers.ts';
 /**
  * Schema for the LLM's structured read. Sent to LM Studio as a JSON Schema so
  * decoding is grammar-constrained — output is guaranteed valid and typed, with
- * no regex extraction or `<think>` stripping needed. The headline stays tightly
- * capped so it never truncates mid-sentence; the report gets room to breathe
- * (the UI clamps it behind a "read more").
+ * no regex extraction or `<think>` stripping needed. Avoid `.max()` length
+ * constraints on string fields — llama.cpp's grammar engine does not support
+ * `maxLength` and will hang on "processing prompt". Use `.describe()` instead.
  */
 const AssistSchema = z.object({
   bias: z.number().min(-1).max(1).describe('lean: -1 bearish .. 1 bullish'),
   narrative: z
     .string()
-    .max(160)
     .describe(
       'punchy headline, ONE short sentence under 120 characters: the lean and the single key level'
     ),
   reasoning: z
     .string()
-    .max(2400)
     .describe(
-      'full report in short paragraphs: momentum and volatility read, each window call with its level, where the market disagrees, and the main risk to the lean'
+      'full report in short paragraphs (aim for 200-400 words): momentum and volatility read, each window call with its level, where the market disagrees, and the main risk to the lean'
     ),
 });
 
@@ -180,7 +178,7 @@ async function llmAssist(
     model: llm,
     schema: AssistSchema,
     prompt,
-    maxOutputTokens: 1600,
+    maxOutputTokens: 2048,
     temperature: 0.2,
     providerOptions: { lmstudio: { enable_thinking: false } },
   });
