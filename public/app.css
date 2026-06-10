@@ -424,50 +424,138 @@ header {
 }
 
 /* ── Tabs + detail panel ────────────────────────────────── */
+/* Each family tab is a mini stat-card: label + call chip on top, a large
+   ticking countdown in the middle, market odds underneath. */
 .tabs {
-  display: flex;
-  gap: 6px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
   margin-top: 22px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 5px;
 }
 .tab {
-  flex: 1;
   appearance: none;
   cursor: pointer;
-  border: 0;
-  background: transparent;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--border);
   color: var(--text-muted);
-  font-size: 13px;
-  font-weight: 600;
   font-family: inherit;
-  letter-spacing: 0.02em;
-  padding: 9px 8px;
-  border-radius: 8px;
+  padding: 12px 14px;
+  border-radius: 12px;
   transition:
+    border-color 0.18s ease,
     background 0.18s ease,
-    color 0.18s ease;
+    transform 0.18s ease;
 }
 .tab:hover {
-  color: var(--text);
+  border-color: rgba(247, 147, 26, 0.35);
+  transform: translateY(-1px);
 }
 .tab.active {
-  background: rgba(247, 147, 26, 0.14);
+  background:
+    radial-gradient(
+      220px 90px at 0% 0%,
+      rgba(247, 147, 26, 0.12),
+      transparent 70%
+    ),
+    var(--surface);
+  border-color: rgba(247, 147, 26, 0.55);
+}
+.tab .tab-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.tab .tab-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.tab.active .tab-label {
   color: var(--accent);
-  box-shadow: inset 0 0 0 1px rgba(247, 147, 26, 0.28);
+}
+.tab .tab-side {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  padding: 2px 7px;
+  border-radius: 100px;
+  border: 1px solid;
+}
+.tab .tab-side.up {
+  color: var(--up);
+  background: rgba(52, 211, 153, 0.12);
+  border-color: rgba(52, 211, 153, 0.3);
+}
+.tab .tab-side.down {
+  color: var(--down);
+  background: rgba(248, 113, 113, 0.12);
+  border-color: rgba(248, 113, 113, 0.3);
+}
+.tab .tab-side.tentative {
+  background: transparent;
+  opacity: 0.65;
+}
+.tab .tab-timer {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  line-height: 1;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.tab.active .tab-timer {
+  color: var(--accent);
 }
 .tab .tab-sub {
-  display: block;
   font-size: 10px;
   font-weight: 500;
   color: var(--text-dim);
-  margin-top: 2px;
   font-variant-numeric: tabular-nums;
 }
-.tab.active .tab-sub {
-  color: rgba(247, 147, 26, 0.75);
+@media (max-width: 720px) {
+  .tabs {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Window-close countdowns */
+.detail-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+.countdown {
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.countdown-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.closing {
+  color: var(--down) !important;
+  animation: countdown-pulse 1s ease-in-out infinite;
+}
+@keyframes countdown-pulse {
+  50% {
+    opacity: 0.55;
+  }
 }
 
 .detail-panel {

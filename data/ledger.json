@@ -21048,7 +21048,11 @@
     "horizonMinutes": 14.9709,
     "decidedAt": "2026-06-10T04:00:01.746Z",
     "source": "live",
-    "outcome": null
+    "outcome": "UP",
+    "closePrice": 61509.99,
+    "correct": true,
+    "resolvedBy": "binance",
+    "resolvedAt": "2026-06-10T04:15:07.589Z"
   },
   "1h:1781064000000": {
     "id": "1h:1781064000000",
@@ -21252,6 +21256,64 @@
     },
     "horizonMinutes": 4.4816666666666665,
     "decidedAt": "2026-06-10T04:10:31.100Z",
+    "source": "live",
+    "outcome": "UP",
+    "closePrice": 61509.99,
+    "correct": true,
+    "resolvedBy": "binance",
+    "resolvedAt": "2026-06-10T04:15:07.628Z"
+  },
+  "5m:1781064900000": {
+    "id": "5m:1781064900000",
+    "rangeId": "5m",
+    "slug": "btc-updown-5m-1781064900",
+    "windowStart": "2026-06-10T04:15:00.000Z",
+    "windowEnd": "2026-06-10T04:20:00.000Z",
+    "strike": 61463.91389016628,
+    "probUp": 0.8584949705268471,
+    "rawProbUp": 0.8452202798647025,
+    "side": "UP",
+    "confidence": 0.8584949705268471,
+    "marketImpliedUp": 0.505,
+    "features": {
+      "z": 0.9648422859898843,
+      "m15": -0.8073716965046517,
+      "m60": 0.6410955213277215,
+      "m240": 0,
+      "vr": -0.4578439073968797,
+      "todSin": 0.8968727415326884,
+      "todCos": 0.44228869021900125,
+      "mkt": 0.020000666706669435
+    },
+    "horizonMinutes": 4.885783333333333,
+    "decidedAt": "2026-06-10T04:15:06.853Z",
+    "source": "live",
+    "outcome": null
+  },
+  "15m:1781064900000": {
+    "id": "15m:1781064900000",
+    "rangeId": "15m",
+    "slug": "btc-updown-15m-1781064900",
+    "windowStart": "2026-06-10T04:15:00.000Z",
+    "windowEnd": "2026-06-10T04:30:00.000Z",
+    "strike": 61462.84351520366,
+    "probUp": 0.7310421640848681,
+    "rawProbUp": 0.7227532074081702,
+    "side": "UP",
+    "confidence": 0.7310421640848681,
+    "marketImpliedUp": 0.495,
+    "features": {
+      "z": 0.5684993212308791,
+      "m15": -0.8073716965046517,
+      "m60": 0.6410955213277215,
+      "m240": 0,
+      "vr": -0.4578439073968797,
+      "todSin": 0.8968727415326884,
+      "todCos": 0.44228869021900125,
+      "mkt": -0.020000666706669543
+    },
+    "horizonMinutes": 14.885783333333332,
+    "decidedAt": "2026-06-10T04:15:06.853Z",
     "source": "live",
     "outcome": null
   }

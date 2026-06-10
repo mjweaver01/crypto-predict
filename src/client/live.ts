@@ -154,7 +154,18 @@ function renderTabs(p: Prediction) {
     .map(r => {
       const active = r.id === selected ? ' active' : '';
       const sub = r.market ? `mkt ${fmtPct(r.market.impliedUp)}` : 'model only';
-      return `<button class="tab${active}" role="tab" data-id="${r.id}">${r.label}<span class="tab-sub">${sub}</span></button>`;
+      // Per-tab call chip: the frozen committed side when one exists (solid),
+      // otherwise the live lean (hollow) so every family shows its yes/no.
+      const side = r.committed?.side ?? (r.probUp >= 0.5 ? 'UP' : 'DOWN');
+      const chipCls = `tab-side ${side === 'UP' ? 'up' : 'down'}${r.committed ? '' : ' tentative'}`;
+      return `<button class="tab${active}" role="tab" data-id="${r.id}">
+        <span class="tab-top">
+          <span class="tab-label">${r.label}</span>
+          <span class="${chipCls}">${side}</span>
+        </span>
+        <span class="tab-timer" data-end="${r.windowEnd}">—</span>
+        <span class="tab-sub">${sub}</span>
+      </button>`;
     })
     .join('');
   for (const btn of tabs.querySelectorAll<HTMLButtonElement>('.tab')) {
@@ -165,6 +176,38 @@ function renderTabs(p: Prediction) {
         renderDetail(latest);
       }
     });
+  }
+  tickCountdowns();
+}
+
+// ── Window countdowns (tabs + detail panel), ticking every second ─────────
+
+/** Compact remaining-time label: 4:32 under an hour, 3h 12m under a day. */
+function fmtCountdown(msLeft: number): string {
+  const s = Math.max(0, Math.floor(msLeft / 1000));
+  if (s < 3600)
+    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  if (s < 86_400) {
+    const h = Math.floor(s / 3600);
+    return `${h}h ${String(Math.floor((s % 3600) / 60)).padStart(2, '0')}m`;
+  }
+  const d = Math.floor(s / 86_400);
+  return `${d}d ${Math.floor((s % 86_400) / 3600)}h`;
+}
+
+/**
+ * Repaint every element carrying a `data-end` window close time. Elements are
+ * re-created by renderTabs/renderDetail each refresh, so this just queries the
+ * DOM — no bookkeeping. Goes "closing" (red, pulsing) inside the last minute.
+ */
+function tickCountdowns() {
+  const now = Date.now();
+  for (const el of document.querySelectorAll<HTMLElement>('[data-end]')) {
+    const end = Date.parse(el.dataset.end ?? '');
+    if (!Number.isFinite(end)) continue;
+    const left = end - now;
+    el.textContent = fmtCountdown(left);
+    el.classList.toggle('closing', left <= 60_000 && left > 0);
   }
 }
 
@@ -220,6 +263,7 @@ function renderDetail(p: Prediction) {
       : 'Binance BTC/USDT';
   $('d-window').textContent =
     `${fmtClock(r.windowStart)} → ${fmtClock(r.windowEnd)} · closes ${relTime(r.windowEnd)}`;
+  $('d-countdown').dataset.end = r.windowEnd;
 
   // The headline verdict is the COMMITTED call (locked in early, never flips).
   // Fall back to the live read only when no genuine call was committed.
@@ -483,6 +527,7 @@ function connectPriceStream() {
 
 refresh();
 setInterval(refresh, 5_000);
+setInterval(tickCountdowns, 1_000);
 wireReadRefresh();
 connectPriceStream();
 requestAnimationFrame(animateHero);
