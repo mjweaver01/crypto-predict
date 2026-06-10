@@ -1,7 +1,9 @@
 import type {
+  FamilyMetrics,
   InsightSnapshot,
   LedgerEntry,
   LedgerSummary,
+  MetricsResponse,
   RangeId,
 } from '../shared/types.ts';
 import {
@@ -104,7 +106,117 @@ function renderRecordFilters() {
       renderRecordFilters();
       renderRecordList();
       renderHitRateChart();
+      renderLearningCurve();
     });
+  }
+}
+
+// ── Learning curve (prequential Brier: learned layer vs raw vs market) ────
+let metrics: MetricsResponse | null = null;
+
+function activeFamilyMetrics(): FamilyMetrics | undefined {
+  return metrics?.families.find(f => f.family === recordFilter);
+}
+
+/**
+ * Rolling Brier of the calibrated (bet-on) probability vs the frozen raw
+ * model probability, against the 0.25 coin-flip baseline. The gap between the
+ * two lines is the learned layer's real out-of-sample contribution.
+ */
+function learningChart(f: FamilyMetrics): string {
+  const pts = f.series;
+  if (pts.length < 2) return '<div class="chart-empty"></div>';
+
+  const W = 100;
+  const H = 100;
+  const PADX = 1.5;
+  const PADTOP = 8;
+  const PADBOT = 8;
+  // Y spans the data plus the 0.25 baseline so the dashed line is always shown.
+  const vals = pts.flatMap(p => [p.brierCal, p.brierRaw]).concat(0.25);
+  const lo = Math.min(...vals);
+  const hi = Math.max(...vals);
+  const span = Math.max(hi - lo, 0.02);
+  const lastIdx = pts.length - 1;
+  const X = (i: number) => PADX + (i / lastIdx) * (W - 2 * PADX);
+  const Y = (v: number) =>
+    PADTOP + (1 - (v - lo) / span) * (H - PADTOP - PADBOT);
+
+  const line = (key: 'brierCal' | 'brierRaw') =>
+    pts.map((p, i) => `${i ? 'L' : 'M'}${px(X(i))} ${px(Y(p[key]))}`).join(' ');
+
+  const yBase = px(Y(0.25));
+  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+    <line x1="0" y1="${yBase}" x2="${W}" y2="${yBase}" stroke="${COLORS.muted}" stroke-width="1" stroke-dasharray="3 3" opacity="0.4" vector-effect="non-scaling-stroke"/>
+    <path d="${line('brierRaw')}" fill="none" stroke="${COLORS.muted}" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round" opacity="0.7" vector-effect="non-scaling-stroke"/>
+    <path d="${line('brierCal')}" fill="none" stroke="${COLORS.accent}" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  </svg>`;
+}
+
+function renderLearningCurve() {
+  const f = activeFamilyMetrics();
+  const chart = $('lc-chart');
+  const axis = $('lc-axis');
+  const sub = $('lc-sub');
+  const stats = $('lc-stats');
+  if (!f || f.rolling.n === 0) {
+    chart.innerHTML = '<div class="chart-empty"></div>';
+    axis.innerHTML = '<span>Not enough resolved calls yet.</span>';
+    sub.textContent = '—';
+    stats.innerHTML = '';
+    $('lc-legend').innerHTML = '';
+    return;
+  }
+
+  const r = f.rolling;
+  // Positive edge = the learned layer beats the raw model out-of-sample.
+  const edge = r.brierRaw - r.brierCal;
+  sub.textContent =
+    `last ${r.n} resolved calls · ` +
+    `learned edge ${edge >= 0 ? '+' : ''}${(edge * 1000).toFixed(1)} mBrier`;
+  const mkt =
+    r.brierMkt !== undefined
+      ? `<div>
+          <div class="rstat-label">Market (n=${r.nMkt})</div>
+          <div class="rstat-val">${r.brierMkt.toFixed(3)}</div>
+        </div>`
+      : '';
+  stats.innerHTML = `
+    <div>
+      <div class="rstat-label">Calibrated</div>
+      <div class="rstat-val accent">${r.brierCal.toFixed(3)}</div>
+    </div>
+    <div>
+      <div class="rstat-label">Raw model</div>
+      <div class="rstat-val">${r.brierRaw.toFixed(3)}</div>
+    </div>
+    ${mkt}`;
+
+  chart.innerHTML = learningChart(f);
+  if (f.series.length >= 2) {
+    const first = f.series[0]!;
+    const last = f.series[f.series.length - 1]!;
+    axis.innerHTML =
+      `<span>${fmtDay(first.t)}</span>` +
+      `<span class="hl">rolling ${f.window}-call Brier</span>` +
+      `<span>${fmtDay(last.t)}</span>`;
+  } else {
+    axis.innerHTML = '<span>Not enough resolved calls to chart yet.</span>';
+  }
+  $('lc-legend').innerHTML = `
+    <span class="key"><span class="swatch" style="background:${COLORS.accent}"></span>Calibrated (bet on)</span>
+    <span class="key"><span class="swatch" style="background:${COLORS.muted}"></span>Raw model</span>
+    <span class="key"><span class="swatch dashed"></span>0.25 coin-flip</span>`;
+}
+
+async function refreshMetrics() {
+  try {
+    const res = await fetch('/api/metrics');
+    if (!res.ok) return;
+    metrics = (await res.json()) as MetricsResponse;
+    renderLearningCurve();
+  } catch {
+    // Learning curve is best-effort; ignore transient failures.
   }
 }
 
@@ -154,9 +266,7 @@ function hitRateChart(entries: LedgerEntry[]): string {
   const Y = (a: number) => PADTOP + (1 - a) * (H - PADTOP - PADBOT);
 
   const line = (key: 'cum' | 'roll') =>
-    pts
-      .map((p, i) => `${i ? 'L' : 'M'}${px(X(i))} ${px(Y(p[key]))}`)
-      .join(' ');
+    pts.map((p, i) => `${i ? 'L' : 'M'}${px(X(i))} ${px(Y(p[key]))}`).join(' ');
 
   const yMid = px(Y(0.5));
   return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
@@ -192,7 +302,8 @@ function recordRow(e: LedgerEntry): string {
   const sideCls = e.side === 'UP' ? 'up' : 'down';
   let result: string;
   if (e.outcome == null) {
-    result = '<span class="rec-result pending" title="Awaiting resolution">···</span>';
+    result =
+      '<span class="rec-result pending" title="Awaiting resolution">···</span>';
   } else if (e.correct) {
     result = '<span class="rec-result hit" title="Correct">✓</span>';
   } else {
@@ -263,6 +374,9 @@ async function refreshRecord() {
 refreshHistory();
 setInterval(refreshHistory, 5_000);
 // The ledger only changes when windows resolve (server resolve loop ≈ 60s), so
-// poll it on a slower cadence than the in-memory insights.
+// poll it on a slower cadence than the in-memory insights. Metrics derive from
+// the same resolutions, so they share that cadence.
 refreshRecord();
+refreshMetrics();
 setInterval(refreshRecord, 30_000);
+setInterval(refreshMetrics, 30_000);

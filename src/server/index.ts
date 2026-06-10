@@ -2,6 +2,7 @@ import { getLatestPrediction, predict } from './routes/predict.ts';
 import { getLedger, resolvePending, summarize } from './model/ledger.ts';
 import { env } from './cache.ts';
 import { refreshCalibrators } from './model/calibration.ts';
+import { computeMetrics } from './model/metrics.ts';
 import { getInsights } from './model/insights.ts';
 import { makePriceStreamResponse } from './sources/priceStream.ts';
 
@@ -87,6 +88,10 @@ const server = Bun.serve({
       }
       if (pathname === '/api/insights') {
         return json({ entries: getInsights() });
+      }
+      if (pathname === '/api/metrics') {
+        // Prequential learning-curve scores (raw vs calibrated vs market).
+        return json(await computeMetrics());
       }
     } catch (err) {
       console.error(err);

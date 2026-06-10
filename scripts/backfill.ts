@@ -21,7 +21,12 @@
  * real Polymarket daily outcome, and write it with `rawProbUp` set so the daily
  * calibrator activates immediately instead of taking ~25 days to accumulate.
  *
- * Usage:  bun run backfill [-- --count5 144 --count15 96 --count1h 48 --count1d 35]
+ * Each row also reconstructs the commit-time FEATURE record (features.ts) —
+ * momentum, vol regime, seasonality, and the historical Polymarket implied
+ * probability at the decision instant (CLOB price history) — so the learned
+ * layer trains on exactly what the live path would have seen.
+ *
+ * Usage:  bun run backfill [-- --count5 144 --count15 96 --count1h 48 --count1d 180]
  */
 import {
   fetchCandleAt,
@@ -30,9 +35,17 @@ import {
 } from '../src/server/sources/binance.ts';
 import {
   fetchMarketOutcome,
+  fetchPriceHistory,
   slugFor,
+  type PricePointRaw,
 } from '../src/server/sources/polymarket.ts';
-import { buildModel, predictAbove } from '../src/server/model/forecast.ts';
+import {
+  buildModel,
+  predictAbove,
+  sigmaPerMinFor,
+  type Model,
+} from '../src/server/model/forecast.ts';
+import { extractFeatures } from '../src/server/model/features.ts';
 import { addEntries } from '../src/server/model/ledger.ts';
 import { dailyWindowAt, noonEtUtc } from '../src/server/model/windows.ts';
 import type { LedgerEntry, RangeId, Side } from '../src/shared/types.ts';
@@ -81,7 +94,26 @@ function recentWindowStarts(windowMin: number, count: number): number[] {
   return Array.from({ length: count }, (_, i) => lastClosed - i * windowMs);
 }
 
-const COUNT_1D = arg('count1d', 35);
+// Daily resolves once a day, so reach far back (Polymarket history permitting)
+// or the 1d learner would take months to see a meaningful sample.
+const COUNT_1D = arg('count1d', 180);
+
+/**
+ * Market-implied P(up) at `decisionSec` from a CLOB price history: the last
+ * sample at or before it. Undefined when no quote existed yet — we must not
+ * fabricate a 0.5 quote, or the learner would train on invented market data.
+ */
+function marketAt(
+  history: PricePointRaw[],
+  decisionSec: number
+): number | undefined {
+  let p: number | undefined;
+  for (const pt of history) {
+    if (pt.t <= decisionSec) p = pt.p;
+    else break;
+  }
+  return p === undefined ? undefined : Math.min(1, Math.max(0, p));
+}
 
 /**
  * The most recent `count` CLOSED daily windows (noon ET → noon ET), newest
@@ -89,9 +121,7 @@ const COUNT_1D = arg('count1d', 35);
  * of the last closed window; we then walk back one ET day at a time (snapping to
  * noon each step so DST transitions stay aligned).
  */
-function recentDailyWindows(
-  count: number
-): { start: number; end: number }[] {
+function recentDailyWindows(count: number): { start: number; end: number }[] {
   const out: { start: number; end: number }[] = [];
   let end = dailyWindowAt(Date.now()).start; // last closed window's close
   for (let i = 0; i < count; i++) {
@@ -127,7 +157,9 @@ async function main() {
   const opens = [...byOpen.keys()].sort((a, b) => a - b);
   const idxOf = new Map<number, number>();
   opens.forEach((t, i) => idxOf.set(t, i));
-  const hourSorted = [...hourCandlesAll].sort((a, b) => a.openTime - b.openTime);
+  const hourSorted = [...hourCandlesAll].sort(
+    (a, b) => a.openTime - b.openTime
+  );
   console.log(
     `fetched ${candles.length} 1m + ${hourSorted.length} 1h candles\n`
   );
@@ -146,7 +178,14 @@ async function main() {
   function modelProbAtCommit(
     startMs: number,
     windowMin: number
-  ): { probUp: number; horizon: number } | null {
+  ): {
+    probUp: number;
+    horizon: number;
+    model: Model;
+    trailing: Candle[];
+    hourTrailing: Candle[];
+    price: number;
+  } | null {
     const openCandle = byOpen.get(startMs);
     const idx = idxOf.get(startMs); // candle opening at the window start
     if (!openCandle || idx === undefined || idx < WARMUP_MIN) return null;
@@ -155,6 +194,7 @@ async function main() {
       trailing.push(byOpen.get(opens[j]!)!);
     }
     const horizon = windowMin - 1; // one minute elapsed at commit
+    const hourTrailing = hoursBefore(startMs);
     const model = buildModel({
       price: openCandle.close, // price one minute into the window
       change24hPct: 0,
@@ -162,11 +202,15 @@ async function main() {
       // Long-horizon families (1h) need real hourly stats; supplying only
       // completed hours up to the window start avoids look-ahead. 5m/15m use
       // minute stats so this is harmless for them.
-      hourCandles: hoursBefore(startMs),
+      hourCandles: hourTrailing,
     });
     return {
       probUp: predictAbove(model, openCandle.open, horizon, '').probAbove,
       horizon,
+      model,
+      trailing,
+      hourTrailing,
+      price: openCandle.close,
     };
   }
 
@@ -180,6 +224,23 @@ async function main() {
       if (!outcome) return null;
       const call = modelProbAtCommit(startMs, fam.windowMin);
       if (call === null) return null;
+      const decidedMs = startMs + MIN;
+      // Historical market-implied P(up) at the commit instant, so the
+      // learner's market feature trains on real (not invented) quotes.
+      const history = await fetchPriceHistory(outcome.upTokenId);
+      const marketImpliedUp = marketAt(history, Math.floor(decidedMs / 1000));
+      const strike = byOpen.get(startMs)!.open;
+      const features = extractFeatures({
+        family: fam.id,
+        price: call.price,
+        strike,
+        horizonMinutes: call.horizon,
+        sigmaPerMin: sigmaPerMinFor(call.model, call.horizon),
+        minuteCandles: call.trailing,
+        hourCandles: call.hourTrailing,
+        marketImpliedUp,
+        now: decidedMs,
+      });
       const probUp = call.probUp;
       const side: Side = probUp >= 0.5 ? 'UP' : 'DOWN';
       const realized: Side = outcome.outcomeUp ? 'UP' : 'DOWN';
@@ -189,14 +250,16 @@ async function main() {
         slug,
         windowStart: new Date(startMs).toISOString(),
         windowEnd: new Date(endMs).toISOString(),
-        strike: byOpen.get(startMs)!.open,
+        strike,
         probUp,
         // No live calibrator existed historically, so raw == committed prob.
         rawProbUp: probUp,
         side,
         confidence: Math.max(probUp, 1 - probUp),
+        marketImpliedUp,
+        features,
         horizonMinutes: call.horizon,
-        decidedAt: new Date(startMs + MIN).toISOString(),
+        decidedAt: new Date(decidedMs).toISOString(),
         source: 'backfill',
         outcome: realized,
         correct: side === realized,
@@ -234,11 +297,26 @@ async function main() {
     const price = decisionCandle.close; // price ~1 min into the window
     const windowMin = Math.round((end - start) / MIN);
     const horizon = windowMin - 1;
+    const decidedMs = start + MIN;
+    const hourTrailing = hourSorted.filter(c => c.openTime < start);
     const model = buildModel({
       price,
       change24hPct: 0,
       minuteCandles: [], // unused at a 24h horizon (long-run hourly stats)
-      hourCandles: hourSorted.filter(c => c.openTime < start),
+      hourCandles: hourTrailing,
+    });
+    const history = await fetchPriceHistory(outcome.upTokenId);
+    const marketImpliedUp = marketAt(history, Math.floor(decidedMs / 1000));
+    const features = extractFeatures({
+      family: '1d',
+      price,
+      strike,
+      horizonMinutes: horizon,
+      sigmaPerMin: sigmaPerMinFor(model, horizon),
+      minuteCandles: [],
+      hourCandles: hourTrailing,
+      marketImpliedUp,
+      now: decidedMs,
     });
     const probUp = predictAbove(model, strike, horizon, '').probAbove;
     const side: Side = probUp >= 0.5 ? 'UP' : 'DOWN';
@@ -254,8 +332,10 @@ async function main() {
       rawProbUp: probUp,
       side,
       confidence: Math.max(probUp, 1 - probUp),
+      marketImpliedUp,
+      features,
       horizonMinutes: horizon,
-      decidedAt: new Date(start + MIN).toISOString(),
+      decidedAt: new Date(decidedMs).toISOString(),
       source: 'backfill',
       outcome: realized,
       correct: side === realized,
@@ -268,7 +348,9 @@ async function main() {
   const dailyCorrect = dailyGot.filter(e => e.correct).length;
   console.log(
     `1d: ${dailyGot.length}/${COUNT_1D} resolved · accuracy ${
-      dailyGot.length ? ((dailyCorrect / dailyGot.length) * 100).toFixed(1) : '—'
+      dailyGot.length
+        ? ((dailyCorrect / dailyGot.length) * 100).toFixed(1)
+        : '—'
     }%`
   );
   all.push(...dailyGot);

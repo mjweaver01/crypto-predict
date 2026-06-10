@@ -115,30 +115,49 @@ which in practice is the first refresh after the window opens. Windows first see
 too late to make a genuine forward-looking call are not graded. Open commitments
 are hydrated from the ledger on startup, so a restart mid-window keeps its call.
 
-### 4. Self-calibration
+### 4. The learned layer (calibration + direction)
 
-This is what makes the model **get better as it sees more outcomes**. For each
-family we fit a mapping from the model's raw probability to the empirically
-observed win frequency, using resolved committed calls — **Platt scaling in logit
-space**:
+This is what makes the model **get better as it sees more outcomes**. A pure
+Platt calibrator is monotone — it can reshape confidence but (almost) never flip
+a yes/no call, so it can't learn *direction*. We fit something strictly more
+general per family: a small **ridge logistic regression** from the raw
+probability **plus frozen commit-time features** to the observed win frequency:
 
 ```
-calibrated_logit = a · raw_logit + b
+calibrated_logit = w0 · raw_logit + Σ wj · xj + b
 ```
 
-- `a < 1` shrinks overconfident probabilities toward 0.5.
-- `b` corrects a systematic directional / base-rate bias.
+The features (`src/server/model/features.ts`), all clamped and vol-normalized:
 
-The fit is a **regularized (ridge) logistic regression** whose L2 prior pulls
-`(a, b)` toward the identity `(1, 0)`. With little data it stays ≈ identity, and
-below a minimum sample count it is a strict no-op — so calibration can only help
-once real evidence accumulates and never distorts a thin sample. Each family is
-calibrated independently.
+| Feature | Meaning |
+| --- | --- |
+| `z` | distance-to-strike in vol units (the raw model's own signal) |
+| `m15/m60/m240` (`m1d/m3d/m7d` daily) | momentum at several lookbacks |
+| `vr` | volatility regime (fast vs slow EWMA log-ratio) |
+| `todSin/todCos` (`dowSin/dowCos` daily) | time-of-day / day-of-week seasonality |
+| `mkt` | logit of the live Polymarket implied probability |
+
+- `w0 < 1` shrinks overconfidence; `b` corrects base-rate bias (the old Platt
+  behavior, recovered exactly when all `wj = 0`).
+- `wj` let the learner discover real directional signal — momentum, regime,
+  seasonality, and the market's own quote — so it can **flip a marginal call**,
+  not just temper it. This is what gives the daily family (a structural coin
+  flip under a driftless model) an actual learned opinion.
+- An L2 prior pulls `(w0, w, b)` toward the identity `(1, 0, 0)`: with little
+  data the layer is a no-op, and below `CALIB_MIN_SAMPLES` it is strictly off.
+- Samples are **recency-weighted** with a per-family half-life
+  (`CALIB_HALF_LIFE_HOURS_*`), so a fitted regime bias decays instead of being
+  carried forever by dilution.
+- Legacy rows without features still train the `(w0, b)` part — missing
+  features read as 0, the prior mean.
 
 A deliberate invariant keeps the loop stable: we always store and fit on the
-**raw** probability, never the already-calibrated output. This keeps the training
-signal stationary as the calibrator evolves — otherwise it would compound its own
-corrections. See `src/server/model/calibration.ts`.
+**raw** probability + the **frozen commit-time features**, never the
+already-calibrated output. This keeps the training signal stationary as the
+learner evolves — otherwise it would compound its own corrections. Every refit
+that materially changes a family's weights is appended to
+`data/calibrators.jsonl`, so the learner's own evolution is auditable. See
+`src/server/model/calibration.ts`.
 
 ### 5–6. Resolution and refit
 
@@ -147,6 +166,18 @@ outcome** (Binance close as a fallback), then refits every family's calibrator
 from the updated track record — so each freshly settled call immediately
 sharpens the next prediction. Calibration status (sample count and the
 adjustment applied) is surfaced per family on the dashboard.
+
+### Measuring the learning (not assuming it)
+
+Because each ledger entry's `probUp` was produced by the learner in force at
+commit time — trained only on windows resolved *before* that call — the ledger
+is a **prequential (online, out-of-sample) record**. `GET /api/metrics` scores
+it three ways per family: the calibrated probability we bet on, the frozen raw
+probability, and the market-implied quote. The history page renders this as a
+**learning curve** (rolling Brier, calibrated vs raw vs the 0.25 coin-flip
+line): if the learned layer is genuinely helping, the calibrated line sits
+below the raw line — measured, with no peeking. See
+`src/server/model/metrics.ts`.
 
 ---
 
@@ -161,8 +192,12 @@ instant — and pairs it with the real Polymarket outcome.
 
 The backfill reconstructs short-horizon families from minute candles and
 long-horizon families from real hourly candles, so the reconstruction matches the
-statistics the live model would have used, with no look-ahead. Backfilled rows
-carry the raw probability, so the calibrators pick them up on the next refit.
+statistics the live model would have used, with no look-ahead. Each row also
+reconstructs the **commit-time feature record** — including the historical
+Polymarket implied probability at the decision instant (CLOB price history) —
+so the learned layer trains on exactly what the live path would have seen. The
+daily family backfills ~180 days by default (it resolves once a day, so live
+accumulation alone would take months).
 
 > Backfilled rows reflect the pure statistical model (the small LLM nudge cannot
 > be replayed historically), so treat them as a strong prior, not ground truth.
@@ -178,7 +213,10 @@ rate, per family).
 
 ```
 GET /api/ledger    → { summary, entries }
-GET /api/insights  → in-memory, windowed log of how the model's read evolved
+GET /api/metrics   → prequential learning curve: rolling Brier/accuracy,
+                     calibrated vs raw vs market, per family
+GET /api/insights  → windowed log of how the model's read evolved
+                     (persisted across restarts)
 ```
 
 ---
@@ -214,9 +252,11 @@ MODEL_DRIFT_SHRINK=1 bun run backtest -- --days 5   # compare with full drift
 ```
 
 `bun run backtest:market` additionally scores the model against the **real
-historical Polymarket odds** and every blend weight. Result: the standalone model
-beats the market on 5m/15m and blending only hurts — so we do **not** ensemble;
-the market quote is shown for edge, not folded into the model.
+historical Polymarket odds** and every blend weight. Latest run: the standalone
+model beats the market on both families; a small fixed blend (`w≈0.2`) helps
+slightly on 15m and hurts on 5m. We do **not** hard-code a blend — instead the
+market quote enters the learned layer as a **feature** (`mkt`), so each family
+fits its own market weight from its actual track record and keeps adapting.
 
 ---
 
@@ -232,11 +272,13 @@ server (Bun)
   ├─ sources/binance.ts    → spot, 24h change, OHLC klines + exact boundary candle
   ├─ sources/polymarket.ts → live odds + historical outcome/price + exact strike
   ├─ model/forecast.ts     → lognormal model (EWMA + Garman-Klass vol, shrunk drift)
+  ├─ model/features.ts     → commit-time features (momentum, vol regime, market, seasonality)
   ├─ model/llmAssist.ts    → optional LLM read + horizon-scaled, clamped bias
   ├─ model/commitments.ts  → freezes one forward-looking call per window
-  ├─ model/calibration.ts  → learned per-family Platt calibration (the feedback loop)
+  ├─ model/calibration.ts  → learned per-family layer: ridge logistic on raw prob + features
   ├─ model/ledger.ts       → committed calls vs real outcomes → data/ledger.json
-  ├─ model/insights.ts     → windowed in-memory log of how the read evolved
+  ├─ model/metrics.ts      → prequential learning curve (calibrated vs raw vs market)
+  ├─ model/insights.ts     → windowed log of how the read evolved (persisted)
   ├─ model/scoring.ts      → Brier / log-loss / reliability (backtest harness)
   └─ routes/predict.ts     → GET /api/predict → Prediction JSON
 ```
@@ -252,8 +294,10 @@ server (Bun)
 | `MODEL_DRIFT_SHRINK` | `0` | Fraction of trailing drift retained (0 = driftless) |
 | `MODEL_DRIFT_CAP_SIGMAS` | `0.5` | Cap on drift as a multiple of diffusion |
 | `COMMIT_BY_FRACTION` | `0.2` | How early a window must be seen to commit a call |
-| `CALIB_MIN_SAMPLES` | `25` | Resolved calls required before calibration activates |
-| `CALIB_PRIOR` | `10` | Shrinkage strength toward the identity calibrator |
+| `CALIB_MIN_SAMPLES` | `25` | Resolved calls required before the learned layer activates |
+| `CALIB_PRIOR` | `10` | Shrinkage strength toward the identity calibrator (`w0`, `b`) |
+| `CALIB_FEATURE_PRIOR` | `10` | Shrinkage strength pulling feature weights toward 0 |
+| `CALIB_HALF_LIFE_HOURS_5M/_15M/_1H/_1D` | `24/48/168/1440` | Recency half-life per family (hours) |
 
 ---
 

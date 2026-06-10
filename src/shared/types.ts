@@ -41,6 +41,11 @@ export interface LedgerEntry {
   confidence: number;
   /** Market-implied Up captured at commit time, if a live market existed. */
   marketImpliedUp?: number;
+  /**
+   * Commit-time feature record (see server features.ts) frozen with the call —
+   * the inputs the learned layer trains on. Absent on legacy rows.
+   */
+  features?: Record<string, number>;
   /** Minutes left in the window at the moment we committed the call. */
   horizonMinutes: number;
   /** ISO time the call was committed (≈ window open, frozen thereafter). */
@@ -173,6 +178,8 @@ export interface CommittedCall {
   confidence: number;
   /** Price to beat captured at commit time. */
   strike: number;
+  /** Commit-time feature record frozen with the call (learner training row). */
+  features?: Record<string, number>;
   /** ISO time the call was committed (≈ window open). */
   decidedAt: string;
   /** Minutes left in the window at the moment we committed. */
@@ -204,6 +211,8 @@ export interface RangePrediction {
   probUp: number;
   /** RAW P(Up) before calibration (post LLM bias). Used to fit the calibrator. */
   rawProbUp: number;
+  /** Current feature record feeding the learned layer (frozen on commit). */
+  features?: Record<string, number>;
   /** Convenience: 1 - probUp. */
   probDown: number;
   /** Price to beat: the price at the window open. */
@@ -232,6 +241,54 @@ export interface CalibrationInfo {
   samples: number;
   /** True once enough samples exist to actually shape the probability. */
   active: boolean;
+}
+
+/**
+ * Prequential (online, out-of-sample) scores over a set of resolved committed
+ * calls. `probUp` was produced by the learner in force at COMMIT time — i.e.
+ * trained only on windows resolved before the call — so comparing it with the
+ * frozen raw probability measures whether the learning loop is actually
+ * helping, with no peeking.
+ */
+export interface MetricsBucket {
+  /** Resolved calls scored. */
+  n: number;
+  /** Hit rate of the committed side. */
+  accuracy: number;
+  /** Mean Brier of the calibrated (bet-on) probability. Lower is better. */
+  brierCal: number;
+  /** Mean Brier of the frozen raw probability. */
+  brierRaw: number;
+  /** Mean Brier of the market-implied probability, over calls that had one. */
+  brierMkt?: number;
+  /** How many calls carried a market quote (brierMkt sample size). */
+  nMkt: number;
+}
+
+/** One step of the rolling learning-curve series (windowed means). */
+export interface MetricsPoint {
+  /** Window-start epoch ms of the resolved call this step ends at. */
+  t: number;
+  brierCal: number;
+  brierRaw: number;
+  /** Rolling hit rate. */
+  accuracy: number;
+}
+
+/** Learning metrics for one family (or the ALL aggregate). */
+export interface FamilyMetrics {
+  family: RangeId | 'ALL';
+  overall: MetricsBucket;
+  /** Last-`window` resolved calls. */
+  rolling: MetricsBucket;
+  /** Rolling window size used for `rolling` and `series`. */
+  window: number;
+  /** Rolling series over the resolved sequence (decimated for charting). */
+  series: MetricsPoint[];
+}
+
+export interface MetricsResponse {
+  families: FamilyMetrics[];
 }
 
 /**

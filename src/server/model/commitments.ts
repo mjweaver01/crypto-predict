@@ -59,6 +59,7 @@ export async function ensureHydrated(): Promise<void> {
         side: e.side,
         confidence: e.confidence,
         strike: e.strike,
+        features: e.features,
         decidedAt: e.decidedAt,
         horizonMinutes: e.horizonMinutes,
       });
@@ -101,6 +102,7 @@ export function decide(
     side,
     confidence: Math.max(r.probUp, 1 - r.probUp),
     strike: r.strike,
+    features: r.features,
     decidedAt: new Date(now).toISOString(),
     horizonMinutes: r.horizonMinutes,
   };

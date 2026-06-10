@@ -6,7 +6,13 @@ import {
   fetchPrice,
   TRADING_SYMBOL,
 } from '../sources/binance.ts';
-import { buildModel, predictAbove, predictPrice } from '../model/forecast.ts';
+import {
+  buildModel,
+  predictAbove,
+  predictPrice,
+  sigmaPerMinFor,
+} from '../model/forecast.ts';
+import { extractFeatures } from '../model/features.ts';
 import { applyBias, assist } from '../model/llmAssist.ts';
 import { recordPredictions } from '../model/ledger.ts';
 import { decide, ensureHydrated } from '../model/commitments.ts';
@@ -260,15 +266,28 @@ export async function predict(): Promise<Prediction> {
       const remaining = Math.max(1 / 60, (w.end - now) / 60_000);
       const endIso = new Date(w.end).toISOString();
       // Raw model probability (statistical model + LLM bias), then the learned
-      // calibration fit from our resolved track record. probUp is what we show
-      // and bet on; rawProbUp is preserved so the calibrator keeps training on a
-      // stationary signal rather than its own corrected output.
+      // layer fit from our resolved track record. probUp is what we show and
+      // bet on; rawProbUp + features are preserved so the learner keeps
+      // training on a stationary signal rather than its own corrected output.
       const rawProbUp = applyBias(
         predictAbove(model, strike, remaining, endIso).probAbove,
         a.bias,
         remaining
       );
-      const probUp = applyCalibration(rawProbUp, getCalibrator(id));
+      // Commit-time feature record for the learned layer (frozen onto the
+      // committed call below, so training rows reflect decision-time inputs).
+      const features = extractFeatures({
+        family: id,
+        price,
+        strike,
+        horizonMinutes: remaining,
+        sigmaPerMin: sigmaPerMinFor(model, remaining),
+        minuteCandles,
+        hourCandles,
+        marketImpliedUp: markets[i]?.impliedUp,
+        now,
+      });
+      const probUp = applyCalibration(rawProbUp, features, getCalibrator(id));
       const range: RangePrediction = {
         id,
         label: META[id].label,
@@ -277,6 +296,7 @@ export async function predict(): Promise<Prediction> {
         horizonMinutes: remaining,
         probUp,
         rawProbUp,
+        features,
         probDown: 1 - probUp,
         strike,
         windowStart: new Date(w.start).toISOString(),

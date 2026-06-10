@@ -59,7 +59,7 @@ export function normCdf(x: number): number {
   return x >= 0 ? 1 - p : p;
 }
 
-interface ReturnStats {
+export interface ReturnStats {
   /** Per-period (EWMA) mean log-return. */
   mean: number;
   /** Per-period (EWMA, range-based) log-return std. */
@@ -70,9 +70,13 @@ interface ReturnStats {
  * EWMA log-return stats from candles. Volatility is the square root of an
  * EWMA-weighted Garman-Klass per-bar variance (uses O/H/L/C); drift is the
  * EWMA-weighted mean of close-to-close log-returns. More recent bars carry
- * exponentially more weight (decay `lambda`).
+ * exponentially more weight (decay `lambda`). Exported for the feature
+ * extractor (vol-regime feature) so both share one estimator.
  */
-function returnStats(candles: Candle[], lambda = EWMA_LAMBDA): ReturnStats {
+export function returnStats(
+  candles: Candle[],
+  lambda = EWMA_LAMBDA
+): ReturnStats {
   const n = candles.length;
   if (n < 2) return { mean: 0, std: 0 };
 
@@ -146,6 +150,15 @@ export function buildModel(inputs: ModelInputs): Model {
 /** Choose the stats appropriate for a horizon (minute vs long-run). */
 function statsFor(model: Model, horizonMinutes: number): ReturnStats {
   return horizonMinutes <= 30 ? model.minute : model.long;
+}
+
+/**
+ * The per-minute volatility the model would use for a horizon. Exposed so the
+ * feature extractor normalizes distance-to-strike by the SAME sigma that
+ * produced the raw probability.
+ */
+export function sigmaPerMinFor(model: Model, horizonMinutes: number): number {
+  return statsFor(model, horizonMinutes).std;
 }
 
 /**

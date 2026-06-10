@@ -1,28 +1,45 @@
-// Learned calibration: the loop that makes the model "get better as it sees
-// more outcomes". We fit a per-range mapping from the model's RAW probability to
-// the empirically observed win frequency, using resolved committed calls from
-// the ledger, then apply it to new predictions.
+// Learned probability layer: the loop that makes the model get better as it
+// sees more outcomes. For each market family we fit a small RIDGE LOGISTIC
+// REGRESSION from the model's raw probability PLUS commit-time features
+// (features.ts) to the empirically observed win frequency, using resolved
+// committed calls from the ledger:
 //
-// Method: Platt scaling in logit space — calibrated logit = a * rawLogit + b.
-//   • a < 1 shrinks overconfident probabilities toward 0.5.
+//   calibrated logit = w0 · rawLogit + Σ wj · xj + b
+//
+// This strictly generalizes the old Platt scaling (w0=a, b=b, w=0):
+//   • w0 < 1 shrinks overconfident probabilities toward 0.5.
 //   • b corrects a directional / base-rate bias.
-// Fit with regularized (ridge) Newton steps whose L2 prior pulls (a, b) toward
-// the identity (1, 0). With little data the fit stays ≈ identity, so calibration
-// can only help once enough outcomes accumulate; it never wildly distorts a
-// thin sample.
+//   • wj let the learner discover real directional signal (momentum, vol
+//     regime, market-implied odds, seasonality) — i.e. it can learn to FLIP a
+//     marginal call, not just reshape its confidence.
 //
-// We deliberately fit on the RAW probability (stored separately in the ledger),
-// not the already-calibrated one, so the training signal stays stationary as the
-// calibrator evolves — otherwise it would keep correcting its own corrections.
+// Fit details:
+//   • L2 prior pulls (w0, w, b) toward the identity (1, 0, 0): with little
+//     data the layer is a no-op and can only act once evidence accumulates.
+//   • Samples are RECENCY-WEIGHTED with a per-family half-life so a fitted
+//     regime bias decays instead of being carried forever by dilution.
+//   • We always fit on the RAW probability + frozen commit-time features,
+//     never the already-calibrated output, keeping the training signal
+//     stationary as the learner evolves.
+//   • Legacy rows without features still train the (w0, b) part — their
+//     feature values read as 0, the prior mean.
+//
+// Every refit that materially changes a family's weights is appended to
+// data/calibrators.jsonl so the learner's own evolution is auditable.
 
 import { env } from '../cache.ts';
 import { getLedger } from './ledger.ts';
+import { FEATURE_KEYS } from './features.ts';
 import type { CalibrationInfo, RangeId } from '../../shared/types.ts';
 
 export interface Calibrator {
-  /** Slope on the logit. */
-  a: number;
-  /** Intercept on the logit. */
+  /** Feature keys aligned with `w` (canonical order from features.ts). */
+  keys: string[];
+  /** Weight on logit(rawProbUp). Prior 1. */
+  w0: number;
+  /** Per-feature weights. Prior 0. */
+  w: number[];
+  /** Intercept. Prior 0. */
   b: number;
   /** Number of resolved samples the fit used. */
   n: number;
@@ -30,12 +47,40 @@ export interface Calibrator {
 
 const RANGE_IDS: RangeId[] = ['5m', '15m', '1h', '1d'];
 
-/** Below this many resolved calls we don't calibrate at all (stay identity). */
+/** Below this many resolved calls we don't fit at all (stay identity). */
 const MIN_SAMPLES = Math.max(1, Number(env('CALIB_MIN_SAMPLES', '25')) || 25);
-/** L2 prior strength pulling (a, b) toward identity. Higher ⇒ more shrinkage. */
+/** L2 prior strength pulling (w0, b) toward identity. Higher ⇒ more shrinkage. */
 const PRIOR = Math.max(0, Number(env('CALIB_PRIOR', '10')) || 10);
+/** L2 prior strength pulling feature weights toward 0. */
+const FEATURE_PRIOR = Math.max(
+  0,
+  Number(env('CALIB_FEATURE_PRIOR', '10')) || 10
+);
 
-const IDENTITY: Calibrator = { a: 1, b: 0, n: 0 };
+/**
+ * Recency half-life per family (hours): a sample this old counts half as much.
+ * Scaled to each family's cadence so fast families track the current regime
+ * while slow families keep enough effective history to fit at all.
+ */
+const HALF_LIFE_HOURS: Record<RangeId, number> = {
+  '5m': Number(env('CALIB_HALF_LIFE_HOURS_5M', '24')) || 24,
+  '15m': Number(env('CALIB_HALF_LIFE_HOURS_15M', '48')) || 48,
+  '1h': Number(env('CALIB_HALF_LIFE_HOURS_1H', '168')) || 168,
+  '1d': Number(env('CALIB_HALF_LIFE_HOURS_1D', '1440')) || 1440,
+};
+
+const HISTORY_PATH = env(
+  'CALIBRATOR_HISTORY_PATH',
+  `${process.cwd()}/data/calibrators.jsonl`
+);
+
+const identity = (id: RangeId): Calibrator => ({
+  keys: FEATURE_KEYS[id],
+  w0: 1,
+  w: FEATURE_KEYS[id].map(() => 0),
+  b: 0,
+  n: 0,
+});
 
 const EPS = 1e-4;
 const clampP = (p: number) => Math.min(1 - EPS, Math.max(EPS, p));
@@ -43,16 +88,28 @@ const logit = (p: number) => Math.log(p / (1 - p));
 const sigmoid = (z: number) => 1 / (1 + Math.exp(-z));
 
 const cache: Record<RangeId, Calibrator> = {
-  '5m': IDENTITY,
-  '15m': IDENTITY,
-  '1h': IDENTITY,
-  '1d': IDENTITY,
+  '5m': identity('5m'),
+  '15m': identity('15m'),
+  '1h': identity('1h'),
+  '1d': identity('1d'),
 };
 
-/** Map a raw probability through a calibrator. Identity is a no-op fast path. */
-export function applyCalibration(p: number, cal: Calibrator): number {
+/**
+ * Map a raw probability + its commit-time features through a calibrator.
+ * Identity (n=0) is a no-op fast path; missing feature keys read as 0.
+ */
+export function applyCalibration(
+  p: number,
+  features: Record<string, number> | undefined,
+  cal: Calibrator
+): number {
   if (cal.n === 0) return p;
-  return clampP(sigmoid(cal.a * logit(clampP(p)) + cal.b));
+  let z = cal.w0 * logit(clampP(p)) + cal.b;
+  for (let j = 0; j < cal.keys.length; j++) {
+    const x = features?.[cal.keys[j]!];
+    if (typeof x === 'number' && Number.isFinite(x)) z += cal.w[j]! * x;
+  }
+  return clampP(sigmoid(z));
 }
 
 /** The calibrator currently in force for a range. */
@@ -66,50 +123,120 @@ export function calibrationInfo(id: RangeId): CalibrationInfo {
   return { samples: cal.n, active: cal.n > 0 };
 }
 
-/**
- * Fit a (raw → calibrated) Platt mapping by regularized Newton's method on the
- * logistic log-loss with an L2 prior centered at the identity (a=1, b=0).
- */
-function fit(samples: { p: number; y: number }[]): Calibrator {
-  if (samples.length < MIN_SAMPLES) return IDENTITY;
-
-  let a = 1;
-  let b = 0;
-  for (let iter = 0; iter < 50; iter++) {
-    let g0 = 0; // ∂/∂a
-    let g1 = 0; // ∂/∂b
-    let h00 = 0;
-    let h01 = 0;
-    let h11 = 0;
-    for (const s of samples) {
-      const z = logit(clampP(s.p));
-      const ph = sigmoid(a * z + b);
-      const r = ph - s.y;
-      g0 += r * z;
-      g1 += r;
-      const w = ph * (1 - ph);
-      h00 += w * z * z;
-      h01 += w * z;
-      h11 += w;
+/** Solve A·x = g for x (dense, partial pivoting). Returns null if singular. */
+function solve(A: number[][], g: number[]): number[] | null {
+  const d = g.length;
+  const M = A.map((row, i) => [...row, g[i]!]);
+  for (let col = 0; col < d; col++) {
+    let piv = col;
+    for (let r = col + 1; r < d; r++) {
+      if (Math.abs(M[r]![col]!) > Math.abs(M[piv]![col]!)) piv = r;
     }
-    // L2 prior toward identity (1, 0): penalty PRIOR*((a-1)^2 + b^2).
-    g0 += 2 * PRIOR * (a - 1);
-    g1 += 2 * PRIOR * b;
-    h00 += 2 * PRIOR;
-    h11 += 2 * PRIOR;
+    if (Math.abs(M[piv]![col]!) < 1e-12) return null;
+    [M[col], M[piv]] = [M[piv]!, M[col]!];
+    for (let r = 0; r < d; r++) {
+      if (r === col) continue;
+      const f = M[r]![col]! / M[col]![col]!;
+      for (let c = col; c <= d; c++) M[r]![c]! -= f * M[col]![c]!;
+    }
+  }
+  return M.map((row, i) => row[d]! / M[i]![i]!);
+}
 
-    const det = h00 * h11 - h01 * h01;
-    if (Math.abs(det) < 1e-12) break;
-    const da = (h11 * g0 - h01 * g1) / det;
-    const db = (h00 * g1 - h01 * g0) / det;
-    a -= da;
-    b -= db;
-    if (Math.abs(da) + Math.abs(db) < 1e-9) break;
+interface Sample {
+  /** logit of the raw probability. */
+  z0: number;
+  /** Feature vector aligned with FEATURE_KEYS[family] (missing → 0). */
+  x: number[];
+  /** Realized outcome: 1 = UP. */
+  y: number;
+  /** Recency weight in (0, 1]. */
+  u: number;
+}
+
+/**
+ * Fit by weighted ridge Newton's method on the logistic log-loss with an L2
+ * prior centered at the identity (w0=1, w=0, b=0).
+ * Parameter vector: θ = [w0, ...w, b].
+ */
+function fit(samples: Sample[], keys: string[]): Omit<Calibrator, 'keys'> {
+  const k = keys.length;
+  const d = k + 2;
+  // θ0 = prior mean, lam = per-param prior strength.
+  const theta = [1, ...new Array<number>(k).fill(0), 0];
+  const theta0 = [...theta];
+  const lam = [PRIOR, ...new Array<number>(k).fill(FEATURE_PRIOR), PRIOR];
+
+  const phi = (s: Sample): number[] => [s.z0, ...s.x, 1];
+
+  for (let iter = 0; iter < 50; iter++) {
+    const g = new Array<number>(d).fill(0);
+    const H = Array.from({ length: d }, () => new Array<number>(d).fill(0));
+    for (const s of samples) {
+      const f = phi(s);
+      let zz = 0;
+      for (let i = 0; i < d; i++) zz += theta[i]! * f[i]!;
+      const ph = sigmoid(zz);
+      const r = s.u * (ph - s.y);
+      const w = s.u * ph * (1 - ph);
+      for (let i = 0; i < d; i++) {
+        g[i]! += r * f[i]!;
+        for (let j = i; j < d; j++) H[i]![j]! += w * f[i]! * f[j]!;
+      }
+    }
+    for (let i = 0; i < d; i++) {
+      g[i]! += 2 * lam[i]! * (theta[i]! - theta0[i]!);
+      H[i]![i]! += 2 * lam[i]!;
+      for (let j = 0; j < i; j++) H[i]![j] = H[j]![i]!;
+    }
+    const step = solve(H, g);
+    if (!step) break;
+    let moved = 0;
+    for (let i = 0; i < d; i++) {
+      theta[i]! -= step[i]!;
+      moved += Math.abs(step[i]!);
+    }
+    if (moved < 1e-9) break;
   }
 
-  // Guard against a degenerate fit (e.g. perfectly separable thin data).
-  if (!Number.isFinite(a) || !Number.isFinite(b)) return IDENTITY;
-  return { a, b, n: samples.length };
+  if (theta.some(t => !Number.isFinite(t))) {
+    return { w0: 1, w: new Array<number>(k).fill(0), b: 0, n: 0 };
+  }
+  return {
+    w0: theta[0]!,
+    w: theta.slice(1, 1 + k),
+    b: theta[d - 1]!,
+    n: samples.length,
+  };
+}
+
+// Last-logged rounded weights per family, to avoid spamming the history file.
+const lastLogged: Partial<Record<RangeId, string>> = {};
+
+/** Append materially-changed calibrators to the on-disk history (JSONL). */
+async function logCalibrator(id: RangeId, cal: Calibrator): Promise<void> {
+  const round = (x: number) => Math.round(x * 1000) / 1000;
+  const compact = JSON.stringify({
+    w0: round(cal.w0),
+    b: round(cal.b),
+    w: Object.fromEntries(cal.keys.map((key, j) => [key, round(cal.w[j]!)])),
+    n: cal.n,
+  });
+  if (lastLogged[id] === compact) return;
+  lastLogged[id] = compact;
+  const line =
+    JSON.stringify({
+      t: new Date().toISOString(),
+      family: id,
+      ...JSON.parse(compact),
+    }) + '\n';
+  try {
+    const file = Bun.file(HISTORY_PATH);
+    const prev = (await file.exists()) ? await file.text() : '';
+    await Bun.write(HISTORY_PATH, prev + line);
+  } catch (err) {
+    console.warn('[calibration] history log failed:', err);
+  }
 }
 
 /**
@@ -126,15 +253,33 @@ export async function refreshCalibrators(): Promise<void> {
     console.warn('[calibration] refresh failed to load ledger:', err);
     return;
   }
+  const now = Date.now();
   for (const id of RANGE_IDS) {
-    const samples = entries
+    const keys = FEATURE_KEYS[id];
+    const halfLifeMs = HALF_LIFE_HOURS[id] * 3_600_000;
+    const samples: Sample[] = entries
       .filter(
         e =>
           e.rangeId === id &&
           e.outcome != null &&
           typeof e.rawProbUp === 'number'
       )
-      .map(e => ({ p: e.rawProbUp as number, y: e.outcome === 'UP' ? 1 : 0 }));
-    cache[id] = fit(samples);
+      .map(e => {
+        const age = Math.max(0, now - Date.parse(e.decidedAt));
+        return {
+          z0: logit(clampP(e.rawProbUp as number)),
+          x: keys.map(key => {
+            const v = e.features?.[key];
+            return typeof v === 'number' && Number.isFinite(v) ? v : 0;
+          }),
+          y: e.outcome === 'UP' ? 1 : 0,
+          u: Math.pow(0.5, age / halfLifeMs),
+        };
+      });
+    cache[id] =
+      samples.length < MIN_SAMPLES
+        ? identity(id)
+        : { keys, ...fit(samples, keys) };
+    if (cache[id].n > 0) void logCalibrator(id, cache[id]);
   }
 }

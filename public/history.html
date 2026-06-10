@@ -36,6 +36,23 @@
         <div class="hr-legend" id="hr-legend"></div>
       </div>
 
+      <!-- Learning curve: prequential Brier of the learned layer vs the raw
+           model vs the market, so improvement is measured, not assumed -->
+      <div class="card hr-card">
+        <div class="hr-top">
+          <div>
+            <span class="card-title"><span>Learning curve · Brier (lower is better)</span></span>
+            <div class="record-sub" id="lc-sub">—</div>
+          </div>
+          <div class="record-stats" id="lc-stats"></div>
+        </div>
+        <div class="chart hr-chart" id="lc-chart">
+          <div class="chart-empty"></div>
+        </div>
+        <div class="hr-axis" id="lc-axis"></div>
+        <div class="hr-legend" id="lc-legend"></div>
+      </div>
+
       <div class="history-grid">
         <!-- Chronological log of calls vs realized outcomes (persisted ledger) -->
         <div class="card record-card">

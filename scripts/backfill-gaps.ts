@@ -14,11 +14,7 @@
  * and 48h of 1h (48×1h) — enough to recover from an overnight downtime.
  */
 
-import {
-  fetchCandleAt,
-  fetchKlineRange,
-  type Candle,
-} from '../src/server/sources/binance.ts';
+import { fetchKlineRange, type Candle } from '../src/server/sources/binance.ts';
 import {
   fetchMarketOutcome,
   slugFor,
@@ -45,9 +41,9 @@ interface Fam {
 }
 
 const FAMS: Fam[] = [
-  { id: '5m',  windowMin: 5,  lookback: arg('lookback5',  144) },
-  { id: '15m', windowMin: 15, lookback: arg('lookback15', 96)  },
-  { id: '1h',  windowMin: 60, lookback: arg('lookback1h', 48)  },
+  { id: '5m', windowMin: 5, lookback: arg('lookback5', 144) },
+  { id: '15m', windowMin: 15, lookback: arg('lookback15', 96) },
+  { id: '1h', windowMin: 60, lookback: arg('lookback1h', 48) },
 ];
 
 async function mapPool<T, R>(
@@ -90,13 +86,15 @@ async function main() {
     const missing = starts.filter(s => !presentIds.has(`${fam.id}:${s}`));
     console.log(
       `${fam.id}: ${fam.lookback} windows checked · ` +
-      `${starts.length - missing.length} present · ${missing.length} missing`
+        `${starts.length - missing.length} present · ${missing.length} missing`
     );
     for (const s of missing) gaps.push({ fam, startMs: s });
   }
 
   if (gaps.length === 0) {
-    console.log('\nnothing to fill — ledger is complete for the checked range.');
+    console.log(
+      '\nnothing to fill — ledger is complete for the checked range.'
+    );
     return;
   }
 
@@ -120,7 +118,9 @@ async function main() {
   const opens = [...byOpen.keys()].sort((a, b) => a - b);
   const idxOf = new Map<number, number>();
   opens.forEach((t, i) => idxOf.set(t, i));
-  const hourSorted = [...hourCandlesAll].sort((a, b) => a.openTime - b.openTime);
+  const hourSorted = [...hourCandlesAll].sort(
+    (a, b) => a.openTime - b.openTime
+  );
   console.log(
     `fetched ${candles.length} 1m + ${hourSorted.length} 1h candles\n`
   );
@@ -204,15 +204,19 @@ async function main() {
     } else {
       const loc = new Date(r.startMs).toLocaleString('en-US', {
         timeZone: 'America/New_York',
-        month: 'short', day: 'numeric',
-        hour: 'numeric', minute: '2-digit',
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
       });
       console.log(`  skipped ${r.fam.id} ${loc} — ${r.status}`);
     }
   }
 
   if (filled.length === 0) {
-    console.log('no entries could be reconstructed (Polymarket may not have settled these yet).');
+    console.log(
+      'no entries could be reconstructed (Polymarket may not have settled these yet).'
+    );
     return;
   }
 
@@ -229,8 +233,8 @@ async function main() {
   const correct = filled.filter(e => e.correct).length;
   console.log(
     `\nwrote ${written} gap entries  ` +
-    `(${filled.length - written} already present by the time we wrote).\n` +
-    `accuracy on filled gaps: ${filled.length ? ((correct / filled.length) * 100).toFixed(1) : '—'}%`
+      `(${filled.length - written} already present by the time we wrote).\n` +
+      `accuracy on filled gaps: ${filled.length ? ((correct / filled.length) * 100).toFixed(1) : '—'}%`
   );
 
   // ── Summary by family ──────────────────────────────────────────────────────
@@ -240,7 +244,7 @@ async function main() {
     const ok = sub.filter(e => e.correct).length;
     console.log(
       `  ${fam.id}: ${sub.length} filled · ` +
-      `${((ok / sub.length) * 100).toFixed(1)}% accuracy`
+        `${((ok / sub.length) * 100).toFixed(1)}% accuracy`
     );
   }
 }
