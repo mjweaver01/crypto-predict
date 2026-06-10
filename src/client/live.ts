@@ -10,13 +10,17 @@ import {
   $,
   COLORS,
   fmtClock,
+  fmtDateTime,
   fmtDay,
   fmtPct,
   fmtUsd,
   fmtUsd2,
+  loadPref,
   px,
   relTime,
+  savePref,
 } from './format.ts';
+import { attachChartTip } from './chartTip.ts';
 
 // ── Inline SVG charts (dependency-free) ──────────────────────────────────
 
@@ -142,7 +146,8 @@ const CHART_MINUTES: Record<RangeId, number> = {
   '1d': 120,
 };
 
-let selected: RangeId | null = null;
+const RANGE_IDS: readonly RangeId[] = ['5m', '15m', '1h', '1d'];
+let selected: RangeId | null = loadPref('tab', RANGE_IDS, '5m');
 let latest: Prediction | null = null;
 
 function renderTabs(p: Prediction) {
@@ -171,6 +176,7 @@ function renderTabs(p: Prediction) {
   for (const btn of tabs.querySelectorAll<HTMLButtonElement>('.tab')) {
     btn.addEventListener('click', () => {
       selected = btn.dataset.id as RangeId;
+      savePref('tab', selected);
       if (latest) {
         renderTabs(latest);
         renderDetail(latest);
@@ -361,6 +367,28 @@ function renderDetail(p: Prediction) {
   const last = pts[pts.length - 1];
   const color = last && last.price >= r.strike ? COLORS.up : COLORS.down;
   $('d-chart').innerHTML = sparkline(pts, color, { strike: r.strike });
+  if (pts.length >= 2) {
+    const t0 = pts[0]!.t;
+    const span = pts[pts.length - 1]!.t - t0 || 1;
+    attachChartTip($('d-chart'), {
+      xs: pts.map(pt => ((pt.t - t0) / span) * 100),
+      at: i => {
+        const pt = pts[i]!;
+        const diff = pt.price - r.strike;
+        return {
+          title: new Date(pt.t).toLocaleTimeString(),
+          rows: [
+            { label: 'Price', value: fmtUsd2(pt.price), color },
+            {
+              label: 'vs strike',
+              value: `${diff >= 0 ? '+' : ''}${fmtUsd2(diff)}`,
+              color: diff >= 0 ? COLORS.up : COLORS.down,
+            },
+          ],
+        };
+      },
+    });
+  }
 
   $('d-above').textContent = fmtPct(r.probUp);
   const calib = $('d-calib');
@@ -384,7 +412,7 @@ function renderDetail(p: Prediction) {
 
 // ── Spot price range toggle (LIVE, 1H … 1W) ──────────────────────────────
 const SPOT_RANGES: SpotRangeId[] = ['LIVE', '1H', '6H', '1D', '1W'];
-let selectedSpot: SpotRangeId = '1D';
+let selectedSpot: SpotRangeId = loadPref('spot', SPOT_RANGES, '1D');
 
 // Rolling buffer of streamed ticks for the client-only LIVE (1-minute) view.
 const LIVE_WINDOW_MS = 60_000;
@@ -399,6 +427,7 @@ function renderSpotRanges() {
   for (const btn of el.querySelectorAll<HTMLButtonElement>('button')) {
     btn.addEventListener('click', () => {
       selectedSpot = btn.dataset.spot as SpotRangeId;
+      savePref('spot', selectedSpot);
       renderSpotRanges();
       renderHero();
     });
@@ -424,8 +453,35 @@ function heroSeries(): PricePoint[] {
 }
 
 function renderHeroChart() {
-  const { svg, dot } = heroRender(heroSeries());
+  const pts = heroSeries();
+  const { svg, dot } = heroRender(pts);
   $('hero-svg').innerHTML = svg;
+  // Hover readout lives on the chart container (sibling of the SVG host, so
+  // the per-frame innerHTML swap doesn't wipe it).
+  const host = $('hero-svg').parentElement;
+  if (host && pts.length >= 2) {
+    const t0 = pts[0]!.t;
+    const span = pts[pts.length - 1]!.t - t0 || 1;
+    const longSpan = span > 24 * 3_600_000;
+    attachChartTip(host, {
+      xs: pts.map(p => ((p.t - t0) / span) * 100),
+      at: i => {
+        const p = pts[i]!;
+        return {
+          title: longSpan
+            ? fmtDateTime(new Date(p.t).toISOString())
+            : new Date(p.t).toLocaleTimeString(),
+          rows: [
+            {
+              label: 'BTC/USDT',
+              value: fmtUsd2(p.price),
+              color: COLORS.accent,
+            },
+          ],
+        };
+      },
+    });
+  }
   const dotEl = $('live-dot');
   if (dot) {
     dotEl.style.display = '';

@@ -184,7 +184,7 @@ export function simulatePaper(
     },
     families: [...families.values()].filter(f => f.bets > 0),
     equity,
-    bets: bets.slice(-50).reverse(),
+    bets: bets.reverse(),
     open: open.reverse(),
   };
 }

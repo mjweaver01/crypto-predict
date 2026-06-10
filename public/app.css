@@ -372,6 +372,7 @@ header {
 
 /* ── Mini charts ────────────────────────────────────────── */
 .chart {
+  position: relative; /* anchors the hover tooltip overlay */
   margin-top: 14px;
   width: 100%;
 }
@@ -386,6 +387,58 @@ header {
 }
 .chart-empty {
   height: 52px;
+}
+
+/* ── Chart hover tooltip (vertical cursor + value readout) ──────── */
+.chart-cursor {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  border-left: 1px dashed rgba(255, 255, 255, 0.3);
+  display: none;
+  pointer-events: none;
+  z-index: 3;
+}
+.chart-tip {
+  position: absolute;
+  top: 10px;
+  display: none;
+  pointer-events: none;
+  z-index: 4;
+  background: rgba(16, 21, 28, 0.96);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 11px;
+  min-width: 130px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+.chart-tip-title {
+  color: var(--text-dim);
+  margin-bottom: 5px;
+  white-space: nowrap;
+}
+.chart-tip-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.chart-tip-swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex: none;
+}
+.chart-tip-val {
+  margin-left: auto;
+  padding-left: 14px;
+  color: var(--text);
+  font-weight: 600;
 }
 
 /* ── Market compare ─────────────────────────────────────── */
@@ -847,6 +900,51 @@ header {
 .hr-legend .swatch.dashed {
   height: 0;
   border-top: 2px dashed var(--text-dim);
+}
+
+/* ── Paper bets list (inside the paper-trading card) ───────────── */
+.pt-bets {
+  margin-top: 12px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+.pt-bet {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 0;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.pt-bet .pt-when {
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.pt-bet .pt-num {
+  white-space: nowrap;
+}
+.pt-pnl {
+  font-weight: 700;
+  white-space: nowrap;
+}
+.pt-pnl.up {
+  color: var(--up);
+}
+.pt-pnl.down {
+  color: var(--down);
+}
+.pt-bet .pt-bank {
+  margin-left: auto;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.pt-more {
+  padding: 8px 0 2px;
+  font-size: 11px;
+  color: var(--text-dim);
+  text-align: center;
 }
 
 /* ── History page two-up layout (call history + previous reads) ── */

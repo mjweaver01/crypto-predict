@@ -294,7 +294,7 @@ export interface PaperResponse {
   families: PaperFamilyStats[];
   /** Bankroll after each resolved bet, for the equity curve. */
   equity: { t: number; bankroll: number }[];
-  /** Most recent resolved bets, newest first. */
+  /** All resolved bets, newest first. */
   bets: PaperBet[];
   /** Bets on still-open windows (stake priced at the current bankroll). */
   open: PaperBet[];

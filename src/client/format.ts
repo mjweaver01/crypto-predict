@@ -61,6 +61,30 @@ export const escapeHtml = (s: string) =>
 
 export const px = (n: number) => n.toFixed(2);
 
+// ── Persisted UI preferences (selected tab, spot range, filters) ──────────
+
+/** Read a saved preference, falling back unless it's one of `allowed`. */
+export function loadPref<T extends string>(
+  key: string,
+  allowed: readonly T[],
+  fallback: T
+): T {
+  try {
+    const v = localStorage.getItem(`bp.${key}`);
+    return allowed.includes(v as T) ? (v as T) : fallback;
+  } catch {
+    return fallback; // storage blocked (private mode etc.)
+  }
+}
+
+export function savePref(key: string, value: string): void {
+  try {
+    localStorage.setItem(`bp.${key}`, value);
+  } catch {
+    // best-effort; losing a preference is fine
+  }
+}
+
 export const COLORS = {
   up: '#34d399',
   down: '#f87171',

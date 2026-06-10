@@ -4,6 +4,7 @@ import type {
   LedgerEntry,
   LedgerSummary,
   MetricsResponse,
+  PaperBet,
   PaperResponse,
   RangeId,
 } from '../shared/types.ts';
@@ -16,8 +17,18 @@ import {
   fmtPct,
   fmtUsd,
   fmtUsd2,
+  loadPref,
   px,
+  savePref,
 } from './format.ts';
+import { attachChartTip } from './chartTip.ts';
+
+/** X positions (viewBox %) for n evenly spaced points, matching the charts'
+ *  PADX=1.5 layout, so tooltip snapping lands exactly on the drawn points. */
+const seriesXs = (n: number): number[] =>
+  Array.from({ length: n }, (_, i) => 1.5 + (i / Math.max(1, n - 1)) * 97);
+
+const isoOf = (t: number) => new Date(t).toISOString();
 
 // ── Previous reads (windowed insight history) ─────────────────────────────
 
@@ -92,7 +103,11 @@ async function refreshHistory() {
 // ── Track record (persisted calls vs realized outcomes) ──────────────────
 const RECORD_RANGES: RangeId[] = ['5m', '15m', '1h', '1d'];
 type RecordFilter = 'ALL' | RangeId;
-let recordFilter: RecordFilter = 'ALL';
+let recordFilter: RecordFilter = loadPref(
+  'filter',
+  ['ALL', ...RECORD_RANGES] as const,
+  'ALL'
+);
 let ledgerEntries: LedgerEntry[] = [];
 let ledgerSummary: LedgerSummary | null = null;
 
@@ -128,10 +143,12 @@ function renderRecordFilters() {
   for (const btn of el.querySelectorAll<HTMLButtonElement>('button')) {
     btn.addEventListener('click', () => {
       recordFilter = btn.dataset.rf as RecordFilter;
+      savePref('filter', recordFilter);
       renderRecordFilters();
       renderRecordList();
       renderHitRateChart();
       renderLearningCurve();
+      renderPaper();
     });
   }
 }
@@ -218,6 +235,28 @@ function renderLearningCurve() {
     ${mkt}`;
 
   chart.innerHTML = learningChart(f);
+  attachChartTip(chart, {
+    xs: seriesXs(f.series.length),
+    at: i => {
+      const p = f.series[i]!;
+      return {
+        title: fmtDateTime(isoOf(p.t)),
+        rows: [
+          {
+            label: 'Calibrated',
+            value: p.brierCal.toFixed(3),
+            color: COLORS.accent,
+          },
+          {
+            label: 'Raw model',
+            value: p.brierRaw.toFixed(3),
+            color: COLORS.muted,
+          },
+          { label: 'Hit rate', value: fmtPct(p.accuracy) },
+        ],
+      };
+    },
+  });
   if (f.series.length >= 2) {
     const first = f.series[0]!;
     const last = f.series[f.series.length - 1]!;
@@ -246,40 +285,71 @@ async function refreshMetrics() {
 }
 
 // ── Paper trading (EV policy replayed at real order-book costs) ───────────
+let paper: PaperResponse | null = null;
+/** Resolved + open paper bets by ledger id, for joining money into rows. */
+let paperById = new Map<string, PaperBet>();
 
-/** Equity curve: bankroll after each resolved bet vs the starting baseline. */
-function equityChart(p: PaperResponse): string {
-  const pts = p.equity;
-  if (pts.length < 2) return '<div class="chart-empty"></div>';
+/** Generic value-over-sequence line vs a dashed baseline (equity / cum P&L). */
+function paperChart(values: number[], baseline: number): string {
+  if (values.length < 2) return '<div class="chart-empty"></div>';
 
   const W = 100;
   const H = 100;
   const PADX = 1.5;
   const PADTOP = 8;
   const PADBOT = 8;
-  const start = p.policy.startBankroll;
-  const vals = pts.map(x => x.bankroll).concat(start);
-  const lo = Math.min(...vals);
-  const hi = Math.max(...vals);
+  const all = values.concat(baseline);
+  const lo = Math.min(...all);
+  const hi = Math.max(...all);
   const span = Math.max(hi - lo, 1e-9);
-  const lastIdx = pts.length - 1;
+  const lastIdx = values.length - 1;
   const X = (i: number) => PADX + (i / lastIdx) * (W - 2 * PADX);
   const Y = (v: number) =>
     PADTOP + (1 - (v - lo) / span) * (H - PADTOP - PADBOT);
 
-  const line = pts
-    .map((x, i) => `${i ? 'L' : 'M'}${px(X(i))} ${px(Y(x.bankroll))}`)
+  const line = values
+    .map((v, i) => `${i ? 'L' : 'M'}${px(X(i))} ${px(Y(v))}`)
     .join(' ');
-  const yBase = px(Y(start));
+  const yBase = px(Y(baseline));
   const color =
-    pts[pts.length - 1]!.bankroll >= start ? COLORS.up : COLORS.down;
+    values[values.length - 1]! >= baseline ? COLORS.up : COLORS.down;
   return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
     <line x1="0" y1="${yBase}" x2="${W}" y2="${yBase}" stroke="${COLORS.muted}" stroke-width="1" stroke-dasharray="3 3" opacity="0.4" vector-effect="non-scaling-stroke"/>
     <path d="${line}" fill="none" stroke="${color}" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   </svg>`;
 }
 
-function renderPaper(p: PaperResponse) {
+/** One paper bet row: side + entry price, money staked, and the P&L. */
+function paperBetRow(b: PaperBet): string {
+  const result =
+    b.pnl === undefined
+      ? '<span class="rec-result pending" title="Awaiting resolution">···</span>'
+      : b.won
+        ? '<span class="rec-result hit" title="Won">✓</span>'
+        : '<span class="rec-result miss" title="Lost">✗</span>';
+  const pnl =
+    b.pnl === undefined
+      ? `<span class="pt-pnl">to win ${fmtUsd2((b.stake * (1 - b.cost)) / b.cost)}</span>`
+      : `<span class="pt-pnl ${b.pnl >= 0 ? 'up' : 'down'}">${b.pnl >= 0 ? '+' : ''}${fmtUsd2(b.pnl)}</span>`;
+  const bank =
+    b.bankrollAfter !== undefined
+      ? `<span class="pt-bank">bank ${fmtUsd2(b.bankrollAfter)}</span>`
+      : '<span class="pt-bank">open</span>';
+  return `<div class="pt-bet">
+    ${result}
+    <span class="rec-range">${b.rangeId}</span>
+    <span class="pt-when">${fmtDateTime(b.decidedAt)}</span>
+    <span class="rec-side ${b.side === 'UP' ? 'up' : 'down'}">${b.side}</span>
+    <span class="pt-num">at ${(b.cost * 100).toFixed(1)}¢ (edge +${(b.edge * 100).toFixed(1)}¢)</span>
+    <span class="pt-num">bet ${fmtUsd2(b.stake)}</span>
+    ${pnl}
+    ${bank}
+  </div>`;
+}
+
+function renderPaper() {
+  const p = paper;
+  if (!p) return;
   const s = p.summary;
   const pol = p.policy;
   const sub = $('pt-sub');
@@ -287,54 +357,156 @@ function renderPaper(p: PaperResponse) {
   const chart = $('pt-chart');
   const axis = $('pt-axis');
   const legend = $('pt-legend');
+  const betsEl = $('pt-bets');
   const polTxt =
     `min edge ${(pol.minEdge * 100).toFixed(0)}¢ · ` +
     `${(pol.kellyFraction * 100).toFixed(0)}% Kelly, ≤${(pol.maxStakeFraction * 100).toFixed(0)}%/bet`;
 
-  if (s.bets === 0) {
+  const famFilter = recordFilter !== 'ALL';
+  const bets = famFilter
+    ? p.bets.filter(b => b.rangeId === recordFilter)
+    : p.bets;
+  const open = famFilter
+    ? p.open.filter(b => b.rangeId === recordFilter)
+    : p.open;
+
+  if (bets.length === 0) {
     sub.textContent =
-      `No resolved paper bets yet · ${p.open.length} open · ${polTxt} — ` +
-      'accumulates as commits with real bid/ask resolve.';
+      `No resolved paper bets${famFilter ? ` for ${recordFilter}` : ''} yet · ` +
+      `${open.length} open · ${polTxt} — accumulates as commits with real ` +
+      'bid/ask resolve.';
     stats.innerHTML = '';
     chart.innerHTML = '<div class="chart-empty"></div>';
     axis.innerHTML = '';
     legend.innerHTML = '';
+    betsEl.innerHTML = open.map(paperBetRow).join('');
     return;
   }
 
-  sub.textContent =
-    `${s.bets} bets (${s.wins}W–${s.bets - s.wins}L) · ` +
-    `${s.passes} passes · ${p.open.length} open · ${polTxt}`;
-  const sign = s.pnl >= 0 ? '+' : '';
-  stats.innerHTML = `
-    <div>
-      <div class="rstat-label">Bankroll</div>
-      <div class="rstat-val accent">${fmtUsd2(s.bankroll)}</div>
-    </div>
-    <div>
-      <div class="rstat-label">P&amp;L</div>
-      <div class="rstat-val" style="color:${s.pnl >= 0 ? COLORS.up : COLORS.down}">${sign}${fmtUsd2(s.pnl)}</div>
-    </div>
-    <div>
-      <div class="rstat-label">ROI</div>
-      <div class="rstat-val">${fmtPct(s.roi)}</div>
-    </div>
-    <div>
-      <div class="rstat-label">Max DD</div>
-      <div class="rstat-val">${fmtPct(s.maxDrawdown)}</div>
-    </div>`;
-
-  chart.innerHTML = equityChart(p);
-  if (p.equity.length >= 2) {
-    const first = p.equity[0]!;
-    const last = p.equity[p.equity.length - 1]!;
-    axis.innerHTML =
-      `<span>${fmtDay(first.t)}</span>` +
-      `<span class="hl">bankroll per resolved bet</span>` +
-      `<span>${fmtDay(last.t)}</span>`;
+  if (famFilter) {
+    // Per-family view: this family's bets in isolation. Bankroll is a global
+    // (cross-family, compounding) quantity, so chart cumulative P&L instead.
+    const f = p.families.find(x => x.rangeId === recordFilter);
+    const wins = bets.filter(b => b.won).length;
+    sub.textContent =
+      `${recordFilter}: ${bets.length} bets (${wins}W–${bets.length - wins}L) · ` +
+      `${open.length} open · ${polTxt}`;
+    const pnl = f?.pnl ?? 0;
+    const sign = pnl >= 0 ? '+' : '';
+    stats.innerHTML = `
+      <div>
+        <div class="rstat-label">P&amp;L</div>
+        <div class="rstat-val" style="color:${pnl >= 0 ? COLORS.up : COLORS.down}">${sign}${fmtUsd2(pnl)}</div>
+      </div>
+      <div>
+        <div class="rstat-label">Staked</div>
+        <div class="rstat-val">${fmtUsd2(f?.staked ?? 0)}</div>
+      </div>
+      <div>
+        <div class="rstat-label">ROI</div>
+        <div class="rstat-val">${fmtPct(f?.roi ?? 0)}</div>
+      </div>
+      <div>
+        <div class="rstat-label">Win rate</div>
+        <div class="rstat-val accent">${fmtPct(bets.length ? wins / bets.length : 0)}</div>
+      </div>`;
+    let cum = 0;
+    const ordered = [...bets].reverse(); // oldest → newest
+    const series = ordered.map(b => (cum += b.pnl ?? 0));
+    chart.innerHTML = paperChart([0, ...series], 0);
+    attachChartTip(chart, {
+      xs: seriesXs(series.length + 1),
+      at: i => {
+        if (i === 0)
+          return {
+            title: 'start',
+            rows: [{ label: 'Cumulative', value: fmtUsd2(0) }],
+          };
+        const b = ordered[i - 1]!;
+        const pnl = b.pnl ?? 0;
+        return {
+          title: fmtDateTime(b.decidedAt),
+          rows: [
+            {
+              label: `${b.side} at ${(b.cost * 100).toFixed(1)}¢, bet ${fmtUsd2(b.stake)}`,
+              value: `${pnl >= 0 ? '+' : ''}${fmtUsd2(pnl)}`,
+              color: pnl >= 0 ? COLORS.up : COLORS.down,
+            },
+            { label: 'Cumulative', value: fmtUsd2(series[i - 1]!) },
+          ],
+        };
+      },
+    });
+    axis.innerHTML = `<span class="hl">cumulative ${recordFilter} P&L per resolved bet</span>`;
   } else {
-    axis.innerHTML = '<span>Not enough resolved bets to chart yet.</span>';
+    sub.textContent =
+      `${s.bets} bets (${s.wins}W–${s.bets - s.wins}L) · ` +
+      `${s.passes} passes · ${open.length} open · ` +
+      `book: ${s.sources.live} live, ${s.sources.trades} backfilled · ${polTxt}`;
+    const sign = s.pnl >= 0 ? '+' : '';
+    stats.innerHTML = `
+      <div>
+        <div class="rstat-label">Bankroll</div>
+        <div class="rstat-val accent">${fmtUsd2(s.bankroll)}</div>
+      </div>
+      <div>
+        <div class="rstat-label">P&amp;L</div>
+        <div class="rstat-val" style="color:${s.pnl >= 0 ? COLORS.up : COLORS.down}">${sign}${fmtUsd2(s.pnl)}</div>
+      </div>
+      <div>
+        <div class="rstat-label">ROI</div>
+        <div class="rstat-val">${fmtPct(s.roi)}</div>
+      </div>
+      <div>
+        <div class="rstat-label">Max DD</div>
+        <div class="rstat-val">${fmtPct(s.maxDrawdown)}</div>
+      </div>`;
+    chart.innerHTML = paperChart(
+      p.equity.map(x => x.bankroll),
+      pol.startBankroll
+    );
+    const orderedAll = [...p.bets].reverse(); // oldest → newest, matches equity
+    attachChartTip(chart, {
+      xs: seriesXs(p.equity.length),
+      at: i => {
+        const e = p.equity[i]!;
+        const b = orderedAll[i];
+        const delta = e.bankroll - pol.startBankroll;
+        const rows = [
+          {
+            label: 'Bankroll',
+            value: fmtUsd2(e.bankroll),
+            color: COLORS.accent,
+          },
+          {
+            label: 'vs start',
+            value: `${delta >= 0 ? '+' : ''}${fmtUsd2(delta)}`,
+            color: delta >= 0 ? COLORS.up : COLORS.down,
+          },
+        ];
+        if (b) {
+          const pnl = b.pnl ?? 0;
+          rows.push({
+            label: `${b.rangeId} ${b.side}, bet ${fmtUsd2(b.stake)}`,
+            value: `${pnl >= 0 ? '+' : ''}${fmtUsd2(pnl)}`,
+            color: pnl >= 0 ? COLORS.up : COLORS.down,
+          });
+        }
+        return { title: fmtDateTime(isoOf(e.t)), rows };
+      },
+    });
+    if (p.equity.length >= 2) {
+      const first = p.equity[0]!;
+      const last = p.equity[p.equity.length - 1]!;
+      axis.innerHTML =
+        `<span>${fmtDay(first.t)}</span>` +
+        `<span class="hl">bankroll per resolved bet</span>` +
+        `<span>${fmtDay(last.t)}</span>`;
+    } else {
+      axis.innerHTML = '<span>Not enough resolved bets to chart yet.</span>';
+    }
   }
+
   legend.innerHTML = p.families
     .map(f => {
       const sgn = f.pnl >= 0 ? '+' : '';
@@ -343,13 +515,27 @@ function renderPaper(p: PaperResponse) {
       }"></span>${f.rangeId}: ${sgn}${fmtUsd2(f.pnl)} (${f.wins}/${f.bets}, roi ${fmtPct(f.roi)})</span>`;
     })
     .join('');
+
+  // Open bets first (what's at stake now), then resolved, newest first.
+  const MAX_ROWS = 30;
+  const rows = [...open, ...bets].slice(0, MAX_ROWS);
+  betsEl.innerHTML =
+    rows.map(paperBetRow).join('') +
+    (open.length + bets.length > MAX_ROWS
+      ? `<div class="pt-more">showing ${MAX_ROWS} of ${open.length + bets.length} bets</div>`
+      : '');
 }
 
 async function refreshPaper() {
   try {
     const res = await fetch('/api/paper');
     if (!res.ok) return;
-    renderPaper((await res.json()) as PaperResponse);
+    paper = (await res.json()) as PaperResponse;
+    paperById = new Map(
+      [...paper.bets, ...paper.open].map(b => [b.id, b] as const)
+    );
+    renderPaper();
+    renderRecordList(); // joins bet money into call-history rows
   } catch {
     // Paper scoreboard is best-effort; ignore transient failures.
   }
@@ -375,11 +561,12 @@ function resolvedForChart(): LedgerEntry[] {
  * trend) and a rolling hit rate (recent form), against a dashed 50% baseline.
  * Drawn in a 0..100 viewBox stretched to fill the card.
  */
-function hitRateChart(entries: LedgerEntry[]): string {
-  if (entries.length < 2) return '<div class="chart-empty"></div>';
-
+/** Cumulative + rolling hit-rate series for a resolved-entry sequence. */
+function computeHitPts(
+  entries: LedgerEntry[]
+): { cum: number; roll: number }[] {
   let correct = 0;
-  const pts = entries.map((e, i) => {
+  return entries.map((e, i) => {
     if (e.correct) correct++;
     const cum = correct / (i + 1);
     const from = Math.max(0, i - ROLL_N + 1);
@@ -388,6 +575,12 @@ function hitRateChart(entries: LedgerEntry[]): string {
     const roll = rollCorrect / (i - from + 1);
     return { cum, roll };
   });
+}
+
+function hitRateChart(entries: LedgerEntry[]): string {
+  if (entries.length < 2) return '<div class="chart-empty"></div>';
+
+  const pts = computeHitPts(entries);
 
   // X is the resolved-call sequence (evenly spaced), so bursts of backfilled
   // calls don't bunch the line — each call is one step along the track record.
@@ -414,6 +607,30 @@ function hitRateChart(entries: LedgerEntry[]): string {
 function renderHitRateChart() {
   const entries = resolvedForChart();
   $('hr-chart').innerHTML = hitRateChart(entries);
+  const pts = computeHitPts(entries);
+  attachChartTip($('hr-chart'), {
+    xs: seriesXs(entries.length),
+    at: i => {
+      const e = entries[i]!;
+      const p = pts[i]!;
+      return {
+        title: fmtDateTime(e.windowStart),
+        rows: [
+          {
+            label: `Recent (${Math.min(ROLL_N, i + 1)})`,
+            value: fmtPct(p.roll),
+            color: COLORS.accent,
+          },
+          { label: 'Cumulative', value: fmtPct(p.cum), color: COLORS.muted },
+          {
+            label: `${e.rangeId} ${e.side}`,
+            value: e.correct ? '✓ hit' : '✗ miss',
+            color: e.correct ? COLORS.up : COLORS.down,
+          },
+        ],
+      };
+    },
+  });
 
   const axis = $('hr-axis');
   if (entries.length >= 2) {
@@ -453,6 +670,18 @@ function recordRow(e: LedgerEntry): string {
   const closeBits =
     e.closePrice != null ? ` · closed ${fmtUsd2(e.closePrice)}` : '';
 
+  // When the EV layer (paper trading) took this call, show the money: stake
+  // at the tradable price, and the realized win/loss once resolved.
+  const bet = paperById.get(e.id);
+  let betBits = '';
+  if (bet) {
+    const money =
+      bet.pnl === undefined
+        ? `to win ${fmtUsd2((bet.stake * (1 - bet.cost)) / bet.cost)}`
+        : `<span class="pt-pnl ${bet.pnl >= 0 ? 'up' : 'down'}">${bet.pnl >= 0 ? '+' : ''}${fmtUsd2(bet.pnl)}</span>`;
+    betBits = `<span>· bet ${fmtUsd2(bet.stake)} at ${(bet.cost * 100).toFixed(1)}¢ → ${money}</span>`;
+  }
+
   return `<div class="rec">
     ${result}
     <span class="rec-range">${e.rangeId}</span>
@@ -462,6 +691,7 @@ function recordRow(e: LedgerEntry): string {
         called <span class="rec-side ${sideCls}">${e.side}</span>
         ${outcome}
         <span>· vs ${fmtUsd2(e.strike)}${closeBits}</span>
+        ${betBits}
       </div>
     </div>
     <div class="rec-prob">
