@@ -22,7 +22,7 @@ import type { LedgerEntry, RangeId } from '../src/shared/types.ts';
 const PATH = process.env.LEDGER_PATH ?? `${process.cwd()}/data/ledger.json`;
 const LIVE_ONLY = process.argv.includes('--live-only');
 
-const FAMILIES: RangeId[] = ['5m', '15m', '1h', '1d'];
+const FAMILIES: RangeId[] = ['5m', '15m', '1h', '4h', '1d'];
 /** Assumed half-spreads (¢) for legacy midpoint-only rows. */
 const ASSUMED_SPREADS = [0, 0.01, 0.02, 0.03];
 /** Minimum-edge thresholds for the abstention sweep. */

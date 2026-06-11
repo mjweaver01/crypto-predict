@@ -68,6 +68,7 @@ const FAMS: Fam[] = [
   { id: '5m', windowMin: 5, count: arg('count5', 144) },
   { id: '15m', windowMin: 15, count: arg('count15', 96) },
   { id: '1h', windowMin: 60, count: arg('count1h', 48) },
+  { id: '4h', windowMin: 240, count: arg('count4h', 42) },
 ];
 
 async function mapPool<T, R>(
@@ -133,12 +134,12 @@ function recentDailyWindows(count: number): { start: number; end: number }[] {
 }
 
 async function main() {
-  // Oldest 1m candle we need: oldest 1h window start - warmup.
-  const oldest1h = recentWindowStarts(
-    60,
-    FAMS.find(f => f.id === '1h')!.count
-  ).at(-1)!;
-  const klStart = oldest1h - (WARMUP_MIN + 5) * MIN;
+  // Oldest 1m candle we need: the oldest window start across the intraday
+  // families, minus the warmup.
+  const oldestIntraday = Math.min(
+    ...FAMS.map(f => recentWindowStarts(f.windowMin, f.count).at(-1)!)
+  );
+  const klStart = oldestIntraday - (WARMUP_MIN + 5) * MIN;
   // Daily windows reach much further back than the 1h family, so the hourly
   // warmup must cover the oldest daily start too.
   const dailyWindows = recentDailyWindows(COUNT_1D);
@@ -147,7 +148,7 @@ async function main() {
   // Fetch 1h candles far enough back that the long-horizon EWMA has warmed up
   // by the oldest window (the live model uses 720 hourly candles).
   const HOUR = 60 * MIN;
-  const hourStart = Math.min(oldest1h, oldestDailyStart) - 720 * HOUR;
+  const hourStart = Math.min(oldestIntraday, oldestDailyStart) - 720 * HOUR;
   const [candles, hourCandlesAll] = await Promise.all([
     fetchKlineRange('1m', klStart, Date.now()),
     fetchKlineRange('1h', hourStart, Date.now()),

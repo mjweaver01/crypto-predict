@@ -149,7 +149,12 @@ function strikeAt(
 }
 
 const floorTo = (n: number, step: number) => Math.floor(n / step) * step;
-const MS = { '5m': 5 * 60_000, '15m': 15 * 60_000, '1h': 60 * 60_000 };
+const MS = {
+  '5m': 5 * 60_000,
+  '15m': 15 * 60_000,
+  '1h': 60 * 60_000,
+  '4h': 4 * 60 * 60_000,
+};
 
 /** Window bounds (start/end epoch ms) for each market family at `now`. */
 function windowsAt(now: number) {
@@ -167,6 +172,12 @@ function windowsAt(now: number) {
       start: floorTo(now, MS['1h']),
       end: floorTo(now, MS['1h']) + MS['1h'],
     },
+    // 4h windows sit on the epoch lattice (00/04/08/12/16/20 UTC), matching
+    // Polymarket's btc-updown-4h-{startUnix} slugs.
+    '4h': {
+      start: floorTo(now, MS['4h']),
+      end: floorTo(now, MS['4h']) + MS['4h'],
+    },
     '1d': { start: day.start, end: day.end },
   } as Record<RangeId, { start: number; end: number }>;
 }
@@ -178,6 +189,7 @@ const META: Record<
   '5m': { label: '5 min', resolutionSource: 'chainlink' },
   '15m': { label: '15 min', resolutionSource: 'chainlink' },
   '1h': { label: 'Hourly', resolutionSource: 'binance' },
+  '4h': { label: '4 hour', resolutionSource: 'chainlink' },
   '1d': { label: 'Daily', resolutionSource: 'binance' },
 };
 
@@ -221,9 +233,11 @@ async function computePrediction(assistWaitMs: number): Promise<Prediction> {
       open5m,
       open15m,
       open1h,
+      open4h,
       openDay,
       pmStrike5m,
       pmStrike15m,
+      pmStrike4h,
     ] = await Promise.all([
       fetchPrice(),
       fetch24hChangePct(),
@@ -233,12 +247,16 @@ async function computePrediction(assistWaitMs: number): Promise<Prediction> {
       fetchCandleAt('1m', win['5m'].start),
       fetchCandleAt('1m', win['15m'].start),
       fetchCandleAt('1m', win['1h'].start),
+      fetchCandleAt('1m', win['4h'].start),
       fetchCandleAt('1m', win['1d'].start),
-      // Polymarket's exact Chainlink-derived "price to beat" for 5m/15m.
+      // Polymarket's exact Chainlink-derived "price to beat" for 5m/15m/4h.
       fetchPolymarketStrike('5m', win['5m'].start, win['5m'].end).catch(
         () => undefined
       ),
       fetchPolymarketStrike('15m', win['15m'].start, win['15m'].end).catch(
+        () => undefined
+      ),
+      fetchPolymarketStrike('4h', win['4h'].start, win['4h'].end).catch(
         () => undefined
       ),
     ]);
@@ -251,7 +269,7 @@ async function computePrediction(assistWaitMs: number): Promise<Prediction> {
     });
 
     // Strike (price to beat) per family, anchored to how each market settles:
-    //  5m/15m → Chainlink BTC/USD. We read Polymarket's EXACT openPrice from
+    //  5m/15m/4h → Chainlink BTC/USD. We read Polymarket's EXACT openPrice from
     //           their crypto-price API; only if it's unavailable do we fall
     //           back to the Binance 1m-open proxy (which carries a basis error).
     //  1h     → Binance BTC/USDT 1h candle OPEN = exact (1m open at boundary).
@@ -270,6 +288,12 @@ async function computePrediction(assistWaitMs: number): Promise<Prediction> {
         candleOpenAt(hourCandles, win['1h'].start) ??
         lastCloseBefore(hourCandles, win['1h'].start) ??
         price,
+      '4h':
+        pmStrike4h ??
+        open4h?.open ??
+        candleOpenAt(hourCandles, win['4h'].start) ??
+        lastCloseBefore(hourCandles, win['4h'].start) ??
+        price,
       '1d':
         openDay?.close ??
         candleOpenAt(hourCandles, win['1d'].start) ??
@@ -277,17 +301,18 @@ async function computePrediction(assistWaitMs: number): Promise<Prediction> {
         price,
     };
 
-    // 5m/15m strikes are only a "proxy" when we couldn't get Polymarket's exact
-    // openPrice and fell back to the Binance boundary candle. 1h/1d are always
-    // exact Binance settlement prices.
+    // Chainlink-family strikes are only a "proxy" when we couldn't get
+    // Polymarket's exact openPrice and fell back to the Binance boundary
+    // candle. 1h/1d are always exact Binance settlement prices.
     const strikeIsProxyByRange: Record<RangeId, boolean> = {
       '5m': pmStrike5m === undefined,
       '15m': pmStrike15m === undefined,
       '1h': false,
+      '4h': pmStrike4h === undefined,
       '1d': false,
     };
 
-    const order: RangeId[] = ['5m', '15m', '1h', '1d'];
+    const order: RangeId[] = ['5m', '15m', '1h', '4h', '1d'];
 
     const markets = await Promise.all(
       order.map(id => {

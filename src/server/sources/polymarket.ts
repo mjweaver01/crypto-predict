@@ -1,9 +1,10 @@
 import { cached, env } from '../cache.ts';
 import type { MarketQuote, RangeId } from '../../shared/types.ts';
 
-// Polymarket runs four recurring "BTC Up or Down" market families:
+// Polymarket runs five recurring "BTC Up or Down" market families:
 //   5m     → slug btc-updown-5m-{startUnix}        (Chainlink BTC/USD)
 //   15m    → slug btc-updown-15m-{startUnix}       (Chainlink BTC/USD)
+//   4h     → slug btc-updown-4h-{startUnix}        (Chainlink BTC/USD)
 //   hourly → slug bitcoin-up-or-down-{m}-{d}-{y}-{h}{am|pm}-et (Binance 1h candle)
 //   daily  → slug bitcoin-up-or-down-on-{m}-{d}-{y}            (Binance 1m close @ noon ET)
 //
@@ -13,7 +14,7 @@ import type { MarketQuote, RangeId } from '../../shared/types.ts';
 const GAMMA = env('POLYMARKET_GAMMA_URL', 'https://gamma-api.polymarket.com');
 const CLOB = env('POLYMARKET_CLOB_URL', 'https://clob.polymarket.com');
 // Polymarket's own web API exposes the exact settlement "open" (price to beat)
-// for the Chainlink-resolved 5m/15m markets via /api/crypto/crypto-price.
+// for the Chainlink-resolved 5m/15m/4h markets via /api/crypto/crypto-price.
 const SITE = env('POLYMARKET_SITE_URL', 'https://polymarket.com');
 const TTL = Number(env('CACHE_TTL_POLYMARKET', '5')); // seconds
 const ET = 'America/New_York';
@@ -113,6 +114,7 @@ export const slugFor = {
     const { month, day, year, hour, ampm } = etParts(startMs);
     return `bitcoin-up-or-down-${month}-${day}-${year}-${hour}${ampm}-et`;
   },
+  '4h': (startMs: number) => `btc-updown-4h-${Math.floor(startMs / 1000)}`,
   // The daily market is keyed by its RESOLUTION day (the closing noon ET).
   '1d': (endMs: number) => {
     const { month, day, year } = etParts(endMs);
@@ -121,11 +123,12 @@ export const slugFor = {
 };
 
 // crypto-price `variant` query value per family. Only the Chainlink-resolved
-// 5m/15m markets are served from this endpoint; hourly/daily proxy Binance
+// 5m/15m/4h markets are served from this endpoint; hourly/daily proxy Binance
 // (and 451 from most regions), so we settle those off our own Binance candles.
 const CRYPTO_PRICE_VARIANT: Partial<Record<RangeId, string>> = {
   '5m': 'fiveminute',
   '15m': 'fifteen',
+  '4h': 'fourhour',
 };
 
 /** Polymarket's ISO format for crypto-price (whole seconds, trailing Z). */
@@ -135,7 +138,7 @@ function isoSec(ms: number): string {
 
 /**
  * The EXACT "price to beat" Polymarket shows for a Chainlink-resolved window
- * (5m/15m), read straight from their crypto-price API's `openPrice`. This is the
+ * (5m/15m/4h), read from their crypto-price API's `openPrice`. This is the
  * same Chainlink BTC/USD value the market settles against, so it removes the
  * Binance↔Chainlink basis that plagued our 1m-open proxy. Returns undefined for
  * families this endpoint doesn't serve, or if it's unavailable.

@@ -14,7 +14,7 @@ import type {
 } from '../../shared/types.ts';
 
 const PATH = env('LEDGER_PATH', `${process.cwd()}/data/ledger.json`);
-const RANGE_IDS: RangeId[] = ['5m', '15m', '1h', '1d'];
+const RANGE_IDS: RangeId[] = ['5m', '15m', '1h', '4h', '1d'];
 
 type Store = Record<string, LedgerEntry>;
 
@@ -103,7 +103,7 @@ export async function recordPredictions(p: Prediction): Promise<void> {
 async function resolveOne(
   e: LedgerEntry
 ): Promise<Partial<LedgerEntry> | null> {
-  // Prefer the real market resolution (Chainlink for 5m/15m, Binance for
+  // Prefer the real market resolution (Chainlink for 5m/15m/4h, Binance for
   // 1h/daily) so the record reflects exactly what the market settled.
   if (e.slug) {
     const o = await fetchMarketOutcome(e.slug).catch(() => null);
@@ -176,6 +176,7 @@ export function summarize(entries: LedgerEntry[]): LedgerSummary {
     '5m': emptyRange(),
     '15m': emptyRange(),
     '1h': emptyRange(),
+    '4h': emptyRange(),
     '1d': emptyRange(),
   } as LedgerSummary['byRange'];
   let resolved = 0;

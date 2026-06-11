@@ -43,6 +43,7 @@ export function getPolicy(): PaperPolicy {
       '5m': fam('PAPER_MIN_EDGE_5M', 0.02),
       '15m': fam('PAPER_MIN_EDGE_15M', 0.05),
       '1h': fam('PAPER_MIN_EDGE_1H', 0.05),
+      '4h': fam('PAPER_MIN_EDGE_4H', 0.05),
       '1d': fam('PAPER_MIN_EDGE_1D', 0.05),
     },
     kellyFraction: num('PAPER_KELLY_FRACTION', 0.25),
@@ -106,7 +107,7 @@ export function decideBet(
   return { action: 'BET', side, cost, edge, stakeFraction };
 }
 
-const RANGE_IDS: RangeId[] = ['5m', '15m', '1h', '1d'];
+const RANGE_IDS: RangeId[] = ['5m', '15m', '1h', '4h', '1d'];
 
 /**
  * Replay the policy over the ledger in commit order. Bets compound against a

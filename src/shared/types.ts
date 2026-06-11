@@ -1,7 +1,7 @@
 // Shared types used by both server and client.
 
 /** The recurring Polymarket BTC Up/Down market families we mirror as tabs. */
-export type RangeId = '5m' | '15m' | '1h' | '1d';
+export type RangeId = '5m' | '15m' | '1h' | '4h' | '1d';
 
 /**
  * Selectable look-back windows for the spot price chart (shortest → longest).

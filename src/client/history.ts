@@ -101,7 +101,7 @@ async function refreshHistory() {
 }
 
 // ── Track record (persisted calls vs realized outcomes) ──────────────────
-const RECORD_RANGES: RangeId[] = ['5m', '15m', '1h', '1d'];
+const RECORD_RANGES: RangeId[] = ['5m', '15m', '1h', '4h', '1d'];
 type RecordFilter = 'ALL' | RangeId;
 let recordFilter: RecordFilter = loadPref(
   'filter',

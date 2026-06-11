@@ -138,7 +138,7 @@ export async function computeMetrics(): Promise<MetricsResponse> {
     byFamily.set(e.rangeId, list);
   }
 
-  const order: RangeId[] = ['5m', '15m', '1h', '1d'];
+  const order: RangeId[] = ['5m', '15m', '1h', '4h', '1d'];
   return {
     families: [
       familyMetrics('ALL', all),

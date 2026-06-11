@@ -143,10 +143,11 @@ const CHART_MINUTES: Record<RangeId, number> = {
   '5m': 30,
   '15m': 90,
   '1h': 120,
+  '4h': 120,
   '1d': 120,
 };
 
-const RANGE_IDS: readonly RangeId[] = ['5m', '15m', '1h', '1d'];
+const RANGE_IDS: readonly RangeId[] = ['5m', '15m', '1h', '4h', '1d'];
 let selected: RangeId | null = loadPref('tab', RANGE_IDS, '5m');
 let latest: Prediction | null = null;
 

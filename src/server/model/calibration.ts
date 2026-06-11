@@ -45,7 +45,7 @@ export interface Calibrator {
   n: number;
 }
 
-const RANGE_IDS: RangeId[] = ['5m', '15m', '1h', '1d'];
+const RANGE_IDS: RangeId[] = ['5m', '15m', '1h', '4h', '1d'];
 
 /** Below this many resolved calls we don't fit at all (stay identity). */
 const MIN_SAMPLES = Math.max(1, Number(env('CALIB_MIN_SAMPLES', '25')) || 25);
@@ -66,6 +66,7 @@ const HALF_LIFE_HOURS: Record<RangeId, number> = {
   '5m': Number(env('CALIB_HALF_LIFE_HOURS_5M', '24')) || 24,
   '15m': Number(env('CALIB_HALF_LIFE_HOURS_15M', '48')) || 48,
   '1h': Number(env('CALIB_HALF_LIFE_HOURS_1H', '168')) || 168,
+  '4h': Number(env('CALIB_HALF_LIFE_HOURS_4H', '336')) || 336,
   '1d': Number(env('CALIB_HALF_LIFE_HOURS_1D', '1440')) || 1440,
 };
 
@@ -91,6 +92,7 @@ const cache: Record<RangeId, Calibrator> = {
   '5m': identity('5m'),
   '15m': identity('15m'),
   '1h': identity('1h'),
+  '4h': identity('4h'),
   '1d': identity('1d'),
 };
 

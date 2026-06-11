@@ -503,7 +503,7 @@ header {
    ticking countdown in the middle, market odds underneath. */
 .tabs {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 10px;
   margin-top: 22px;
 }
@@ -598,6 +598,10 @@ header {
 @media (max-width: 720px) {
   .tabs {
     grid-template-columns: repeat(2, 1fr);
+  }
+  /* With an odd tab count, stretch the straggler across the row. */
+  .tabs .tab:nth-child(odd):last-child {
+    grid-column: 1 / -1;
   }
 }
 

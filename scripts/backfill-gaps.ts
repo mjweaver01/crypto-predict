@@ -44,6 +44,7 @@ const FAMS: Fam[] = [
   { id: '5m', windowMin: 5, lookback: arg('lookback5', 144) },
   { id: '15m', windowMin: 15, lookback: arg('lookback15', 96) },
   { id: '1h', windowMin: 60, lookback: arg('lookback1h', 48) },
+  { id: '4h', windowMin: 240, lookback: arg('lookback4h', 42) },
 ];
 
 async function mapPool<T, R>(
@@ -99,13 +100,12 @@ async function main() {
   }
 
   // ── Fetch klines once, covering the full range needed ─────────────────────
-  const oldest1h = recentWindowStarts(
-    60,
-    FAMS.find(f => f.id === '1h')!.lookback
-  ).at(-1)!;
-  const klStart = oldest1h - (WARMUP_MIN + 5) * MIN;
+  const oldestIntraday = Math.min(
+    ...FAMS.map(f => recentWindowStarts(f.windowMin, f.lookback).at(-1)!)
+  );
+  const klStart = oldestIntraday - (WARMUP_MIN + 5) * MIN;
   const HOUR = 60 * MIN;
-  const hourStart = oldest1h - 720 * HOUR;
+  const hourStart = oldestIntraday - 720 * HOUR;
 
   console.log('\nfetching klines…');
   const [candles, hourCandlesAll] = await Promise.all([

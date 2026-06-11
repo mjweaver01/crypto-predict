@@ -41,6 +41,7 @@ export const FEATURE_KEYS: Record<RangeId, string[]> = {
   '5m': ['z', 'm15', 'm60', 'm240', 'vr', 'todSin', 'todCos', 'mkt'],
   '15m': ['z', 'm15', 'm60', 'm240', 'vr', 'todSin', 'todCos', 'mkt'],
   '1h': ['z', 'm15', 'm60', 'm240', 'vr', 'todSin', 'todCos', 'mkt'],
+  '4h': ['z', 'm15', 'm60', 'm240', 'vr', 'todSin', 'todCos', 'mkt'],
   '1d': ['z', 'm1d', 'm3d', 'm7d', 'vr', 'dowSin', 'dowCos', 'mkt'],
 };
 
