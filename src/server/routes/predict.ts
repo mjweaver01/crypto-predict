@@ -19,9 +19,9 @@ import {
   statsAssist,
   type Assist,
 } from '../model/llmAssist.ts';
-import { recordPredictions } from '../model/ledger.ts';
+import { getLedger, recordPredictions } from '../model/ledger.ts';
 import { decide, ensureHydrated } from '../model/commitments.ts';
-import { decideBet } from '../model/paper.ts';
+import { decideBet, simulatePaper } from '../model/paper.ts';
 import {
   applyCalibration,
   calibrationInfo,
@@ -219,6 +219,15 @@ async function computePrediction(assistWaitMs: number): Promise<Prediction> {
     // Load any still-open committed calls from the ledger before we decide, so
     // a restart mid-window keeps the call we already locked in.
     await ensureHydrated();
+
+    // Current paper bankroll, so a live BET verdict can state its dollar stake
+    // (the replay sizes open bets at this same running bankroll).
+    let bankroll: number | undefined;
+    try {
+      bankroll = simulatePaper(await getLedger()).summary.bankroll;
+    } catch (err) {
+      console.warn('[paper] bankroll unavailable for live stake:', err);
+    }
 
     // Fetch market data plus the EXACT boundary candle for each window, so the
     // strike is the precise Binance price at the boundary rather than whatever
@@ -425,6 +434,9 @@ async function computePrediction(assistWaitMs: number): Promise<Prediction> {
           c.marketBidUp,
           c.marketAskUp
         );
+        if (range.paper.action === 'BET' && bankroll !== undefined) {
+          range.paper.stake = bankroll * range.paper.stakeFraction;
+        }
       }
       return range;
     });

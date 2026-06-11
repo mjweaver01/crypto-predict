@@ -228,6 +228,11 @@ export interface PaperDecision {
   edge?: number;
   /** Fraction of bankroll staked (fractional Kelly, capped). 0 when PASS. */
   stakeFraction: number;
+  /**
+   * Dollars staked at the current paper bankroll (stakeFraction × bankroll),
+   * matching the stake the replay's open bet carries. Only set on live BETs.
+   */
+  stake?: number;
   /** Why a PASS passed: no book at commit, or edge below the minimum. */
   reason?: 'no-book' | 'edge-below-min';
 }

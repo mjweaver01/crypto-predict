@@ -297,10 +297,14 @@ function renderMarketBlock(r: RangePrediction) {
   } else {
     paperEl.style.display = 'block';
     if (pd.action === 'BET') {
+      const sized =
+        pd.stake !== undefined
+          ? `bet ${fmtUsd2(pd.stake)} to win ${fmtUsd2((pd.stake * (1 - pd.cost!)) / pd.cost!)} ` +
+            `(${(pd.stakeFraction * 100).toFixed(1)}% of bankroll)`
+          : `stake ${(pd.stakeFraction * 100).toFixed(1)}% of bankroll`;
       paperEl.innerHTML =
         `<span class="paper-chip bet">PAPER BET</span>` +
-        `${pd.side} at ${cents(pd.cost!)} · edge +${cents(pd.edge!)} · ` +
-        `stake ${(pd.stakeFraction * 100).toFixed(1)}% of bankroll`;
+        `${pd.side} at ${cents(pd.cost!)} · edge +${cents(pd.edge!)} · ${sized}`;
     } else {
       const why =
         pd.reason === 'no-book'
