@@ -3,14 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Bitcoin Predict · Live</title>
+    <title>Crypto Predict · Live</title>
     <link rel="stylesheet" href="/app.css" />
   </head>
   <body>
     <main id="app" class="app loading">
       <header>
         <div class="header-left">
-          <div class="brand">Bitcoin Predict · BTC/USDT</div>
+          <div class="brand">Crypto Predict</div>
+          <select id="crypto-select" class="crypto-select"></select>
           <nav class="nav">
             <a href="/" class="active">Live</a>
             <a href="/history">History</a>
@@ -21,9 +22,9 @@
 
       <div class="hero-row">
         <div class="card price-card">
-          <div class="price-head">
+          <div class="price-head" id="price-head">
             <div>
-              <div class="price-label">Bitcoin price · spot</div>
+              <div class="price-label" id="price-label">Bitcoin price · spot</div>
               <div id="price">$—</div>
               <div class="meta-row">
                 <span id="change" class="change">—</span>
@@ -37,6 +38,8 @@
             <span class="live-dot" id="live-dot" style="display: none"></span>
           </div>
           <div class="hero-axis" id="hero-axis"></div>
+          <!-- "All" view: one mini spot card per crypto, in place of the chart -->
+          <div class="crypto-grid" id="crypto-grid" style="display: none"></div>
         </div>
 
         <div class="card narrative-card">
@@ -126,6 +129,22 @@
         <div class="market-block muted" id="d-nomarket" style="display: none">
           No live Polymarket market for this window right now.
         </div>
+      </div>
+
+      <!-- "All" view: every crypto's call for the selected window family -->
+      <div class="card detail-panel" id="all-panel" style="display: none">
+        <div class="detail-head">
+          <div>
+            <div class="card-title"><span id="all-title">—</span></div>
+            <div class="detail-window" id="all-window">—</div>
+          </div>
+          <div class="detail-side">
+            <div id="all-countdown" class="countdown">—</div>
+            <div class="countdown-label">until close</div>
+          </div>
+        </div>
+        <div class="detail" id="all-summary">—</div>
+        <div class="all-table-wrap"><table class="all-table" id="all-table"></table></div>
       </div>
 
       <div id="error"></div>

@@ -48,6 +48,8 @@ export interface WindowRead {
 
 /** Concrete context handed to the LLM so its read references real levels. */
 export interface AssistContext {
+  /** Pair label, e.g. "BTC/USDT" — keeps the read on the right asset. */
+  asset?: string;
   /** Current spot price. */
   price: number;
   /** Per-window base reads, shortest horizon first. */
@@ -144,7 +146,8 @@ function heuristic(model: Model, ctx?: AssistContext): Assist {
     return { bias: 0, narrative, llmApplied: false };
   }
   const dir = driftPerMin > 0 ? 'upward' : 'downward';
-  const narrative = `Near-flat read: ${dir} 1m drift of ${(driftPerMin * 1e4).toFixed(2)}bp/min, BTC ${change}.`;
+  const asset = ctx?.asset?.split('/')[0] ?? 'BTC';
+  const narrative = `Near-flat read: ${dir} 1m drift of ${(driftPerMin * 1e4).toFixed(2)}bp/min, ${asset} ${change}.`;
   return { bias: 0, narrative, llmApplied: false };
 }
 
@@ -161,7 +164,7 @@ async function llmAssist(
     ? `\nModel calls (price to beat = strike):\n${readLines(ctx)}`
     : '';
   const prompt =
-    `BTC/USDT $${s.price.toFixed(0)}, 24h ${s.change24hPct.toFixed(2)}%. ` +
+    `${ctx?.asset ?? 'BTC/USDT'} $${s.price.toFixed(0)}, 24h ${s.change24hPct.toFixed(2)}%. ` +
     `drift ${(s.driftPerMin * 1e4).toFixed(2)}bp/min, ` +
     `vol/min ${(s.volPerMin * 100).toFixed(3)}%, ` +
     `vol/hr ${(s.volPerHour * 100).toFixed(2)}%.${reads}\n\n` +

@@ -6,6 +6,7 @@
 
 import { readFileSync } from 'node:fs';
 import { env } from '../cache.ts';
+import type { CryptoId } from '../../shared/cryptos.ts';
 import type { InsightSnapshot, Prediction, Side } from '../../shared/types.ts';
 
 // How long to keep snapshots, and a hard cap so a tiny TTL can't grow it without
@@ -57,7 +58,9 @@ export function recordInsight(p: Prediction): void {
     side: (r.probUp >= 0.5 ? 'UP' : 'DOWN') as Side,
   }));
 
-  const prev = log[log.length - 1];
+  // Dedupe against the last snapshot OF THE SAME CRYPTO — interleaved assets
+  // must not mask each other's unchanged reads.
+  const prev = [...log].reverse().find(s => (s.crypto ?? 'btc') === p.crypto);
   const sameSides =
     prev &&
     prev.narrative === p.narrative &&
@@ -66,6 +69,7 @@ export function recordInsight(p: Prediction): void {
   if (sameSides) return;
 
   log.push({
+    crypto: p.crypto,
     asOf: p.asOf,
     price: p.stats.price,
     change24hPct: p.stats.change24hPct,
@@ -78,8 +82,9 @@ export function recordInsight(p: Prediction): void {
   persist();
 }
 
-/** All retained snapshots, newest first. */
-export function getInsights(): InsightSnapshot[] {
+/** Retained snapshots, newest first, optionally for one crypto. */
+export function getInsights(crypto?: CryptoId): InsightSnapshot[] {
   prune(Date.now());
-  return [...log].reverse();
+  const all = [...log].reverse();
+  return crypto ? all.filter(s => (s.crypto ?? 'btc') === crypto) : all;
 }

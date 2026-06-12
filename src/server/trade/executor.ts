@@ -76,12 +76,13 @@ export async function maybeTrade(
   const cfg = getTradeConfig();
   if (!cfg.enabled) return null;
   if (!cfg.families.has(r.id)) return null;
+  if (!cfg.cryptos.has(r.crypto)) return null;
 
   const c = r.committed;
   if (!c || r.paper?.action !== 'BET') return null;
 
   const startMs = Date.parse(r.windowStart);
-  const windowId = `${r.id}:${startMs}`;
+  const windowId = `${r.crypto}:${r.id}:${startMs}`;
   const seen = await ensureAttempted();
   if (seen.has(windowId)) return null;
 
@@ -235,6 +236,7 @@ export async function maybeTrade(
 
   const base: TradeRecord = {
     id: windowId,
+    crypto: r.crypto,
     rangeId: r.id,
     slug: r.market.slug,
     windowStart: r.windowStart,

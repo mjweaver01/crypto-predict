@@ -11,14 +11,24 @@ is committed early, frozen, graded against the real market outcome, and fed back
 into a calibration layer that continuously corrects the model's confidence and
 bias. The system measurably improves as it accumulates outcomes.
 
-It mirrors four recurring Polymarket families:
+It mirrors five recurring Polymarket families across **six crypto assets**
+(BTC, ETH, SOL, XRP, DOGE, BNB — every asset Polymarket runs up/down markets
+for, all sharing the same window boundaries and slug patterns):
 
 | Family | Horizon | Settles on |
 | --- | --- | --- |
-| **5 min** | rolling 5-minute window | Chainlink BTC/USD |
-| **15 min** | rolling 15-minute window | Chainlink BTC/USD |
-| **Hourly** | top-of-hour window | Binance BTC/USDT 1h candle |
-| **Daily** | noon-ET to noon-ET | Binance BTC/USDT 1m close at noon ET |
+| **5 min** | rolling 5-minute window | Chainlink \<asset>/USD |
+| **15 min** | rolling 15-minute window | Chainlink \<asset>/USD |
+| **Hourly** | top-of-hour window | Binance \<asset>/USDT 1h candle |
+| **4 hour** | epoch-aligned 4h window | Chainlink \<asset>/USD |
+| **Daily** | noon-ET to noon-ET | Binance \<asset>/USDT 1m close at noon ET |
+
+A top-level dropdown switches the dashboard between any single asset and
+**All** — a holistic view with per-asset spot mini-cards and every asset's
+call/bet for the selected window family. Each asset gets its own calibrators,
+committed calls, and ledger rows (`?crypto=` filters every data endpoint);
+`LLM_CRYPTOS` limits which assets use the LLM read, and `TRADE_CRYPTOS`
+limits which may real-trade (both default btc).
 
 An optional LLM-assist layer adds a short narrative and a small, clamped
 directional nudge. With no API key the app runs a fully transparent statistical

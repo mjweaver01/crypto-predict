@@ -121,11 +121,17 @@ function familyMetrics(family: RangeId | 'ALL', rows: Scored[]): FamilyMetrics {
   };
 }
 
-/** Compute learning metrics for every family plus the ALL aggregate. */
-export async function computeMetrics(): Promise<MetricsResponse> {
+/**
+ * Compute learning metrics for every family plus the ALL aggregate,
+ * optionally restricted to one crypto (legacy rows without a crypto = btc).
+ */
+export async function computeMetrics(
+  crypto?: string
+): Promise<MetricsResponse> {
   const entries = await getLedger();
   const resolved = entries
     .filter(e => e.outcome != null)
+    .filter(e => !crypto || (e.crypto ?? 'btc') === crypto)
     .sort((a, b) => Date.parse(a.windowStart) - Date.parse(b.windowStart));
 
   const byFamily = new Map<RangeId, Scored[]>();

@@ -4,7 +4,8 @@
 
 import { env } from '../cache.ts';
 import { fetchCandleAt } from '../sources/binance.ts';
-import { fetchMarketOutcome, slugFor } from '../sources/polymarket.ts';
+import { fetchMarketOutcome, marketSlug } from '../sources/polymarket.ts';
+import { CRYPTOS, type CryptoId } from '../../shared/cryptos.ts';
 import type {
   LedgerEntry,
   LedgerSummary,
@@ -44,8 +45,13 @@ async function save(store: Store): Promise<void> {
 }
 
 /** Polymarket slug for a window (daily is keyed by its resolution noon). */
-function slugForRange(id: RangeId, startMs: number, endMs: number): string {
-  return id === '1d' ? slugFor['1d'](endMs) : slugFor[id](startMs);
+function slugForRange(
+  crypto: CryptoId,
+  id: RangeId,
+  startMs: number,
+  endMs: number
+): string {
+  return marketSlug(crypto, id, id === '1d' ? endMs : startMs);
 }
 
 /**
@@ -63,13 +69,18 @@ export async function recordPredictions(p: Prediction): Promise<void> {
       if (!c) continue; // no genuine forward-looking call → don't grade it
       const startMs = Date.parse(r.windowStart);
       const endMs = Date.parse(r.windowEnd);
-      const id = `${r.id}:${startMs}`;
-      const existing = store[id];
+      const id = `${r.crypto}:${r.id}:${startMs}`;
+      // A btc window recorded under the legacy id (pre multi-crypto) must not
+      // be double-recorded under the new id — that would grade it twice.
+      const legacyId = `${r.id}:${startMs}`;
+      const existing =
+        store[id] ?? (r.crypto === 'btc' ? store[legacyId] : undefined);
       if (existing) continue; // call already committed & recorded (or resolved)
       store[id] = {
         id,
+        crypto: r.crypto,
         rangeId: r.id,
-        slug: r.market?.slug ?? slugForRange(r.id, startMs, endMs),
+        slug: r.market?.slug ?? slugForRange(r.crypto, r.id, startMs, endMs),
         windowStart: r.windowStart,
         windowEnd: r.windowEnd,
         strike: c.strike,
@@ -121,7 +132,8 @@ async function resolveOne(
   }
   // Fallback: Binance close of the window's final 1m candle vs the strike.
   const endMs = Date.parse(e.windowEnd);
-  const c = await fetchCandleAt('1m', endMs - 60_000).catch(() => null);
+  const symbol = CRYPTOS[e.crypto ?? 'btc'].binanceSymbol;
+  const c = await fetchCandleAt('1m', endMs - 60_000, symbol).catch(() => null);
   if (!c) return null;
   const outcome: Side = c.close >= e.strike ? 'UP' : 'DOWN';
   return {

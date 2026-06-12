@@ -2,8 +2,10 @@ import {
   getLatestPrediction,
   msToNextBoundary,
   predict,
+  predictAll,
   refreshRead,
 } from './routes/predict.ts';
+import { isCryptoId, type CryptoId } from '../shared/cryptos.ts';
 import { getLedger, resolvePending, summarize } from './model/ledger.ts';
 import { simulatePaper } from './model/paper.ts';
 import { env } from './cache.ts';
@@ -74,7 +76,15 @@ const server = Bun.serve({
   port: PORT,
   idleTimeout: 0,
   async fetch(req) {
-    const { pathname } = new URL(req.url);
+    const { pathname, searchParams } = new URL(req.url);
+    // ?crypto=… : a specific asset, or undefined for "all"/unspecified.
+    const cryptoParam = searchParams.get('crypto') ?? undefined;
+    const crypto: CryptoId | undefined = isCryptoId(cryptoParam)
+      ? cryptoParam
+      : undefined;
+    // Predicate for ledger/trade rows (legacy rows without crypto = btc).
+    const inCrypto = (rowCrypto: CryptoId | undefined) =>
+      !crypto || (rowCrypto ?? 'btc') === crypto;
 
     // Dev live-reload SSE stream.
     if (IS_DEV && pathname === '/api/__reload' && makeSseResponse) {
@@ -90,29 +100,36 @@ const server = Bun.serve({
         // Serve the snapshot the server-side commit loop already computed; the
         // browser never triggers a recompute or records calls. Only on a cold
         // start (before the first cycle finishes) do we compute on demand.
-        return json(getLatestPrediction() ?? (await predict()));
+        const c = crypto ?? 'btc';
+        return json(getLatestPrediction(c) ?? (await predict(c)));
+      }
+      if (pathname === '/api/overview') {
+        // One snapshot per tracked crypto (cached by the commit loop) — the
+        // "All" view's holistic feed.
+        return json({ predictions: await predictAll() });
       }
       if (pathname === '/api/ledger') {
-        const entries = await getLedger();
+        const entries = (await getLedger()).filter(e => inCrypto(e.crypto));
         return json({ summary: summarize(entries), entries });
       }
       if (pathname === '/api/insights') {
-        return json({ entries: getInsights() });
+        return json({ entries: getInsights(crypto) });
       }
       if (pathname === '/api/metrics') {
         // Prequential learning-curve scores (raw vs calibrated vs market).
-        return json(await computeMetrics());
+        return json(await computeMetrics(crypto));
       }
       if (pathname === '/api/paper') {
         // Paper-trading replay: the EV policy run over every resolved call
         // with real commit-time order-book prices. Deterministic from the
         // ledger, so it is recomputed on demand rather than stored.
-        return json(simulatePaper(await getLedger()));
+        const entries = (await getLedger()).filter(e => inCrypto(e.crypto));
+        return json(simulatePaper(entries));
       }
       if (pathname === '/api/trades') {
         // Real-money (or dry-run shadow) execution record + halt status.
         const cfg = getTradeConfig();
-        const trades = await getTrades();
+        const trades = (await getTrades()).filter(t => inCrypto(t.crypto));
         const settled = trades.filter(t => t.settledAt !== undefined);
         const dayStart = new Date().setUTCHours(0, 0, 0, 0);
         const pnlTodayUsd = settled
@@ -137,7 +154,7 @@ const server = Bun.serve({
       }
       if (pathname === '/api/read/refresh' && req.method === 'POST') {
         // Force a fresh LLM read now (normally refreshed once per 5m window).
-        return json(await refreshRead());
+        return json(await refreshRead(crypto ?? 'btc'));
       }
     } catch (err) {
       console.error(err);
@@ -211,7 +228,7 @@ const COMMIT_TICK_MS = Math.max(
 );
 const commitLoop = async () => {
   try {
-    await predict();
+    await predictAll();
   } catch (err) {
     console.warn('[commit] tick failed:', err);
   }

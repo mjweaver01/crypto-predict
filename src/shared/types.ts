@@ -1,6 +1,8 @@
 // Shared types used by both server and client.
 
-/** The recurring Polymarket BTC Up/Down market families we mirror as tabs. */
+import type { CryptoId } from './cryptos.ts';
+
+/** The recurring Polymarket Up/Down market families we mirror as tabs. */
 export type RangeId = '5m' | '15m' | '1h' | '4h' | '1d';
 
 /**
@@ -22,8 +24,13 @@ export type Side = 'UP' | 'DOWN';
  * accumulate a verifiable history of calls vs outcomes.
  */
 export interface LedgerEntry {
-  /** Stable id: `${rangeId}:${windowStartMs}`. */
+  /**
+   * Stable id: `${crypto}:${rangeId}:${windowStartMs}`. Legacy rows recorded
+   * before multi-crypto support use `${rangeId}:${windowStartMs}` (= btc).
+   */
   id: string;
+  /** Asset of the market. Absent on legacy rows (= btc). */
+  crypto?: CryptoId;
   rangeId: RangeId;
   /** Polymarket slug for this window, when known. */
   slug?: string;
@@ -153,6 +160,8 @@ export interface PricePoint {
  * a full prediction on every update.
  */
 export interface PriceTick {
+  /** Asset the tick belongs to (absent on legacy frames = btc). */
+  crypto?: CryptoId;
   /** Latest trade price (USDT). */
   price: number;
   /** Rolling 24h % change at the time of the tick. */
@@ -382,8 +391,10 @@ export type TradeStatus =
  * replayable simulation, so fills/P&L are stored rather than recomputed.
  */
 export interface TradeRecord {
-  /** Window id `${rangeId}:${windowStartMs}` — one trade max per window. */
+  /** Window id `${crypto}:${rangeId}:${windowStartMs}` — one trade max per window. */
   id: string;
+  /** Asset of the market (absent on legacy rows = btc). */
+  crypto?: CryptoId;
   rangeId: RangeId;
   slug: string;
   windowStart: string;
@@ -460,6 +471,8 @@ export interface TradesResponse {
  */
 export interface RangePrediction {
   id: RangeId;
+  /** Asset this window belongs to. */
+  crypto: CryptoId;
   /** Short human label, e.g. "5 min", "Hourly". */
   label: string;
   /** What the real market settles against. */
@@ -567,6 +580,8 @@ export interface MetricsResponse {
  * evolved without persisting anything to disk.
  */
 export interface InsightSnapshot {
+  /** Asset the read was for (absent on legacy rows = btc). */
+  crypto?: CryptoId;
   /** ISO timestamp the underlying prediction was generated. */
   asOf: string;
   /** Spot price at the time. */
@@ -586,6 +601,8 @@ export interface InsightSnapshot {
 export interface Prediction {
   /** ISO timestamp the prediction was generated */
   asOf: string;
+  /** Asset this prediction is for. */
+  crypto: CryptoId;
   symbol: string;
   stats: MarketStats;
   /** One prediction per Polymarket market family, ordered shortest → longest. */

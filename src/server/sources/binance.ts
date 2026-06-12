@@ -37,10 +37,11 @@ export function toCandle(k: RawKline): Candle {
 
 export async function fetchCandles(
   interval: '1m' | '5m' | '1h',
-  limit: number
+  limit: number,
+  symbol: string = SYMBOL
 ): Promise<Candle[]> {
-  return cached(`klines:${interval}:${limit}`, TTL, async () => {
-    const url = `${BASE}/api/v3/klines?symbol=${SYMBOL}&interval=${interval}&limit=${limit}`;
+  return cached(`klines:${symbol}:${interval}:${limit}`, TTL, async () => {
+    const url = `${BASE}/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
     const res = await fetch(url, {
       headers: { 'User-Agent': 'bitcoin-predict/1.0' },
       signal: AbortSignal.timeout(15_000),
@@ -59,22 +60,27 @@ export async function fetchCandles(
  */
 export async function fetchCandleAt(
   interval: '1m' | '5m' | '1h',
-  openTimeMs: number
+  openTimeMs: number,
+  symbol: string = SYMBOL
 ): Promise<Candle | null> {
-  return cached(`kline-at:${interval}:${openTimeMs}`, TTL, async () => {
-    const url =
-      `${BASE}/api/v3/klines?symbol=${SYMBOL}&interval=${interval}` +
-      `&startTime=${openTimeMs}&limit=1`;
-    const res = await fetch(url, {
-      headers: { 'User-Agent': 'bitcoin-predict/1.0' },
-      signal: AbortSignal.timeout(15_000),
-    });
-    if (!res.ok) throw new Error(`binance kline-at ${res.status}`);
-    const raw = (await res.json()) as RawKline[];
-    if (raw.length === 0) return null;
-    const c = toCandle(raw[0]!);
-    return c.openTime === openTimeMs ? c : null;
-  });
+  return cached(
+    `kline-at:${symbol}:${interval}:${openTimeMs}`,
+    TTL,
+    async () => {
+      const url =
+        `${BASE}/api/v3/klines?symbol=${symbol}&interval=${interval}` +
+        `&startTime=${openTimeMs}&limit=1`;
+      const res = await fetch(url, {
+        headers: { 'User-Agent': 'bitcoin-predict/1.0' },
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (!res.ok) throw new Error(`binance kline-at ${res.status}`);
+      const raw = (await res.json()) as RawKline[];
+      if (raw.length === 0) return null;
+      const c = toCandle(raw[0]!);
+      return c.openTime === openTimeMs ? c : null;
+    }
+  );
 }
 
 /**
@@ -84,14 +90,15 @@ export async function fetchCandleAt(
 export async function fetchKlineRange(
   interval: '1m' | '5m' | '1h',
   startMs: number,
-  endMs: number
+  endMs: number,
+  symbol: string = SYMBOL
 ): Promise<Candle[]> {
   const stepMs = { '1m': 60_000, '5m': 300_000, '1h': 3_600_000 }[interval];
   const out: Candle[] = [];
   let cursor = startMs;
   while (cursor < endMs) {
     const url =
-      `${BASE}/api/v3/klines?symbol=${SYMBOL}&interval=${interval}` +
+      `${BASE}/api/v3/klines?symbol=${symbol}&interval=${interval}` +
       `&startTime=${cursor}&endTime=${endMs}&limit=1000`;
     const res = await fetch(url, {
       headers: { 'User-Agent': 'bitcoin-predict/1.0' },
@@ -108,9 +115,9 @@ export async function fetchKlineRange(
 }
 
 /** Latest spot price. */
-export async function fetchPrice(): Promise<number> {
-  return cached('price', TTL, async () => {
-    const url = `${BASE}/api/v3/ticker/price?symbol=${SYMBOL}`;
+export async function fetchPrice(symbol: string = SYMBOL): Promise<number> {
+  return cached(`price:${symbol}`, TTL, async () => {
+    const url = `${BASE}/api/v3/ticker/price?symbol=${symbol}`;
     const res = await fetch(url, {
       headers: { 'User-Agent': 'bitcoin-predict/1.0' },
       signal: AbortSignal.timeout(15_000),
@@ -122,9 +129,11 @@ export async function fetchPrice(): Promise<number> {
 }
 
 /** 24h rolling price change percent. */
-export async function fetch24hChangePct(): Promise<number> {
-  return cached('change24h', TTL, async () => {
-    const url = `${BASE}/api/v3/ticker/24hr?symbol=${SYMBOL}`;
+export async function fetch24hChangePct(
+  symbol: string = SYMBOL
+): Promise<number> {
+  return cached(`change24h:${symbol}`, TTL, async () => {
+    const url = `${BASE}/api/v3/ticker/24hr?symbol=${symbol}`;
     const res = await fetch(url, {
       headers: { 'User-Agent': 'bitcoin-predict/1.0' },
       signal: AbortSignal.timeout(15_000),

@@ -1,12 +1,21 @@
 import { env } from '../cache.ts';
+import { CRYPTOS, CRYPTO_IDS, type CryptoId } from '../../shared/cryptos.ts';
 import type { PriceTick } from '../../shared/types.ts';
 
 // data-stream.binance.vision is Binance's public websocket mirror: the realtime
 // counterpart to the data-api.binance.vision REST mirror (no API key, no
-// geo-block). One upstream connection is held here and fanned out to every
-// browser via SSE, so the client never talks to Binance directly.
+// geo-block). One upstream COMBINED connection carries every tracked crypto's
+// ticker and is fanned out to every browser via SSE, so the client never talks
+// to Binance directly.
 const WS_BASE = env('BINANCE_WS_URL', 'wss://data-stream.binance.vision');
-const SYMBOL = env('BTC_SYMBOL', 'BTCUSDT').toLowerCase();
+
+// stream name (e.g. "btcusdt@ticker") → crypto id
+const STREAM_TO_CRYPTO = new Map<string, CryptoId>(
+  CRYPTO_IDS.map(id => [
+    `${CRYPTOS[id].binanceSymbol.toLowerCase()}@ticker`,
+    id,
+  ])
+);
 
 /** The `@ticker` stream pushes ~1 update/sec with last price + 24h stats. */
 interface TickerFrame {
@@ -18,10 +27,16 @@ interface TickerFrame {
   E: number;
 }
 
+/** Combined-stream envelope: which symbol's ticker this frame is. */
+interface CombinedFrame {
+  stream?: string;
+  data?: TickerFrame;
+}
+
 type Listener = (tick: PriceTick) => void;
 
 const listeners = new Set<Listener>();
-let latest: PriceTick | null = null;
+const latest = new Map<CryptoId, PriceTick>();
 
 let ws: WebSocket | null = null;
 let started = false;
@@ -29,26 +44,31 @@ let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let backoffMs = 1_000;
 
 function connect(): void {
-  ws = new WebSocket(`${WS_BASE}/ws/${SYMBOL}@ticker`);
+  const streams = [...STREAM_TO_CRYPTO.keys()].join('/');
+  ws = new WebSocket(`${WS_BASE}/stream?streams=${streams}`);
 
   ws.onopen = () => {
     backoffMs = 1_000;
   };
 
   ws.onmessage = event => {
-    let frame: TickerFrame;
+    let frame: CombinedFrame;
     try {
-      frame = JSON.parse(String(event.data)) as TickerFrame;
+      frame = JSON.parse(String(event.data)) as CombinedFrame;
     } catch {
       return; // ignore malformed frames
     }
+    const crypto = STREAM_TO_CRYPTO.get(frame.stream ?? '');
+    const data = frame.data;
+    if (!crypto || !data) return;
     const tick: PriceTick = {
-      price: parseFloat(frame.c),
-      change24hPct: parseFloat(frame.P),
-      t: frame.E ?? Date.now(),
+      crypto,
+      price: parseFloat(data.c),
+      change24hPct: parseFloat(data.P),
+      t: data.E ?? Date.now(),
     };
     if (!Number.isFinite(tick.price)) return;
-    latest = tick;
+    latest.set(crypto, tick);
     for (const fn of listeners) {
       try {
         fn(tick);
@@ -93,9 +113,9 @@ export function onTick(fn: Listener): () => void {
   return () => listeners.delete(fn);
 }
 
-/** Most recent tick seen, if any (used to seed a new SSE connection). */
-export function getLatestTick(): PriceTick | null {
-  return latest;
+/** Most recent tick per crypto (used to seed a new SSE connection). */
+export function getLatestTicks(): PriceTick[] {
+  return [...latest.values()];
 }
 
 const encoder = new TextEncoder();
@@ -122,8 +142,7 @@ export function makePriceStreamResponse(): Response {
       };
 
       controller.enqueue(encoder.encode(': connected\n\n'));
-      const seed = getLatestTick();
-      if (seed) send(seed);
+      for (const seed of getLatestTicks()) send(seed);
       unsubscribe = onTick(send);
 
       heartbeat = setInterval(() => {

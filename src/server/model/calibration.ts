@@ -30,6 +30,7 @@
 import { env } from '../cache.ts';
 import { getLedger } from './ledger.ts';
 import { FEATURE_KEYS } from './features.ts';
+import { CRYPTO_IDS, type CryptoId } from '../../shared/cryptos.ts';
 import type { CalibrationInfo, RangeId } from '../../shared/types.ts';
 
 export interface Calibrator {
@@ -88,13 +89,11 @@ const clampP = (p: number) => Math.min(1 - EPS, Math.max(EPS, p));
 const logit = (p: number) => Math.log(p / (1 - p));
 const sigmoid = (z: number) => 1 / (1 + Math.exp(-z));
 
-const cache: Record<RangeId, Calibrator> = {
-  '5m': identity('5m'),
-  '15m': identity('15m'),
-  '1h': identity('1h'),
-  '4h': identity('4h'),
-  '1d': identity('1d'),
-};
+// One calibrator per (crypto, family): each asset's regime bias is its own.
+// Keys are `${crypto}:${rangeId}`; lookups fall back to identity until fit.
+const cache = new Map<string, Calibrator>();
+
+const calKey = (crypto: CryptoId, id: RangeId) => `${crypto}:${id}`;
 
 /**
  * Map a raw probability + its commit-time features through a calibrator.
@@ -114,14 +113,20 @@ export function applyCalibration(
   return clampP(sigmoid(z));
 }
 
-/** The calibrator currently in force for a range. */
-export function getCalibrator(id: RangeId): Calibrator {
-  return cache[id];
+/** The calibrator currently in force for a crypto + range. */
+export function getCalibrator(
+  id: RangeId,
+  crypto: CryptoId = 'btc'
+): Calibrator {
+  return cache.get(calKey(crypto, id)) ?? identity(id);
 }
 
-/** Display-friendly summary of a range's calibrator. */
-export function calibrationInfo(id: RangeId): CalibrationInfo {
-  const cal = cache[id];
+/** Display-friendly summary of a crypto + range's calibrator. */
+export function calibrationInfo(
+  id: RangeId,
+  crypto: CryptoId = 'btc'
+): CalibrationInfo {
+  const cal = getCalibrator(id, crypto);
   return { samples: cal.n, active: cal.n > 0 };
 }
 
@@ -213,10 +218,14 @@ function fit(samples: Sample[], keys: string[]): Omit<Calibrator, 'keys'> {
 }
 
 // Last-logged rounded weights per family, to avoid spamming the history file.
-const lastLogged: Partial<Record<RangeId, string>> = {};
+const lastLogged: Record<string, string> = {};
 
-/** Append materially-changed calibrators to the on-disk history (JSONL). */
-async function logCalibrator(id: RangeId, cal: Calibrator): Promise<void> {
+/**
+ * Append materially-changed calibrators to the on-disk history (JSONL). The
+ * `family` field stays the bare range id for btc (continuity with the
+ * pre-multi-crypto history) and `${crypto}:${rangeId}` for the rest.
+ */
+async function logCalibrator(id: string, cal: Calibrator): Promise<void> {
   const round = (x: number) => Math.round(x * 1000) / 1000;
   const compact = JSON.stringify({
     w0: round(cal.w0),
@@ -256,32 +265,38 @@ export async function refreshCalibrators(): Promise<void> {
     return;
   }
   const now = Date.now();
-  for (const id of RANGE_IDS) {
-    const keys = FEATURE_KEYS[id];
-    const halfLifeMs = HALF_LIFE_HOURS[id] * 3_600_000;
-    const samples: Sample[] = entries
-      .filter(
-        e =>
-          e.rangeId === id &&
-          e.outcome != null &&
-          typeof e.rawProbUp === 'number'
-      )
-      .map(e => {
-        const age = Math.max(0, now - Date.parse(e.decidedAt));
-        return {
-          z0: logit(clampP(e.rawProbUp as number)),
-          x: keys.map(key => {
-            const v = e.features?.[key];
-            return typeof v === 'number' && Number.isFinite(v) ? v : 0;
-          }),
-          y: e.outcome === 'UP' ? 1 : 0,
-          u: Math.pow(0.5, age / halfLifeMs),
-        };
-      });
-    cache[id] =
-      samples.length < MIN_SAMPLES
-        ? identity(id)
-        : { keys, ...fit(samples, keys) };
-    if (cache[id].n > 0) void logCalibrator(id, cache[id]);
+  for (const crypto of CRYPTO_IDS) {
+    for (const id of RANGE_IDS) {
+      const keys = FEATURE_KEYS[id];
+      const halfLifeMs = HALF_LIFE_HOURS[id] * 3_600_000;
+      const samples: Sample[] = entries
+        .filter(
+          e =>
+            (e.crypto ?? 'btc') === crypto &&
+            e.rangeId === id &&
+            e.outcome != null &&
+            typeof e.rawProbUp === 'number'
+        )
+        .map(e => {
+          const age = Math.max(0, now - Date.parse(e.decidedAt));
+          return {
+            z0: logit(clampP(e.rawProbUp as number)),
+            x: keys.map(key => {
+              const v = e.features?.[key];
+              return typeof v === 'number' && Number.isFinite(v) ? v : 0;
+            }),
+            y: e.outcome === 'UP' ? 1 : 0,
+            u: Math.pow(0.5, age / halfLifeMs),
+          };
+        });
+      const cal =
+        samples.length < MIN_SAMPLES
+          ? identity(id)
+          : { keys, ...fit(samples, keys) };
+      cache.set(calKey(crypto, id), cal);
+      if (cal.n > 0) {
+        void logCalibrator(crypto === 'btc' ? id : calKey(crypto, id), cal);
+      }
+    }
   }
 }

@@ -1314,3 +1314,146 @@ header {
     font-size: 42px;
   }
 }
+
+/* ── Crypto selector + "All" view ─────────────────────────────────────── */
+
+.crypto-select {
+  appearance: none;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-bright);
+  border-radius: 8px;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 5px 26px 5px 10px;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%237b8fa8'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 9px center;
+}
+.crypto-select:hover {
+  border-color: var(--accent);
+}
+
+.crypto-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-top: 12px;
+}
+@media (max-width: 700px) {
+  .crypto-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+.mini-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.02);
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+.mini-card:hover {
+  border-color: var(--accent);
+  background: rgba(255, 255, 255, 0.04);
+}
+.mini-card .mini-ticker {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+.mini-card .mini-price {
+  font-size: 17px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  margin: 2px 0;
+}
+.mini-card .mini-change {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.mini-card .mini-change.up {
+  color: var(--up);
+}
+.mini-card .mini-change.down {
+  color: var(--down);
+}
+.mini-card .mini-spark {
+  height: 26px;
+  margin-top: 6px;
+}
+.mini-card .mini-spark svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.all-table-wrap {
+  overflow-x: auto;
+  margin-top: 10px;
+}
+.all-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+.all-table th {
+  text-align: left;
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-dim);
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.all-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.all-table tr:last-child td {
+  border-bottom: none;
+}
+.all-table tbody tr {
+  cursor: pointer;
+}
+.all-table tbody tr:hover td {
+  background: rgba(255, 255, 255, 0.03);
+}
+.all-table .side-chip {
+  display: inline-block;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  border-radius: 6px;
+  padding: 2px 7px;
+}
+.all-table .side-chip.up {
+  color: var(--up);
+  background: rgba(52, 211, 153, 0.12);
+}
+.all-table .side-chip.down {
+  color: var(--down);
+  background: rgba(248, 113, 113, 0.12);
+}
+.all-table .side-chip.tentative {
+  opacity: 0.55;
+}
+.all-table .edge-pos {
+  color: var(--up);
+}
+.all-table .edge-neg {
+  color: var(--down);
+}
+
+/* All view: no narrative card, so the spot card owns the whole hero row. */
+.price-card.all-mode {
+  grid-column: 1 / -1;
+}

@@ -1,7 +1,8 @@
 import { cached, env } from '../cache.ts';
+import { CRYPTOS, type CryptoId } from '../../shared/cryptos.ts';
 import type { BookLevel, MarketQuote, RangeId } from '../../shared/types.ts';
 
-// Polymarket runs five recurring "BTC Up or Down" market families:
+// Polymarket runs five recurring "Up or Down" market families:
 //   5m     → slug btc-updown-5m-{startUnix}        (Chainlink BTC/USD)
 //   15m    → slug btc-updown-15m-{startUnix}       (Chainlink BTC/USD)
 //   4h     → slug btc-updown-4h-{startUnix}        (Chainlink BTC/USD)
@@ -122,20 +123,41 @@ function etParts(ms: number) {
   };
 }
 
-/** Deterministic Polymarket slug for each market family + window. */
+/**
+ * Deterministic Polymarket slug for a crypto + market family + window. Every
+ * asset uses the same patterns, differing only in prefix/name (verified live
+ * for all six assets × five families). The daily market is keyed by its
+ * RESOLUTION day (the closing noon ET), so pass the window END for '1d'.
+ */
+export function marketSlug(
+  crypto: CryptoId,
+  rangeId: RangeId,
+  ms: number
+): string {
+  const { pmShort, pmName } = CRYPTOS[crypto];
+  switch (rangeId) {
+    case '5m':
+    case '15m':
+    case '4h':
+      return `${pmShort}-updown-${rangeId}-${Math.floor(ms / 1000)}`;
+    case '1h': {
+      const { month, day, year, hour, ampm } = etParts(ms);
+      return `${pmName}-up-or-down-${month}-${day}-${year}-${hour}${ampm}-et`;
+    }
+    case '1d': {
+      const { month, day, year } = etParts(ms);
+      return `${pmName}-up-or-down-on-${month}-${day}-${year}`;
+    }
+  }
+}
+
+/** Legacy BTC-only slug builders (still used by the backfill/backtest scripts). */
 export const slugFor = {
-  '5m': (startMs: number) => `btc-updown-5m-${Math.floor(startMs / 1000)}`,
-  '15m': (startMs: number) => `btc-updown-15m-${Math.floor(startMs / 1000)}`,
-  '1h': (startMs: number) => {
-    const { month, day, year, hour, ampm } = etParts(startMs);
-    return `bitcoin-up-or-down-${month}-${day}-${year}-${hour}${ampm}-et`;
-  },
-  '4h': (startMs: number) => `btc-updown-4h-${Math.floor(startMs / 1000)}`,
-  // The daily market is keyed by its RESOLUTION day (the closing noon ET).
-  '1d': (endMs: number) => {
-    const { month, day, year } = etParts(endMs);
-    return `bitcoin-up-or-down-on-${month}-${day}-${year}`;
-  },
+  '5m': (startMs: number) => marketSlug('btc', '5m', startMs),
+  '15m': (startMs: number) => marketSlug('btc', '15m', startMs),
+  '1h': (startMs: number) => marketSlug('btc', '1h', startMs),
+  '4h': (startMs: number) => marketSlug('btc', '4h', startMs),
+  '1d': (endMs: number) => marketSlug('btc', '1d', endMs),
 };
 
 // crypto-price `variant` query value per family. Only the Chainlink-resolved
@@ -162,31 +184,36 @@ function isoSec(ms: number): string {
 export async function fetchPolymarketStrike(
   rangeId: RangeId,
   windowStartMs: number,
-  windowEndMs: number
+  windowEndMs: number,
+  crypto: CryptoId = 'btc'
 ): Promise<number | undefined> {
   const variant = CRYPTO_PRICE_VARIANT[rangeId];
   if (!variant) return undefined;
   const url =
-    `${SITE}/api/crypto/crypto-price?symbol=BTC` +
+    `${SITE}/api/crypto/crypto-price?symbol=${CRYPTOS[crypto].pmPriceSymbol}` +
     `&eventStartTime=${isoSec(windowStartMs)}` +
     `&variant=${variant}` +
     `&endDate=${isoSec(windowEndMs)}`;
   // Throw on failure so `cached` never stores a bad/undefined strike (it can
   // serve a prior good one instead) and the caller falls back to its proxy.
-  return cached(`pmstrike:${rangeId}:${windowStartMs}`, TTL, async () => {
-    let lastErr: unknown;
-    for (let attempt = 0; attempt < 2; attempt++) {
-      try {
-        const data = (await getJson(url)) as { openPrice?: number };
-        const open = Number(data?.openPrice);
-        if (Number.isFinite(open) && open > 0) return open;
-        lastErr = new Error(`crypto-price openPrice missing for ${variant}`);
-      } catch (err) {
-        lastErr = err;
+  return cached(
+    `pmstrike:${crypto}:${rangeId}:${windowStartMs}`,
+    TTL,
+    async () => {
+      let lastErr: unknown;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const data = (await getJson(url)) as { openPrice?: number };
+          const open = Number(data?.openPrice);
+          if (Number.isFinite(open) && open > 0) return open;
+          lastErr = new Error(`crypto-price openPrice missing for ${variant}`);
+        } catch (err) {
+          lastErr = err;
+        }
       }
+      throw lastErr;
     }
-    throw lastErr;
-  });
+  );
 }
 
 /**

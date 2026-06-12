@@ -30,9 +30,11 @@ const COMMIT_BY_FRACTION = Math.max(
   Math.min(1, Number(env('COMMIT_BY_FRACTION', '0.2')) || 0.2)
 );
 
-/** Stable id: `${rangeId}:${windowStartMs}` (matches the ledger key). */
-function windowId(r: Pick<RangePrediction, 'id' | 'windowStart'>): string {
-  return `${r.id}:${Date.parse(r.windowStart)}`;
+/** Stable id: `${crypto}:${rangeId}:${windowStartMs}` (matches the ledger key). */
+function windowId(
+  r: Pick<RangePrediction, 'crypto' | 'id' | 'windowStart'>
+): string {
+  return `${r.crypto}:${r.id}:${Date.parse(r.windowStart)}`;
 }
 
 const commitments = new Map<string, CommittedCall>();
@@ -51,7 +53,8 @@ export async function ensureHydrated(): Promise<void> {
     const entries = await getLedger();
     for (const e of entries) {
       if (e.outcome != null) continue; // resolved → window is over
-      const id = `${e.rangeId}:${Date.parse(e.windowStart)}`;
+      // Legacy rows carry no crypto field — they are all btc.
+      const id = `${e.crypto ?? 'btc'}:${e.rangeId}:${Date.parse(e.windowStart)}`;
       if (commitments.has(id)) continue;
       commitments.set(id, {
         probUp: e.probUp,

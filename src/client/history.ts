@@ -22,6 +22,33 @@ import {
   savePref,
 } from './format.ts';
 import { attachChartTip } from './chartTip.ts';
+import { CRYPTOS, CRYPTO_IDS, type CryptoId } from '../shared/cryptos.ts';
+
+// ── Crypto filter (shared pref with the live page) ────────────────────────
+type CryptoChoice = CryptoId | 'all';
+const CRYPTO_CHOICES: readonly CryptoChoice[] = [...CRYPTO_IDS, 'all'];
+let selectedCrypto: CryptoChoice = loadPref('crypto', CRYPTO_CHOICES, 'btc');
+
+/** Query-string suffix applied to every data fetch ('all' = no filter). */
+const cryptoQS = () =>
+  selectedCrypto === 'all' ? '' : `?crypto=${selectedCrypto}`;
+
+function wireCryptoSelect(onChange: () => void) {
+  const sel = $<HTMLSelectElement>('crypto-select');
+  sel.innerHTML =
+    `<option value="all">All cryptos</option>` +
+    CRYPTO_IDS.map(
+      id =>
+        `<option value="${id}">${CRYPTOS[id].label} (${CRYPTOS[id].ticker})</option>`
+    ).join('');
+  sel.value = selectedCrypto;
+  sel.addEventListener('change', () => {
+    selectedCrypto = sel.value as CryptoChoice;
+    savePref('crypto', selectedCrypto);
+    $('app').classList.add('loading');
+    onChange();
+  });
+}
 
 /** X positions (viewBox %) for n evenly spaced points, matching the charts'
  *  PADX=1.5 layout, so tooltip snapping lands exactly on the drawn points. */
@@ -91,7 +118,7 @@ function renderHistory(entries: InsightSnapshot[]) {
 
 async function refreshHistory() {
   try {
-    const res = await fetch('/api/insights');
+    const res = await fetch(`/api/insights${cryptoQS()}`);
     if (!res.ok) return;
     const data = (await res.json()) as { entries: InsightSnapshot[] };
     renderHistory(data.entries);
@@ -275,7 +302,7 @@ function renderLearningCurve() {
 
 async function refreshMetrics() {
   try {
-    const res = await fetch('/api/metrics');
+    const res = await fetch(`/api/metrics${cryptoQS()}`);
     if (!res.ok) return;
     metrics = (await res.json()) as MetricsResponse;
     renderLearningCurve();
@@ -530,7 +557,7 @@ function renderPaper() {
 
 async function refreshPaper() {
   try {
-    const res = await fetch('/api/paper');
+    const res = await fetch(`/api/paper${cryptoQS()}`);
     if (!res.ok) return;
     paper = (await res.json()) as PaperResponse;
     paperById = new Map(
@@ -719,7 +746,7 @@ function renderRecordList() {
 
 async function refreshRecord() {
   try {
-    const res = await fetch('/api/ledger');
+    const res = await fetch(`/api/ledger${cryptoQS()}`);
     if (!res.ok) return;
     const data = (await res.json()) as {
       summary: LedgerSummary;
@@ -738,6 +765,13 @@ async function refreshRecord() {
   }
 }
 
+const refreshAll = () => {
+  refreshHistory();
+  refreshRecord();
+  refreshMetrics();
+  refreshPaper();
+};
+wireCryptoSelect(refreshAll);
 refreshHistory();
 setInterval(refreshHistory, 5_000);
 // The ledger only changes when windows resolve (server resolve loop ≈ 60s), so

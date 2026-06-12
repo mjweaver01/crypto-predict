@@ -7,6 +7,7 @@
 // data/trades.json before a single dollar is risked.
 
 import { env } from '../cache.ts';
+import { CRYPTO_IDS, type CryptoId } from '../../shared/cryptos.ts';
 import type { RangeId } from '../../shared/types.ts';
 
 export interface TradeConfig {
@@ -26,6 +27,8 @@ export interface TradeConfig {
   funder?: string;
   /** Families allowed to trade (default: only 5m — the proven edge). */
   families: Set<RangeId>;
+  /** Cryptos allowed to trade (default: only btc — the one with history). */
+  cryptos: Set<CryptoId>;
   /** Hard cap on USD spent on any single trade. */
   maxStakeUsd: number;
   /** Skip trades the sizing would put below this many dollars. */
@@ -60,6 +63,14 @@ export function getTradeConfig(): TradeConfig {
       .map(s => s.trim())
       .filter((s): s is RangeId => (RANGE_IDS as string[]).includes(s))
   );
+  const cryptos = new Set<CryptoId>(
+    env('TRADE_CRYPTOS', 'btc')
+      .split(',')
+      .map(s => s.trim())
+      .filter((s): s is CryptoId =>
+        (CRYPTO_IDS as readonly string[]).includes(s)
+      )
+  );
   return {
     enabled: env('TRADING_ENABLED', 'false') === 'true',
     dryRun: env('TRADING_DRY_RUN', 'true') !== 'false',
@@ -67,6 +78,7 @@ export function getTradeConfig(): TradeConfig {
     signatureType: num('POLYMARKET_SIGNATURE_TYPE', 0),
     funder: env('POLYMARKET_FUNDER', '') || undefined,
     families,
+    cryptos,
     maxStakeUsd: num('TRADE_MAX_STAKE_USD', 10),
     minStakeUsd: num('TRADE_MIN_STAKE_USD', 1),
     bankrollCapUsd: num('TRADE_BANKROLL_CAP_USD', 250),

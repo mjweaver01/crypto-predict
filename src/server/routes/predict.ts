@@ -4,7 +4,6 @@ import {
   fetchCandleAt,
   fetchCandles,
   fetchPrice,
-  TRADING_SYMBOL,
 } from '../sources/binance.ts';
 import {
   buildModel,
@@ -33,8 +32,9 @@ import { dailyWindowAt } from '../model/windows.ts';
 import {
   fetchMarket,
   fetchPolymarketStrike,
-  slugFor,
+  marketSlug,
 } from '../sources/polymarket.ts';
+import { CRYPTOS, CRYPTO_IDS, type CryptoId } from '../../shared/cryptos.ts';
 import type {
   Prediction,
   PricePoint,
@@ -46,21 +46,38 @@ import type {
 const TTL = Number(env('CACHE_TTL_PREDICT', '20'));
 
 /**
- * The most recent prediction computed by the server-side commit loop. The
- * browser reads this snapshot instead of triggering a recompute, so ALL data
- * generation (committing calls, recording insights) happens on the server's own
- * cadence rather than as a side effect of an HTTP request.
+ * Cryptos whose reads use the LLM. Each enabled crypto costs one generation
+ * per 5m window, so the default keeps the LLM on btc only — the others get the
+ * transparent stats narrative. Set LLM_CRYPTOS=all to enable everywhere.
  */
-let latest: Prediction | null = null;
+const LLM_CRYPTOS = new Set(
+  (env('LLM_CRYPTOS', 'btc') === 'all'
+    ? [...CRYPTO_IDS]
+    : env('LLM_CRYPTOS', 'btc')
+        .split(',')
+        .map(s => s.trim())
+  ).filter(s => (CRYPTO_IDS as readonly string[]).includes(s))
+);
 
 /**
- * The latest server-computed prediction, or null before the first cycle — or
- * when the snapshot straddles a window boundary (some window already closed).
- * Returning null in that case makes the API path recompute immediately, so the
- * dashboard shows the new window's wager as soon as the countdown hits zero
- * instead of waiting out the commit tick.
+ * The most recent prediction per crypto computed by the server-side commit
+ * loop. The browser reads these snapshots instead of triggering a recompute,
+ * so ALL data generation (committing calls, recording insights) happens on the
+ * server's own cadence rather than as a side effect of an HTTP request.
  */
-export function getLatestPrediction(): Prediction | null {
+const latestByCrypto = new Map<CryptoId, Prediction>();
+
+/**
+ * The latest server-computed prediction for a crypto, or null before the first
+ * cycle — or when the snapshot straddles a window boundary (some window already
+ * closed). Returning null in that case makes the API path recompute
+ * immediately, so the dashboard shows the new window's wager as soon as the
+ * countdown hits zero instead of waiting out the commit tick.
+ */
+export function getLatestPrediction(
+  crypto: CryptoId = 'btc'
+): Prediction | null {
+  const latest = latestByCrypto.get(crypto);
   if (!latest) return null;
   const now = Date.now();
   const stale = latest.ranges.some(r => Date.parse(r.windowEnd) <= now);
@@ -77,8 +94,8 @@ const ASSIST_FRESH_WAIT_MS = 2_000;
 /** The manual refresh button is explicitly asking for a NEW read: wait for it. */
 const ASSIST_REFRESH_WAIT_MS = 120_000;
 
-/** Last completed LLM read, served while a newer generation is in flight. */
-let lastAssist: Assist | null = null;
+/** Last completed LLM read per crypto, served while a newer one generates. */
+const lastAssistByCrypto = new Map<CryptoId, Assist>();
 
 const delay = (ms: number) =>
   new Promise<null>(res => setTimeout(() => res(null), ms));
@@ -89,11 +106,13 @@ const delay = (ms: number) =>
  * and WAIT for the new read (unlike the tick path, which serves the previous
  * read while regenerating). Committed calls are unaffected — they were frozen.
  */
-export async function refreshRead(): Promise<Prediction> {
-  invalidate(`assist:${floorTo(Date.now(), MS['5m'])}`);
-  invalidate('predict:ranges');
-  const p = await computePrediction(ASSIST_REFRESH_WAIT_MS);
-  latest = p;
+export async function refreshRead(
+  crypto: CryptoId = 'btc'
+): Promise<Prediction> {
+  invalidate(`assist:${crypto}:${floorTo(Date.now(), MS['5m'])}`);
+  invalidate(`predict:ranges:${crypto}`);
+  const p = await computePrediction(crypto, ASSIST_REFRESH_WAIT_MS);
+  latestByCrypto.set(crypto, p);
   return p;
 }
 
@@ -200,22 +219,39 @@ export function msToNextBoundary(now = Date.now()): number {
   return floorTo(now, MS['5m']) + MS['5m'] - now;
 }
 
-export async function predict(): Promise<Prediction> {
+export async function predict(crypto: CryptoId = 'btc'): Promise<Prediction> {
   // Never let a cached snapshot outlive a window boundary: clamp the TTL so the
   // entry expires the moment any market window closes and the next call
   // recomputes with the new window's strike + committed call.
   const ttl = Math.max(1, Math.min(TTL, Math.ceil(msToNextBoundary() / 1000)));
-  const p = await cached('predict:ranges', ttl, () =>
-    computePrediction(ASSIST_FRESH_WAIT_MS)
+  const p = await cached(`predict:ranges:${crypto}`, ttl, () =>
+    computePrediction(crypto, ASSIST_FRESH_WAIT_MS)
   );
-  latest = p;
+  latestByCrypto.set(crypto, p);
   return p;
 }
 
-async function computePrediction(assistWaitMs: number): Promise<Prediction> {
+/**
+ * Compute (or serve cached) predictions for every tracked crypto. Sequential
+ * failures are isolated — one asset's upstream hiccup never blocks the rest.
+ */
+export async function predictAll(): Promise<Prediction[]> {
+  const results = await Promise.allSettled(CRYPTO_IDS.map(c => predict(c)));
+  return results
+    .filter(
+      (r): r is PromiseFulfilledResult<Prediction> => r.status === 'fulfilled'
+    )
+    .map(r => r.value);
+}
+
+async function computePrediction(
+  crypto: CryptoId,
+  assistWaitMs: number
+): Promise<Prediction> {
   {
     const now = Date.now();
     const win = windowsAt(now);
+    const symbol = CRYPTOS[crypto].binanceSymbol;
 
     // Load any still-open committed calls from the ledger before we decide, so
     // a restart mid-window keeps the call we already locked in.
@@ -249,24 +285,27 @@ async function computePrediction(assistWaitMs: number): Promise<Prediction> {
       pmStrike15m,
       pmStrike4h,
     ] = await Promise.all([
-      fetchPrice(),
-      fetch24hChangePct(),
-      fetchCandles('1m', 240),
-      fetchCandles('5m', 80),
-      fetchCandles('1h', 720),
-      fetchCandleAt('1m', win['5m'].start),
-      fetchCandleAt('1m', win['15m'].start),
-      fetchCandleAt('1m', win['1h'].start),
-      fetchCandleAt('1m', win['4h'].start),
-      fetchCandleAt('1m', win['1d'].start),
+      fetchPrice(symbol),
+      fetch24hChangePct(symbol),
+      fetchCandles('1m', 240, symbol),
+      fetchCandles('5m', 80, symbol),
+      fetchCandles('1h', 720, symbol),
+      fetchCandleAt('1m', win['5m'].start, symbol),
+      fetchCandleAt('1m', win['15m'].start, symbol),
+      fetchCandleAt('1m', win['1h'].start, symbol),
+      fetchCandleAt('1m', win['4h'].start, symbol),
+      fetchCandleAt('1m', win['1d'].start, symbol),
       // Polymarket's exact Chainlink-derived "price to beat" for 5m/15m/4h.
-      fetchPolymarketStrike('5m', win['5m'].start, win['5m'].end).catch(
+      fetchPolymarketStrike('5m', win['5m'].start, win['5m'].end, crypto).catch(
         () => undefined
       ),
-      fetchPolymarketStrike('15m', win['15m'].start, win['15m'].end).catch(
-        () => undefined
-      ),
-      fetchPolymarketStrike('4h', win['4h'].start, win['4h'].end).catch(
+      fetchPolymarketStrike(
+        '15m',
+        win['15m'].start,
+        win['15m'].end,
+        crypto
+      ).catch(() => undefined),
+      fetchPolymarketStrike('4h', win['4h'].start, win['4h'].end, crypto).catch(
         () => undefined
       ),
     ]);
@@ -327,7 +366,7 @@ async function computePrediction(assistWaitMs: number): Promise<Prediction> {
     const markets = await Promise.all(
       order.map(id => {
         const w = win[id];
-        const slug = id === '1d' ? slugFor['1d'](w.end) : slugFor[id](w.start);
+        const slug = marketSlug(crypto, id, id === '1d' ? w.end : w.start);
         return fetchMarket(slug, w.start, w.end).catch(() => null);
       })
     );
@@ -359,18 +398,28 @@ async function computePrediction(assistWaitMs: number): Promise<Prediction> {
     // stampeding the provider. Stale-while-revalidate: if the fresh read isn't
     // ready within `assistWaitMs`, serve the previous read and let the
     // generation finish in the background — the commit cadence never blocks on
-    // a slow local model.
-    const assistPromise = cached(`assist:${win['5m'].start}`, 360, () =>
-      assist(model, { price, reads })
-    );
-    assistPromise.then(
-      v => (lastAssist = v),
-      () => {}
-    );
-    const a =
-      (await Promise.race([assistPromise, delay(assistWaitMs)])) ??
-      lastAssist ??
-      statsAssist(model, { price, reads });
+    // a slow local model. Cryptos outside LLM_CRYPTOS get the stats narrative
+    // directly, so six assets don't mean six generations per window.
+    const assetLabel = `${CRYPTOS[crypto].ticker}/USDT`;
+    const assistCtx = { asset: assetLabel, price, reads };
+    let a: Assist;
+    if (!LLM_CRYPTOS.has(crypto)) {
+      a = statsAssist(model, assistCtx);
+    } else {
+      const assistPromise = cached(
+        `assist:${crypto}:${win['5m'].start}`,
+        360,
+        () => assist(model, assistCtx)
+      );
+      assistPromise.then(
+        v => lastAssistByCrypto.set(crypto, v),
+        () => {}
+      );
+      a =
+        (await Promise.race([assistPromise, delay(assistWaitMs)])) ??
+        lastAssistByCrypto.get(crypto) ??
+        statsAssist(model, assistCtx);
+    }
 
     const ranges: RangePrediction[] = order.map((id, i) => {
       const w = win[id];
@@ -402,9 +451,14 @@ async function computePrediction(assistWaitMs: number): Promise<Prediction> {
         marketImpliedUp: markets[i]?.impliedUp,
         now,
       });
-      const probUp = applyCalibration(rawProbUp, features, getCalibrator(id));
+      const probUp = applyCalibration(
+        rawProbUp,
+        features,
+        getCalibrator(id, crypto)
+      );
       const range: RangePrediction = {
         id,
+        crypto,
         label: META[id].label,
         resolutionSource: META[id].resolutionSource,
         strikeIsProxy: strikeIsProxyByRange[id],
@@ -417,7 +471,7 @@ async function computePrediction(assistWaitMs: number): Promise<Prediction> {
         windowStart: new Date(w.start).toISOString(),
         windowEnd: endIso,
         forecast: predictPrice(model, remaining, endIso, strike),
-        calibration: calibrationInfo(id),
+        calibration: calibrationInfo(id, crypto),
         market: markets[i] ?? undefined,
       };
       // Lock in (or recall) the frozen directional call for this window. The
@@ -469,7 +523,8 @@ async function computePrediction(assistWaitMs: number): Promise<Prediction> {
 
     const prediction: Prediction = {
       asOf: new Date(now).toISOString(),
-      symbol: TRADING_SYMBOL,
+      crypto,
+      symbol,
       stats: model.stats,
       ranges,
       narrative: a.narrative,

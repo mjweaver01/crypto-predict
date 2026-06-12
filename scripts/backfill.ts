@@ -26,7 +26,7 @@
  * probability at the decision instant (CLOB price history) — so the learned
  * layer trains on exactly what the live path would have seen.
  *
- * Usage:  bun run backfill [-- --count5 144 --count15 96 --count1h 48 --count1d 180]
+ * Usage:  bun run backfill [-- --crypto all|btc|eth|… --count5 144 --count15 96 --count1h 48 --count1d 180]
  */
 import {
   fetchCandleAt,
@@ -36,7 +36,7 @@ import {
 import {
   fetchMarketOutcome,
   fetchPriceHistory,
-  slugFor,
+  marketSlug,
   type PricePointRaw,
 } from '../src/server/sources/polymarket.ts';
 import {
@@ -46,8 +46,14 @@ import {
   type Model,
 } from '../src/server/model/forecast.ts';
 import { extractFeatures } from '../src/server/model/features.ts';
-import { addEntries } from '../src/server/model/ledger.ts';
+import { addEntries, getLedger } from '../src/server/model/ledger.ts';
 import { dailyWindowAt, noonEtUtc } from '../src/server/model/windows.ts';
+import {
+  CRYPTOS,
+  CRYPTO_IDS,
+  isCryptoId,
+  type CryptoId,
+} from '../src/shared/cryptos.ts';
 import type { LedgerEntry, RangeId, Side } from '../src/shared/types.ts';
 
 const MIN = 60_000;
@@ -56,6 +62,12 @@ const WARMUP_MIN = 240;
 function arg(name: string, fallback: number): number {
   const i = process.argv.indexOf(`--${name}`);
   if (i >= 0 && process.argv[i + 1]) return Number(process.argv[i + 1]);
+  return fallback;
+}
+
+function strArg(name: string, fallback: string): string {
+  const i = process.argv.indexOf(`--${name}`);
+  if (i >= 0 && process.argv[i + 1]) return process.argv[i + 1]!;
   return fallback;
 }
 
@@ -133,7 +145,20 @@ function recentDailyWindows(count: number): { start: number; end: number }[] {
   return out;
 }
 
-async function main() {
+async function backfillCrypto(
+  crypto: CryptoId,
+  existingIds: Set<string>
+): Promise<void> {
+  const symbol = CRYPTOS[crypto].binanceSymbol;
+  console.log(`\n═══ ${CRYPTOS[crypto].label} (${symbol}) ═══`);
+  /**
+   * Skip windows the ledger already has: live rows carry real commit-time
+   * book data a backfill can't reconstruct, and btc history predates the
+   * `${crypto}:` id prefix, so check the legacy id form too.
+   */
+  const alreadyRecorded = (rangeId: RangeId, startMs: number): boolean =>
+    existingIds.has(`${crypto}:${rangeId}:${startMs}`) ||
+    (crypto === 'btc' && existingIds.has(`${rangeId}:${startMs}`));
   // Oldest 1m candle we need: the oldest window start across the intraday
   // families, minus the warmup.
   const oldestIntraday = Math.min(
@@ -150,8 +175,8 @@ async function main() {
   const HOUR = 60 * MIN;
   const hourStart = Math.min(oldestIntraday, oldestDailyStart) - 720 * HOUR;
   const [candles, hourCandlesAll] = await Promise.all([
-    fetchKlineRange('1m', klStart, Date.now()),
-    fetchKlineRange('1h', hourStart, Date.now()),
+    fetchKlineRange('1m', klStart, Date.now(), symbol),
+    fetchKlineRange('1h', hourStart, Date.now(), symbol),
   ]);
   const byOpen = new Map<number, Candle>();
   for (const c of candles) byOpen.set(c.openTime, c);
@@ -219,8 +244,9 @@ async function main() {
   for (const fam of FAMS) {
     const starts = recentWindowStarts(fam.windowMin, fam.count);
     const rows = await mapPool(starts, 6, async startMs => {
+      if (alreadyRecorded(fam.id, startMs)) return null;
       const endMs = startMs + fam.windowMin * MIN;
-      const slug = slugFor[fam.id](startMs);
+      const slug = marketSlug(crypto, fam.id, startMs);
       const outcome = await fetchMarketOutcome(slug);
       if (!outcome) return null;
       const call = modelProbAtCommit(startMs, fam.windowMin);
@@ -246,7 +272,8 @@ async function main() {
       const side: Side = probUp >= 0.5 ? 'UP' : 'DOWN';
       const realized: Side = outcome.outcomeUp ? 'UP' : 'DOWN';
       const entry: LedgerEntry = {
-        id: `${fam.id}:${startMs}`,
+        id: `${crypto}:${fam.id}:${startMs}`,
+        crypto,
         rangeId: fam.id,
         slug,
         windowStart: new Date(startMs).toISOString(),
@@ -286,12 +313,13 @@ async function main() {
   // come from completed hourly candles strictly before the open (no look-ahead);
   // minute stats are unused at this horizon, so we don't fetch a 1m history.
   const dailyRows = await mapPool(dailyWindows, 6, async ({ start, end }) => {
-    const slug = slugFor['1d'](end);
+    if (alreadyRecorded('1d', start)) return null;
+    const slug = marketSlug(crypto, '1d', end);
     const outcome = await fetchMarketOutcome(slug);
     if (!outcome) return null;
     const [noonCandle, decisionCandle] = await Promise.all([
-      fetchCandleAt('1m', start).catch(() => null),
-      fetchCandleAt('1m', start + MIN).catch(() => null),
+      fetchCandleAt('1m', start, symbol).catch(() => null),
+      fetchCandleAt('1m', start + MIN, symbol).catch(() => null),
     ]);
     if (!noonCandle || !decisionCandle) return null;
     const strike = noonCandle.close; // daily settles on the 1m close at noon
@@ -323,7 +351,8 @@ async function main() {
     const side: Side = probUp >= 0.5 ? 'UP' : 'DOWN';
     const realized: Side = outcome.outcomeUp ? 'UP' : 'DOWN';
     const entry: LedgerEntry = {
-      id: `1d:${start}`,
+      id: `${crypto}:1d:${start}`,
+      crypto,
       rangeId: '1d',
       slug,
       windowStart: new Date(start).toISOString(),
@@ -357,7 +386,20 @@ async function main() {
   all.push(...dailyGot);
 
   await addEntries(all);
-  console.log(`\nwrote ${all.length} backfilled entries to the ledger.`);
+  console.log(
+    `wrote ${all.length} backfilled ${crypto} entries to the ledger.`
+  );
+}
+
+async function main() {
+  const which = strArg('crypto', 'all');
+  const cryptos: CryptoId[] = isCryptoId(which) ? [which] : [...CRYPTO_IDS];
+  // Pre-load existing ids once: windows already in the ledger (live rows with
+  // real book data, or a prior backfill) must not be overwritten.
+  const existingIds = new Set((await getLedger()).map(e => e.id));
+  for (const crypto of cryptos) {
+    await backfillCrypto(crypto, existingIds);
+  }
 }
 
 main().catch(err => {

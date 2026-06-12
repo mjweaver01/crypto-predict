@@ -6,6 +6,7 @@ import type {
   RangePrediction,
   SpotRangeId,
 } from '../shared/types.ts';
+import { CRYPTOS, CRYPTO_IDS, type CryptoId } from '../shared/cryptos.ts';
 import {
   $,
   COLORS,
@@ -150,6 +151,68 @@ const CHART_MINUTES: Record<RangeId, number> = {
 const RANGE_IDS: readonly RangeId[] = ['5m', '15m', '1h', '4h', '1d'];
 let selected: RangeId | null = loadPref('tab', RANGE_IDS, '5m');
 let latest: Prediction | null = null;
+
+// ── Crypto selector ('all' = holistic view across every asset) ───────────
+type CryptoChoice = CryptoId | 'all';
+const CRYPTO_CHOICES: readonly CryptoChoice[] = [...CRYPTO_IDS, 'all'];
+let selectedCrypto: CryptoChoice = loadPref('crypto', CRYPTO_CHOICES, 'btc');
+/** Latest per-crypto snapshots for the All view. */
+let latestAll: Prediction[] | null = null;
+
+const isAllView = () => selectedCrypto === 'all';
+/** Meta for the focused crypto (single-asset mode). */
+const focusMeta = () =>
+  CRYPTOS[selectedCrypto === 'all' ? 'btc' : selectedCrypto];
+
+function wireCryptoSelect() {
+  const sel = $<HTMLSelectElement>('crypto-select');
+  sel.innerHTML =
+    `<option value="all">All cryptos</option>` +
+    CRYPTO_IDS.map(
+      id =>
+        `<option value="${id}">${CRYPTOS[id].label} (${CRYPTOS[id].ticker})</option>`
+    ).join('');
+  sel.value = selectedCrypto;
+  sel.addEventListener('change', () => {
+    selectedCrypto = sel.value as CryptoChoice;
+    savePref('crypto', selectedCrypto);
+    // Old asset's data must not flash on the new one.
+    latest = null;
+    latestAll = null;
+    liveTicks.length = 0;
+    lastTickPrice = null;
+    displayPrice = null;
+    streaming = false;
+    applyViewMode();
+    $('app').classList.add('loading');
+    void refresh();
+  });
+}
+
+/** Show/hide the single-asset vs All-view chrome. */
+function applyViewMode() {
+  const all = isAllView();
+  const show = (id: string, on: boolean) =>
+    ($(id).style.display = on ? '' : 'none');
+  show('crypto-grid', all);
+  show('all-panel', all);
+  show('hero-chart', !all);
+  show('hero-axis', !all);
+  show('detail', !all);
+  show('price', !all);
+  const meta = $('change').parentElement;
+  if (meta) meta.style.display = all ? 'none' : '';
+  // No AI narrative in the All view — hide its card and let the spot card
+  // span the full hero row instead.
+  const narrative = document.querySelector<HTMLElement>('.narrative-card');
+  if (narrative) narrative.style.display = all ? 'none' : '';
+  document
+    .querySelector<HTMLElement>('.price-card')
+    ?.classList.toggle('all-mode', all);
+  $('price-label').textContent = all
+    ? 'All cryptos · spot'
+    : `${focusMeta().label} price · spot`;
+}
 
 function renderTabs(p: Prediction) {
   if (!selected || !p.ranges.some(r => r.id === selected)) {
@@ -316,13 +379,14 @@ function renderMarketBlock(r: RangePrediction) {
     }
   }
 
+  const noteTkr = CRYPTOS[r.crypto]?.ticker ?? 'BTC';
   $('d-note').textContent = r.strikeIsProxy
-    ? 'Resolves on Chainlink BTC/USD; strike shown is a Binance-open proxy (Polymarket price-to-beat unavailable).'
+    ? `Resolves on Chainlink ${noteTkr}/USD; strike shown is a Binance-open proxy (Polymarket price-to-beat unavailable).`
     : r.resolutionSource === 'chainlink'
-      ? "Resolves on Chainlink BTC/USD; strike is Polymarket's exact price to beat."
+      ? `Resolves on Chainlink ${noteTkr}/USD; strike is Polymarket's exact price to beat.`
       : r.id === '1d'
-        ? 'Resolves on the Binance BTC/USDT 1m close at noon ET vs the prior noon.'
-        : 'Resolves on the Binance BTC/USDT 1h candle (close vs open).';
+        ? `Resolves on the Binance ${noteTkr}/USDT 1m close at noon ET vs the prior noon.`
+        : `Resolves on the Binance ${noteTkr}/USDT 1h candle (close vs open).`;
 }
 
 function renderDetail(p: Prediction) {
@@ -330,11 +394,12 @@ function renderDetail(p: Prediction) {
   if (!r) return;
   const up = r.probUp;
 
+  const tkr = CRYPTOS[r.crypto]?.ticker ?? 'BTC';
   $('d-title').textContent = `Up / Down · ${r.label}`;
   $('d-source').textContent =
     r.resolutionSource === 'chainlink'
-      ? 'Chainlink BTC/USD'
-      : 'Binance BTC/USDT';
+      ? `Chainlink ${tkr}/USD`
+      : `Binance ${tkr}/USDT`;
   $('d-window').textContent =
     `${fmtClock(r.windowStart)} → ${fmtClock(r.windowEnd)} · closes ${relTime(r.windowEnd)}`;
   $('d-countdown').dataset.end = r.windowEnd;
@@ -434,7 +499,13 @@ function renderSpotRanges() {
       selectedSpot = btn.dataset.spot as SpotRangeId;
       savePref('spot', selectedSpot);
       renderSpotRanges();
-      renderHero();
+      // The range toggle drives the hero chart in single mode and every
+      // mini-card series in the All view.
+      if (isAllView()) {
+        if (latestAll) renderCryptoGrid(latestAll);
+      } else {
+        renderHero();
+      }
     });
   }
 }
@@ -478,7 +549,7 @@ function renderHeroChart() {
             : new Date(p.t).toLocaleTimeString(),
           rows: [
             {
-              label: 'BTC/USDT',
+              label: `${focusMeta().ticker}/USDT`,
               value: fmtUsd2(p.price),
               color: COLORS.accent,
             },
@@ -539,13 +610,171 @@ function animateHero() {
   renderHeroChart();
 }
 
+// ── "All" view: mini spot cards + per-window bets across every crypto ─────
+
+/** Price formatter that adapts to sub-dollar assets (XRP/DOGE). */
+const fmtPx = (n: number) =>
+  n >= 1000 ? fmtUsd(n) : n >= 1 ? fmtUsd2(n) : `$${n.toFixed(4)}`;
+
+// Rolling ~1-minute tick buffers per crypto, powering the All view's LIVE
+// range (the single-asset LIVE buffer only tracks the focused crypto).
+const liveTicksByCrypto = new Map<CryptoId, PricePoint[]>();
+
+/** The mini-card series for one crypto at the selected spot range. */
+function miniSeries(p: Prediction): PricePoint[] {
+  if (selectedSpot === 'LIVE') {
+    return liveTicksByCrypto.get(p.crypto) ?? p.history.slice(-5);
+  }
+  return p.spot?.[selectedSpot] ?? p.history.slice(-60);
+}
+
+/**
+ * % change over a series (its first → last point). Keeping the mini card's
+ * number on the SAME span as its sparkline means the sign, the colour, and
+ * the chart direction always agree — a +x% next to a red 1H chart was just
+ * the 24h change disagreeing with the selected range.
+ */
+function seriesChangePct(pts: PricePoint[]): number {
+  const first = pts[0]?.price;
+  const last = pts[pts.length - 1]?.price;
+  return first && last ? (last / first - 1) * 100 : 0;
+}
+
+function renderCryptoGrid(preds: Prediction[]) {
+  const grid = $('crypto-grid');
+  grid.innerHTML = preds
+    .map(p => {
+      const meta = CRYPTOS[p.crypto];
+      const pts = miniSeries(p);
+      const pct = seriesChangePct(pts);
+      const up = pct >= 0;
+      return `<div class="mini-card" data-crypto="${p.crypto}">
+        <div class="mini-ticker">${meta.ticker}/USDT</div>
+        <div class="mini-price" data-mini-price="${p.crypto}">${fmtPx(p.stats.price)}</div>
+        <div class="mini-change ${up ? 'up' : 'down'}" data-mini-change="${p.crypto}">${up ? '+' : ''}${pct.toFixed(2)}% ${selectedSpot}</div>
+        <div class="mini-spark" data-mini-spark="${p.crypto}">${sparkline(pts, up ? COLORS.up : COLORS.down)}</div>
+      </div>`;
+    })
+    .join('');
+  for (const card of grid.querySelectorAll<HTMLElement>('.mini-card')) {
+    card.addEventListener('click', () => {
+      const id = card.dataset.crypto as CryptoId;
+      $<HTMLSelectElement>('crypto-select').value = id;
+      $<HTMLSelectElement>('crypto-select').dispatchEvent(new Event('change'));
+    });
+  }
+}
+
+function renderAllTabs(preds: Prediction[]) {
+  if (!selected) selected = '5m';
+  const tabs = $('tabs');
+  tabs.innerHTML = RANGE_IDS.map(id => {
+    const rs = preds
+      .map(p => p.ranges.find(r => r.id === id))
+      .filter((r): r is RangePrediction => !!r);
+    if (rs.length === 0) return '';
+    const bets = rs.filter(r => r.paper?.action === 'BET').length;
+    const active = id === selected ? ' active' : '';
+    return `<button class="tab${active}" role="tab" data-id="${id}">
+      <span class="tab-top">
+        <span class="tab-label">${rs[0]!.label}</span>
+        <span class="tab-side ${bets > 0 ? 'up' : 'tentative'}">${bets} bet${bets === 1 ? '' : 's'}</span>
+      </span>
+      <span class="tab-timer" data-end="${rs[0]!.windowEnd}">—</span>
+      <span class="tab-sub">${rs.length} markets</span>
+    </button>`;
+  }).join('');
+  for (const btn of tabs.querySelectorAll<HTMLButtonElement>('.tab')) {
+    btn.addEventListener('click', () => {
+      selected = btn.dataset.id as RangeId;
+      savePref('tab', selected);
+      if (latestAll) renderAll(latestAll);
+    });
+  }
+  tickCountdowns();
+}
+
+function renderAllPanel(preds: Prediction[]) {
+  const id = selected ?? '5m';
+  const rows = preds
+    .map(p => ({ p, r: p.ranges.find(r => r.id === id) }))
+    .filter((x): x is { p: Prediction; r: RangePrediction } => !!x.r);
+  if (rows.length === 0) return;
+  const first = rows[0]!.r;
+
+  $('all-title').textContent = `Up / Down · ${first.label} · every crypto`;
+  $('all-window').textContent =
+    `${fmtClock(first.windowStart)} → ${fmtClock(first.windowEnd)} · closes ${relTime(first.windowEnd)}`;
+  $('all-countdown').dataset.end = first.windowEnd;
+
+  const betsOn = rows.filter(x => x.r.paper?.action === 'BET');
+  const committed = rows.filter(x => x.r.committed).length;
+  const staked = betsOn.reduce((s, x) => s + (x.r.paper?.stake ?? 0), 0);
+  $('all-summary').textContent =
+    `${committed}/${rows.length} calls committed · ${betsOn.length} paper bet${betsOn.length === 1 ? '' : 's'}` +
+    (staked > 0 ? ` · ${fmtUsd2(staked)} staked` : '') +
+    ' · click a row to focus that crypto';
+
+  const cents = (v: number) => `${(v * 100).toFixed(1)}¢`;
+  const body = rows
+    .map(({ p, r }) => {
+      const meta = CRYPTOS[p.crypto];
+      const c = r.committed;
+      const side = c?.side ?? (r.probUp >= 0.5 ? 'UP' : 'DOWN');
+      const chip = `<span class="side-chip ${side === 'UP' ? 'up' : 'down'}${c ? '' : ' tentative'}">${side}</span>`;
+      const pd = r.paper;
+      const verdict =
+        pd?.action === 'BET'
+          ? `<span class="paper-chip bet">BET</span> ${pd.stake !== undefined ? fmtUsd2(pd.stake) : ''} ` +
+            `<span class="edge-pos">+${pd.edge !== undefined ? cents(pd.edge) : '—'}</span>`
+          : pd
+            ? `<span class="paper-chip pass">PASS</span>`
+            : '—';
+      const mkt = r.market ? fmtPct(r.market.impliedUp) : '—';
+      const vs = p.stats.price >= r.strike ? 'above' : 'below';
+      return `<tr data-crypto="${p.crypto}">
+        <td><b>${meta.ticker}</b></td>
+        <td>${fmtPx(p.stats.price)}</td>
+        <td>${chip}${c ? ` ${fmtPct(c.confidence)}` : ''}</td>
+        <td>${fmtPct(r.probUp)}</td>
+        <td>${mkt}</td>
+        <td>${fmtPx(r.strike)} <span style="color:var(--text-dim)">(${vs})</span></td>
+        <td>${verdict}</td>
+      </tr>`;
+    })
+    .join('');
+  $('all-table').innerHTML =
+    `<thead><tr><th>Asset</th><th>Spot</th><th>Call</th><th>Model ↑</th><th>Market ↑</th><th>Strike</th><th>Paper</th></tr></thead>` +
+    `<tbody>${body}</tbody>`;
+  for (const tr of $('all-table').querySelectorAll<HTMLElement>('tbody tr')) {
+    tr.addEventListener('click', () => {
+      $<HTMLSelectElement>('crypto-select').value = tr.dataset.crypto!;
+      $<HTMLSelectElement>('crypto-select').dispatchEvent(new Event('change'));
+    });
+  }
+}
+
+function renderAll(preds: Prediction[]) {
+  latestAll = preds;
+  renderSpotRanges();
+  renderCryptoGrid(preds);
+  renderAllTabs(preds);
+  renderAllPanel(preds);
+  const newest = preds
+    .map(p => p.asOf)
+    .sort()
+    .pop();
+  if (newest) $('updated').textContent = new Date(newest).toLocaleTimeString();
+  $('app').classList.remove('loading');
+}
+
 function render(p: Prediction) {
   latest = p;
 
   // Header. Once the live stream is feeding the price/change, leave those to it
   // so the (up-to-20s-cached) predict payload doesn't snap them backwards.
   if (!streaming) {
-    $('price').textContent = fmtUsd(p.stats.price);
+    $('price').textContent = fmtPx(p.stats.price);
     applyChange(p.stats.change24hPct);
   }
   $('vol').textContent = `σ ${(p.stats.volPerHour * 100).toFixed(2)}%/h`;
@@ -571,10 +800,21 @@ let inflight = false;
 async function refresh() {
   if (inflight) return;
   inflight = true;
+  // The selector may change while a fetch is in flight — only apply results
+  // that still match the current selection.
+  const want = selectedCrypto;
   try {
-    const res = await fetch('/api/predict');
-    if (!res.ok) throw new Error(`predict ${res.status}`);
-    render((await res.json()) as Prediction);
+    if (want === 'all') {
+      const res = await fetch('/api/overview');
+      if (!res.ok) throw new Error(`overview ${res.status}`);
+      const data = (await res.json()) as { predictions: Prediction[] };
+      if (selectedCrypto === 'all') renderAll(data.predictions);
+    } else {
+      const res = await fetch(`/api/predict?crypto=${want}`);
+      if (!res.ok) throw new Error(`predict ${res.status}`);
+      const p = (await res.json()) as Prediction;
+      if (selectedCrypto === want) render(p);
+    }
     $('error').textContent = '';
   } catch (err) {
     $('error').textContent = `Failed to load: ${String(err)}`;
@@ -638,7 +878,10 @@ function wireReadRefresh() {
     btn.classList.add('loading');
     card?.classList.add('refreshing');
     try {
-      const res = await fetch('/api/read/refresh', { method: 'POST' });
+      const c = selectedCrypto === 'all' ? 'btc' : selectedCrypto;
+      const res = await fetch(`/api/read/refresh?crypto=${c}`, {
+        method: 'POST',
+      });
       if (!res.ok) throw new Error(`refresh ${res.status}`);
       render((await res.json()) as Prediction);
       $('error').textContent = '';
@@ -664,8 +907,49 @@ function applyChange(pct: number) {
 }
 
 function applyTick(tick: PriceTick) {
+  const tickCrypto = tick.crypto ?? 'btc';
+
+  // Always feed the per-crypto rolling buffers so the All view's LIVE range
+  // has data the moment it's selected.
+  const buf = liveTicksByCrypto.get(tickCrypto) ?? [];
+  buf.push({ t: tick.t, price: tick.price });
+  const bufCutoff = tick.t - LIVE_WINDOW_MS;
+  while (buf.length > 2 && buf[0]!.t < bufCutoff) buf.shift();
+  liveTicksByCrypto.set(tickCrypto, buf);
+
+  // In the All view, ticks live-update the matching mini card and stop there.
+  // The % + spark are only tick-driven on the LIVE range (where the buffer IS
+  // the visible series); other ranges keep the series-matched values from the
+  // last render so number, colour, and chart never disagree.
+  if (isAllView()) {
+    const priceEl = document.querySelector<HTMLElement>(
+      `[data-mini-price="${tickCrypto}"]`
+    );
+    if (priceEl) priceEl.textContent = fmtPx(tick.price);
+    if (selectedSpot === 'LIVE' && buf.length >= 2) {
+      const pct = seriesChangePct(buf);
+      const up = pct >= 0;
+      const chgEl = document.querySelector<HTMLElement>(
+        `[data-mini-change="${tickCrypto}"]`
+      );
+      if (chgEl) {
+        chgEl.textContent = `${up ? '+' : ''}${pct.toFixed(2)}% LIVE`;
+        chgEl.className = `mini-change ${up ? 'up' : 'down'}`;
+      }
+      const sparkEl = document.querySelector<HTMLElement>(
+        `[data-mini-spark="${tickCrypto}"]`
+      );
+      if (sparkEl) {
+        sparkEl.innerHTML = sparkline(buf, up ? COLORS.up : COLORS.down);
+      }
+    }
+    return;
+  }
+
+  // Single-asset mode: only the focused crypto's ticks drive the header/chart.
+  if (tickCrypto !== selectedCrypto) return;
   streaming = true;
-  $('price').textContent = fmtUsd(tick.price);
+  $('price').textContent = fmtPx(tick.price);
   applyChange(tick.change24hPct);
   lastTickPrice = tick.price;
 
@@ -690,6 +974,8 @@ function connectPriceStream() {
   };
 }
 
+wireCryptoSelect();
+applyViewMode();
 refresh();
 setInterval(refresh, 5_000);
 setInterval(tickCountdowns, 1_000);
