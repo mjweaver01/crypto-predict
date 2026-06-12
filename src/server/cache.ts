@@ -23,7 +23,9 @@ export async function cached<T>(
   if (hit && hit.expires > now) return hit.value;
 
   const pending = inflight.get(key) as Promise<T> | undefined;
-  if (pending) return pending;
+  // A refresh is already running. If we have a (stale) value, serve it now
+  // rather than waiting on the recompute — keeps requests responsive.
+  if (pending) return hit ? hit.value : pending;
 
   const run = (async () => {
     try {
@@ -42,6 +44,15 @@ export async function cached<T>(
     }
   })();
   inflight.set(key, run);
+
+  // Stale-while-revalidate: when the entry has merely expired (we still hold a
+  // value), serve the stale value immediately and let the recompute replace the
+  // cache in the background. The first caller after a window resolves no longer
+  // blocks on the full recalculation. Only a cold miss (no value yet) waits.
+  if (hit) {
+    run.catch(() => {}); // background refresh; errors already fall back to stale
+    return hit.value;
+  }
   return run;
 }
 

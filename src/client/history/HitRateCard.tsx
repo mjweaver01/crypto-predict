@@ -21,9 +21,9 @@ export function HitRateCard() {
   const f = metrics.value?.families.find(x => x.family === recordFilter.value);
   const pts = f?.series ?? [];
   const windowLabel =
-    datePreset.value === 'all' ? 'all time' : DATE_PRESET_LABELS[datePreset.value];
-
-  const showAllTime = !!(all && all !== s && all.resolved);
+    datePreset.value === 'all'
+      ? 'all time'
+      : DATE_PRESET_LABELS[datePreset.value];
 
   const tip =
     pts.length >= 2
@@ -68,9 +68,6 @@ export function HitRateCard() {
             <div class="rstat-label">Hit rate</div>
             <div class="rstat-val accent">
               {s && s.resolved ? fmtPct(s.accuracy) : '—'}
-              {showAllTime && (
-                <span class="rstat-alltime"> ({fmtPct(all!.accuracy)} all time)</span>
-              )}
             </div>
           </div>
           <div>
@@ -90,7 +87,9 @@ export function HitRateCard() {
           }}
         >
           All
-          <span class="rf-acc">{all && all.resolved ? fmtPct(all.accuracy) : '—'}</span>
+          <span class="rf-acc">
+            {all && all.resolved ? fmtPct(all.accuracy) : '—'}
+          </span>
         </button>
         {RECORD_RANGES.map(id => {
           const r = all?.byRange[id];
@@ -103,7 +102,9 @@ export function HitRateCard() {
               }}
             >
               {id}
-              <span class="rf-acc">{r && r.resolved ? fmtPct(r.accuracy) : '—'}</span>
+              <span class="rf-acc">
+                {r && r.resolved ? fmtPct(r.accuracy) : '—'}
+              </span>
             </button>
           );
         })}
@@ -111,7 +112,11 @@ export function HitRateCard() {
 
       {pts.length >= 2 ? (
         <>
-          <Chart class="chart hr-chart" svg={hitRateChartFromSeries(pts)} tip={tip} />
+          <Chart
+            class="chart hr-chart"
+            svg={hitRateChartFromSeries(pts)}
+            tip={tip}
+          />
           <div class="hr-axis">
             <span>{fmtDay(pts[0]!.t)}</span>
             <span class="hl">100% / 50% / 0%</span>
