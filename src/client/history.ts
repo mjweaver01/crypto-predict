@@ -467,6 +467,18 @@ function renderPaper() {
       pol.startBankroll
     );
     const orderedAll = [...p.bets].reverse(); // oldest → newest, matches equity
+    // Build per-family running P&L + count series so the tooltip can show all
+    // ranges at every equity point, not just the single bet that landed there.
+    const famPnl: Record<string, number> = {};
+    const famCount: Record<string, number> = {};
+    const famPnlSeries: Array<Record<string, number>> = [];
+    const famCountSeries: Array<Record<string, number>> = [];
+    for (const b of orderedAll) {
+      famPnl[b.rangeId] = (famPnl[b.rangeId] ?? 0) + (b.pnl ?? 0);
+      famCount[b.rangeId] = (famCount[b.rangeId] ?? 0) + 1;
+      famPnlSeries.push(Object.assign({}, famPnl));
+      famCountSeries.push(Object.assign({}, famCount));
+    }
     attachChartTip(chart, {
       xs: seriesXs(p.equity.length),
       at: i => {
@@ -488,10 +500,23 @@ function renderPaper() {
         if (b) {
           const pnl = b.pnl ?? 0;
           rows.push({
-            label: `${b.rangeId} ${b.side}, bet ${fmtUsd2(b.stake)}`,
+            label: `${b.rangeId} ${b.side} @ ${(b.cost * 100).toFixed(1)}¢  bet ${fmtUsd2(b.stake)}`,
             value: `${pnl >= 0 ? '+' : ''}${fmtUsd2(pnl)}`,
             color: pnl >= 0 ? COLORS.up : COLORS.down,
           });
+        }
+        // Per-family cumulative P&L up to this point.
+        const snappedPnl = famPnlSeries[i] ?? {};
+        const snappedCount = famCountSeries[i] ?? {};
+        for (const id of RECORD_RANGES) {
+          if ((snappedCount[id] ?? 0) > 0) {
+            const cum = snappedPnl[id] ?? 0;
+            rows.push({
+              label: `${id} (${snappedCount[id]} bets)`,
+              value: `${cum >= 0 ? '+' : ''}${fmtUsd2(cum)}`,
+              color: cum >= 0 ? COLORS.up : COLORS.down,
+            });
+          }
         }
         return { title: fmtDateTime(isoOf(e.t)), rows };
       },
