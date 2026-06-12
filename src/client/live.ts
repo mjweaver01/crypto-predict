@@ -783,10 +783,8 @@ function render(p: Prediction) {
   renderSpotRanges();
   renderHero();
 
-  // Narrative + method
+  // Stats-grounded one-line narrative
   $('narrative').textContent = p.narrative;
-  renderReasoning(p.reasoning);
-  $('method').textContent = p.llmApplied ? 'LLM-assisted' : 'Stats-only';
 
   // Tabs + selected range detail
   renderTabs(p);
@@ -821,78 +819,6 @@ async function refresh() {
   } finally {
     inflight = false;
   }
-}
-
-// ── Full LLM report, clamped behind a "read more" toggle ─────────────────
-// Collapsed by default; expansion survives the 5s refresh (the read itself
-// only changes every 5m window or on manual refresh) and resets on new text.
-let reasoningExpanded = false;
-let lastReasoning = '';
-
-function renderReasoning(text: string | undefined) {
-  const el = $('reasoning');
-  const toggle = $<HTMLButtonElement>('reasoning-toggle');
-  if (!text) {
-    el.classList.remove('visible');
-    el.textContent = '';
-    toggle.style.display = 'none';
-    lastReasoning = '';
-    return;
-  }
-  if (text !== lastReasoning) {
-    lastReasoning = text;
-    reasoningExpanded = false; // fresh read → collapse again
-  }
-  el.textContent = text;
-  el.classList.add('visible');
-  el.classList.toggle('clamped', !reasoningExpanded);
-  // Show the toggle only when the clamp actually hides content (or when
-  // expanded, so it can be collapsed back). The clamp height comes from the
-  // parent card, so this is re-checked on resize too.
-  const overflows = el.scrollHeight > el.clientHeight + 1;
-  el.classList.toggle('truncated', !reasoningExpanded && overflows);
-  toggle.style.display = reasoningExpanded || overflows ? '' : 'none';
-  toggle.textContent = reasoningExpanded ? 'Show less' : 'Read more';
-}
-
-function wireReasoningToggle() {
-  $<HTMLButtonElement>('reasoning-toggle').addEventListener('click', () => {
-    reasoningExpanded = !reasoningExpanded;
-    renderReasoning(lastReasoning);
-  });
-  // The available height depends on the layout, so re-evaluate the clamp
-  // whenever the viewport changes.
-  window.addEventListener('resize', () => {
-    if (lastReasoning) renderReasoning(lastReasoning);
-  });
-}
-
-// On-demand LLM read: the server refreshes its read once per 5m window (at the
-// commit boundary); this button forces a brand-new read right now.
-function wireReadRefresh() {
-  const btn = $<HTMLButtonElement>('read-refresh');
-  const card = btn.closest('.narrative-card');
-  btn.addEventListener('click', async () => {
-    if (btn.disabled) return;
-    btn.disabled = true;
-    btn.classList.add('loading');
-    card?.classList.add('refreshing');
-    try {
-      const c = selectedCrypto === 'all' ? 'btc' : selectedCrypto;
-      const res = await fetch(`/api/read/refresh?crypto=${c}`, {
-        method: 'POST',
-      });
-      if (!res.ok) throw new Error(`refresh ${res.status}`);
-      render((await res.json()) as Prediction);
-      $('error').textContent = '';
-    } catch (err) {
-      $('error').textContent = `Failed to refresh read: ${String(err)}`;
-    } finally {
-      btn.disabled = false;
-      btn.classList.remove('loading');
-      card?.classList.remove('refreshing');
-    }
-  });
 }
 
 // ── Live spot price stream (SSE) ─────────────────────────────────────────
@@ -979,7 +905,5 @@ applyViewMode();
 refresh();
 setInterval(refresh, 5_000);
 setInterval(tickCountdowns, 1_000);
-wireReadRefresh();
-wireReasoningToggle();
 connectPriceStream();
 requestAnimationFrame(animateHero);

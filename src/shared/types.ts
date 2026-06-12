@@ -574,8 +574,8 @@ export interface MetricsResponse {
 }
 
 /**
- * A compact, point-in-time capture of the model's "read" (narrative, reasoning,
- * and directional calls) taken each time a fresh prediction is computed. Kept in
+ * A compact, point-in-time capture of the model's "read" (narrative and
+ * directional calls) taken each time a fresh prediction is computed. Kept in
  * a windowed in-memory buffer so the UI can scroll back through how sentiment
  * evolved without persisting anything to disk.
  */
@@ -590,10 +590,6 @@ export interface InsightSnapshot {
   change24hPct: number;
   /** One-sentence model summary. */
   narrative: string;
-  /** Optional 2-3 sentence LLM reasoning. */
-  reasoning?: string;
-  /** True when an LLM provider nudged the probabilities. */
-  llmApplied: boolean;
   /** Per-range directional calls at the time. */
   calls: { id: RangeId; label: string; probUp: number; side: Side }[];
 }
@@ -607,12 +603,8 @@ export interface Prediction {
   stats: MarketStats;
   /** One prediction per Polymarket market family, ordered shortest → longest. */
   ranges: RangePrediction[];
-  /** One-sentence summary of the model's read */
+  /** One-sentence stats-grounded summary of the model's read. */
   narrative: string;
-  /** Optional 2-3 sentence LLM reasoning (absent on the pure-stats path) */
-  reasoning?: string;
-  /** True when an LLM provider nudged the directional probabilities */
-  llmApplied: boolean;
   /** Recent 1-minute price history (oldest → newest), for sparklines */
   history: PricePoint[];
   /**

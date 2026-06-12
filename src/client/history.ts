@@ -59,25 +59,16 @@ const isoOf = (t: number) => new Date(t).toISOString();
 
 // ── Previous reads (windowed insight history) ─────────────────────────────
 
-// Entries whose full report is expanded, keyed by snapshot time so the state
-// survives the periodic re-render.
-const expandedReads = new Set<string>();
-
 function renderHistory(entries: InsightSnapshot[]) {
   const list = $('history-list');
   const empty = $('history-empty');
   empty.style.display = entries.length ? 'none' : 'block';
   list.innerHTML = entries
     .map(e => {
-      const method = e.llmApplied
-        ? '<span class="hist-method llm">LLM</span>'
-        : '<span class="hist-method stats">Stats</span>';
+      // The asset chip replaces the old LLM/Stats method tag — every read is
+      // stats-grounded now, and in the All filter the asset is what matters.
+      const ticker = CRYPTOS[e.crypto ?? 'btc']?.ticker ?? 'BTC';
       const change = `${e.change24hPct >= 0 ? '+' : ''}${e.change24hPct.toFixed(2)}%`;
-      const expanded = expandedReads.has(e.asOf);
-      const reasoning = e.reasoning
-        ? `<div class="hist-reasoning${expanded ? '' : ' clamped'}">${escapeHtml(e.reasoning)}</div>` +
-          `<button class="read-more" data-read="${e.asOf}">${expanded ? 'Show less' : 'Read more'}</button>`
-        : '';
       const calls = e.calls
         .map(
           c =>
@@ -87,33 +78,14 @@ function renderHistory(entries: InsightSnapshot[]) {
       return `<div class="hist">
         <div class="hist-top">
           <span class="hist-time">${new Date(e.asOf).toLocaleTimeString()}</span>
-          ${method}
+          <span class="hist-method stats">${ticker}</span>
           <span>${fmtUsd(e.price)} · ${change} 24h</span>
         </div>
         <div class="hist-narrative">${escapeHtml(e.narrative)}</div>
-        ${reasoning}
         <div class="hist-calls">${calls}</div>
       </div>`;
     })
     .join('');
-  for (const btn of list.querySelectorAll<HTMLButtonElement>('[data-read]')) {
-    // Hide the toggle when the clamp isn't actually hiding anything.
-    const body = btn.previousElementSibling as HTMLElement | null;
-    if (
-      body &&
-      !expandedReads.has(btn.dataset.read!) &&
-      body.scrollHeight <= body.clientHeight + 1
-    ) {
-      btn.style.display = 'none';
-      continue;
-    }
-    btn.addEventListener('click', () => {
-      const key = btn.dataset.read!;
-      if (expandedReads.has(key)) expandedReads.delete(key);
-      else expandedReads.add(key);
-      renderHistory(entries);
-    });
-  }
 }
 
 async function refreshHistory() {

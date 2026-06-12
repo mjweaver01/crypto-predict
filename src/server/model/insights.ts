@@ -1,5 +1,5 @@
 // Windowed log of the model's "read" over time. Every fresh prediction drops a
-// compact snapshot (narrative + reasoning + directional calls) into a ring
+// compact snapshot (narrative + directional calls) into a ring
 // buffer so the UI can scroll back through how sentiment evolved. The buffer is
 // bounded by both age and count, and is persisted to disk (write-behind) so a
 // restart doesn't erase the recent timeline.
@@ -74,8 +74,6 @@ export function recordInsight(p: Prediction): void {
     price: p.stats.price,
     change24hPct: p.stats.change24hPct,
     narrative: p.narrative,
-    reasoning: p.reasoning,
-    llmApplied: p.llmApplied,
     calls,
   });
   prune(Date.parse(p.asOf) || Date.now());

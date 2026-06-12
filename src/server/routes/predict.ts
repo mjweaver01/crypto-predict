@@ -1,4 +1,4 @@
-import { cached, env, invalidate } from '../cache.ts';
+import { cached, env } from '../cache.ts';
 import {
   fetch24hChangePct,
   fetchCandleAt,
@@ -12,12 +12,7 @@ import {
   sigmaPerMinFor,
 } from '../model/forecast.ts';
 import { extractFeatures } from '../model/features.ts';
-import {
-  applyBias,
-  assist,
-  statsAssist,
-  type Assist,
-} from '../model/llmAssist.ts';
+import { buildNarrative } from '../model/narrative.ts';
 import { getLedger, recordPredictions } from '../model/ledger.ts';
 import { decide, ensureHydrated } from '../model/commitments.ts';
 import { decideBet, getPolicy, simulatePaper } from '../model/paper.ts';
@@ -46,20 +41,6 @@ import type {
 const TTL = Number(env('CACHE_TTL_PREDICT', '20'));
 
 /**
- * Cryptos whose reads use the LLM. Each enabled crypto costs one generation
- * per 5m window, so the default keeps the LLM on btc only — the others get the
- * transparent stats narrative. Set LLM_CRYPTOS=all to enable everywhere.
- */
-const LLM_CRYPTOS = new Set(
-  (env('LLM_CRYPTOS', 'btc') === 'all'
-    ? [...CRYPTO_IDS]
-    : env('LLM_CRYPTOS', 'btc')
-        .split(',')
-        .map(s => s.trim())
-  ).filter(s => (CRYPTO_IDS as readonly string[]).includes(s))
-);
-
-/**
  * The most recent prediction per crypto computed by the server-side commit
  * loop. The browser reads these snapshots instead of triggering a recompute,
  * so ALL data generation (committing calls, recording insights) happens on the
@@ -82,38 +63,6 @@ export function getLatestPrediction(
   const now = Date.now();
   const stale = latest.ranges.some(r => Date.parse(r.windowEnd) <= now);
   return stale ? null : latest;
-}
-
-/**
- * How long the regular tick waits for a fresh LLM read before serving the
- * previous one (stale-while-revalidate). Hosted APIs usually finish within
- * this; a slow local model keeps generating in the background and its read is
- * picked up on a later tick — the 20s commit cadence is never blocked.
- */
-const ASSIST_FRESH_WAIT_MS = 2_000;
-/** The manual refresh button is explicitly asking for a NEW read: wait for it. */
-const ASSIST_REFRESH_WAIT_MS = 120_000;
-
-/** Last completed LLM read per crypto, served while a newer one generates. */
-const lastAssistByCrypto = new Map<CryptoId, Assist>();
-
-const delay = (ms: number) =>
-  new Promise<null>(res => setTimeout(() => res(null), ms));
-
-/**
- * Force a fresh LLM read on demand (the dashboard's refresh button): drop the
- * current 5m window's cached assist plus the prediction snapshot, recompute,
- * and WAIT for the new read (unlike the tick path, which serves the previous
- * read while regenerating). Committed calls are unaffected — they were frozen.
- */
-export async function refreshRead(
-  crypto: CryptoId = 'btc'
-): Promise<Prediction> {
-  invalidate(`assist:${crypto}:${floorTo(Date.now(), MS['5m'])}`);
-  invalidate(`predict:ranges:${crypto}`);
-  const p = await computePrediction(crypto, ASSIST_REFRESH_WAIT_MS);
-  latestByCrypto.set(crypto, p);
-  return p;
 }
 
 /** Open price of the candle whose openTime is exactly `startMs`, if present. */
@@ -225,7 +174,7 @@ export async function predict(crypto: CryptoId = 'btc'): Promise<Prediction> {
   // recomputes with the new window's strike + committed call.
   const ttl = Math.max(1, Math.min(TTL, Math.ceil(msToNextBoundary() / 1000)));
   const p = await cached(`predict:ranges:${crypto}`, ttl, () =>
-    computePrediction(crypto, ASSIST_FRESH_WAIT_MS)
+    computePrediction(crypto)
   );
   latestByCrypto.set(crypto, p);
   return p;
@@ -244,10 +193,7 @@ export async function predictAll(): Promise<Prediction[]> {
     .map(r => r.value);
 }
 
-async function computePrediction(
-  crypto: CryptoId,
-  assistWaitMs: number
-): Promise<Prediction> {
+async function computePrediction(crypto: CryptoId): Promise<Prediction> {
   {
     const now = Date.now();
     const win = windowsAt(now);
@@ -371,9 +317,9 @@ async function computePrediction(
       })
     );
 
-    // Ground the LLM read in the model's own per-window calls (base P(up) before
-    // bias, the price to beat, and market-implied odds) so the narrative cites
-    // concrete levels instead of restating raw stats.
+    // Ground the narrative in the model's own per-window calls (base P(up),
+    // the price to beat, and market-implied odds) so it cites concrete levels
+    // instead of restating raw stats.
     const reads = order.map((id, i) => {
       const w = win[id];
       const remaining = Math.max(1 / 60, (w.end - now) / 60_000);
@@ -392,34 +338,11 @@ async function computePrediction(
         marketImpliedUp: markets[i]?.impliedUp,
       };
     });
-    // Refresh the LLM read once per 5m window — at the boundary where the 5m
-    // commitment is placed — instead of on every 20s tick. The cache is
-    // single-flight, so concurrent ticks join one generation rather than
-    // stampeding the provider. Stale-while-revalidate: if the fresh read isn't
-    // ready within `assistWaitMs`, serve the previous read and let the
-    // generation finish in the background — the commit cadence never blocks on
-    // a slow local model. Cryptos outside LLM_CRYPTOS get the stats narrative
-    // directly, so six assets don't mean six generations per window.
-    const assetLabel = `${CRYPTOS[crypto].ticker}/USDT`;
-    const assistCtx = { asset: assetLabel, price, reads };
-    let a: Assist;
-    if (!LLM_CRYPTOS.has(crypto)) {
-      a = statsAssist(model, assistCtx);
-    } else {
-      const assistPromise = cached(
-        `assist:${crypto}:${win['5m'].start}`,
-        360,
-        () => assist(model, assistCtx)
-      );
-      assistPromise.then(
-        v => lastAssistByCrypto.set(crypto, v),
-        () => {}
-      );
-      a =
-        (await Promise.race([assistPromise, delay(assistWaitMs)])) ??
-        lastAssistByCrypto.get(crypto) ??
-        statsAssist(model, assistCtx);
-    }
+    const narrative = buildNarrative(model, {
+      asset: `${CRYPTOS[crypto].ticker}/USDT`,
+      price,
+      reads,
+    });
 
     const ranges: RangePrediction[] = order.map((id, i) => {
       const w = win[id];
@@ -429,15 +352,16 @@ async function computePrediction(
       // back toward 50/50. Floor at 1 second to avoid a zero-vol singularity.
       const remaining = Math.max(1 / 60, (w.end - now) / 60_000);
       const endIso = new Date(w.end).toISOString();
-      // Raw model probability (statistical model + LLM bias), then the learned
-      // layer fit from our resolved track record. probUp is what we show and
-      // bet on; rawProbUp + features are preserved so the learner keeps
-      // training on a stationary signal rather than its own corrected output.
-      const rawProbUp = applyBias(
-        predictAbove(model, strike, remaining, endIso).probAbove,
-        a.bias,
-        remaining
-      );
+      // Raw statistical model probability, then the learned layer fit from
+      // our resolved track record. probUp is what we show and bet on;
+      // rawProbUp + features are preserved so the learner keeps training on a
+      // stationary signal rather than its own corrected output.
+      const rawProbUp = predictAbove(
+        model,
+        strike,
+        remaining,
+        endIso
+      ).probAbove;
       // Commit-time feature record for the learned layer (frozen onto the
       // committed call below, so training rows reflect decision-time inputs).
       const features = extractFeatures({
@@ -527,9 +451,7 @@ async function computePrediction(
       symbol,
       stats: model.stats,
       ranges,
-      narrative: a.narrative,
-      reasoning: a.reasoning,
-      llmApplied: a.llmApplied,
+      narrative,
       history,
       spot,
     };

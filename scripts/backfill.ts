@@ -10,10 +10,6 @@
  * so refreshCalibrators() picks it up. This matches the distribution the
  * calibrator is applied to: forward-looking calls, not pre-close snapshots.
  *
- * Note: the live committed call also includes a small LLM bias nudge, which we
- * cannot replay here — backfilled rows reflect the pure statistical model. The
- * nudge is small (±0.08 max) so the calibration signal is dominated by the model.
- *
  * The daily (1d) family is handled separately: its windows are noon-ET to
  * noon-ET, it settles on the Binance 1m close at noon, and it forecasts over a
  * ~24h horizon (long-run hourly stats). We reconstruct each daily call ~1 min

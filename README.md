@@ -27,12 +27,11 @@ A top-level dropdown switches the dashboard between any single asset and
 **All** — a holistic view with per-asset spot mini-cards and every asset's
 call/bet for the selected window family. Each asset gets its own calibrators,
 committed calls, and ledger rows (`?crypto=` filters every data endpoint);
-`LLM_CRYPTOS` limits which assets use the LLM read, and `TRADE_CRYPTOS`
-limits which may real-trade (both default btc).
+`TRADE_CRYPTOS` limits which may real-trade (default btc).
 
-An optional LLM-assist layer adds a short narrative and a small, clamped
-directional nudge. With no API key the app runs a fully transparent statistical
-model.
+The app is fully statistical — no LLM, no API keys. The dashboard's
+"model read" is a stats-grounded sentence generated from the same numbers the
+model bets on (`src/server/model/narrative.ts`).
 
 ## Quick start
 
@@ -61,7 +60,7 @@ closes the loop between prediction and outcome.
 ```
             ┌─────────────────────────────────────────────────────────────┐
             │                                                               │
-   market   │   1. Statistical model ──► 2. LLM nudge ──► raw probability   │
+   market   │   1. Statistical model ─────────────────► raw probability   │
    data ───►│            │                                       │          │
             │            │                          3. Calibration (learned)│
             │            │                                       │          │
@@ -96,12 +95,14 @@ Two accuracy-oriented refinements, both validated by the backtest:
 Short horizons (5m/15m) use per-minute stats from 1m candles; longer horizons use
 per-hour stats from 1h candles. See `src/server/model/forecast.ts`.
 
-### 2. LLM-assist (optional)
+### 2. Narrative (stats-grounded, no LLM)
 
-A configured model returns a terse directional read and a bias in `[-1, 1]`. The
-bias can shift the up-probability by at most **±8%**, decaying with horizon, and
-is clamped — it never overrides the statistical core. Falls back to a stats-only
-narrative with no key. See `src/server/model/llmAssist.ts`.
+The dashboard's one-line "model read" is generated from the model's own
+numbers — the lead window's call, spot vs strike, drift, and 24h change
+(`src/server/model/narrative.ts`). An earlier LLM-assist layer (small clamped
+probability nudge + generated narrative) was removed: its contribution was
+unmeasurable against the structural signal, and any consistent bias it added
+would have been absorbed by the calibration layer anyway.
 
 ### 3. Committed calls vs. the live read
 
@@ -209,8 +210,8 @@ so the learned layer trains on exactly what the live path would have seen. The
 daily family backfills ~180 days by default (it resolves once a day, so live
 accumulation alone would take months).
 
-> Backfilled rows reflect the pure statistical model (the small LLM nudge cannot
-> be replayed historically), so treat them as a strong prior, not ground truth.
+> Backfilled rows reconstruct the statistical model's calls with no look-ahead,
+> so treat them as a strong prior, not ground truth.
 
 ---
 
@@ -396,7 +397,7 @@ server (Bun)
   ├─ sources/polymarket.ts → live odds + historical outcome/price + exact strike
   ├─ model/forecast.ts     → lognormal model (EWMA + Garman-Klass vol, shrunk drift)
   ├─ model/features.ts     → commit-time features (momentum, vol regime, market, seasonality)
-  ├─ model/llmAssist.ts    → optional LLM read + horizon-scaled, clamped bias
+  ├─ model/narrative.ts    → stats-grounded one-line model read
   ├─ model/commitments.ts  → freezes one forward-looking call per window
   ├─ model/calibration.ts  → learned per-family layer: ridge logistic on raw prob + features
   ├─ model/ledger.ts       → committed calls vs real outcomes → data/ledger.json
@@ -415,7 +416,6 @@ server (Bun)
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `LLM_MODEL` + key | — | Enable the LLM-assist read (OpenAI / Anthropic / LMStudio) |
 | `MODEL_EWMA_LAMBDA` | `0.94` | EWMA decay for volatility/drift |
 | `MODEL_DRIFT_SHRINK` | `0` | Fraction of trailing drift retained (0 = driftless) |
 | `MODEL_DRIFT_CAP_SIGMAS` | `0.5` | Cap on drift as a multiple of diffusion |

@@ -3,7 +3,6 @@ import {
   msToNextBoundary,
   predict,
   predictAll,
-  refreshRead,
 } from './routes/predict.ts';
 import { isCryptoId, type CryptoId } from '../shared/cryptos.ts';
 import { getLedger, resolvePending, summarize } from './model/ledger.ts';
@@ -151,10 +150,6 @@ const server = Bun.serve({
           trades,
         };
         return json(body);
-      }
-      if (pathname === '/api/read/refresh' && req.method === 'POST') {
-        // Force a fresh LLM read now (normally refreshed once per 5m window).
-        return json(await refreshRead(crypto ?? 'btc'));
       }
     } catch (err) {
       console.error(err);
