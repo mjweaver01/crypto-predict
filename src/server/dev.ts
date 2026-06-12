@@ -5,7 +5,7 @@ const clients = new Set<ReadableStreamDefaultController<Uint8Array>>();
 
 export function notifyReload() {
   const chunk = encoder.encode('event: reload\ndata: {}\n\n');
-  for (const ctrl of clients) {
+  for (const ctrl of [...clients]) {
     try {
       ctrl.enqueue(chunk);
     } catch {
@@ -17,27 +17,37 @@ export function notifyReload() {
   }
 }
 
-export function makeSseResponse(): Response {
+export function makeSseResponse(req: Request): Response {
   let ctrl!: ReadableStreamDefaultController<Uint8Array>;
   let heartbeat: ReturnType<typeof setInterval>;
+  let cleanedUp = false;
+
+  const cleanup = () => {
+    if (cleanedUp) return;
+    cleanedUp = true;
+    clearInterval(heartbeat);
+    clients.delete(ctrl);
+  };
 
   const stream = new ReadableStream<Uint8Array>({
     start(c) {
       ctrl = c;
       c.enqueue(encoder.encode(': connected\n\n'));
       clients.add(c);
+      // Bun doesn't reliably call cancel() when the tab closes, so rely on the
+      // request's abort signal to drop dead clients and stop the heartbeat.
+      req.signal.addEventListener('abort', cleanup);
       // Keep the connection alive so Bun's idleTimeout doesn't kill it.
       heartbeat = setInterval(() => {
         try {
           c.enqueue(encoder.encode(': ping\n\n'));
         } catch {
-          clearInterval(heartbeat);
+          cleanup();
         }
       }, 5_000);
     },
     cancel() {
-      clearInterval(heartbeat);
-      clients.delete(ctrl);
+      cleanup();
     },
   });
   return new Response(stream, {

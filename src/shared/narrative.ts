@@ -1,12 +1,7 @@
 // Stats-grounded model read: a headline sentence plus a longer paragraph,
 // contrived from the same numbers the dashboard already shows.
 
-import type {
-  MarketStats,
-  RangeId,
-  RangePrediction,
-  Side,
-} from './types.ts';
+import type { MarketStats, RangeId, RangePrediction, Side } from './types.ts';
 
 /** One window's call, used to ground the narrative in concrete levels. */
 export interface WindowRead {
@@ -217,12 +212,8 @@ function paperClause(r: RangeDetail): string | null {
   const pd = r.paper;
   if (!pd) return null;
   if (pd.action === 'BET') {
-    const edgeText =
-      pd.edge !== undefined
-        ? ` (+${cents(pd.edge)} edge)`
-        : '';
-    const costText =
-      pd.cost !== undefined ? ` at ${cents(pd.cost)} cost` : '';
+    const edgeText = pd.edge !== undefined ? ` (+${cents(pd.edge)} edge)` : '';
+    const costText = pd.cost !== undefined ? ` at ${cents(pd.cost)} cost` : '';
     const stakeText =
       pd.stake !== undefined
         ? `, staking ${fmtUsd(pd.stake)} (${(pd.stakeFraction * 100).toFixed(1)}% bankroll)`
@@ -262,9 +253,7 @@ export function buildDescription(
   const vs = delta >= 0 ? 'above' : 'below';
   const deltaAbs = Math.abs(delta);
   const deltaStr =
-    deltaAbs >= 10
-      ? fmtUsd(deltaAbs)
-      : `$${deltaAbs.toFixed(2)}`;
+    deltaAbs >= 10 ? fmtUsd(deltaAbs) : `$${deltaAbs.toFixed(2)}`;
 
   const parts: string[] = [];
 

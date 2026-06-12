@@ -53,11 +53,8 @@ function normFill(f: DataApiFill): {
 } {
   const price = Number(f.price);
   const size = Number(f.size);
-  const txHash =
-    (f.transaction_hash ?? f.transactionHash ?? '').trim();
-  const orderId = (
-    f.taker_order_id ?? f.maker_order_id ?? f.id ?? ''
-  ).trim();
+  const txHash = (f.transaction_hash ?? f.transactionHash ?? '').trim();
+  const orderId = (f.taker_order_id ?? f.maker_order_id ?? f.id ?? '').trim();
   return { price, size, txHash, orderId };
 }
 
@@ -142,7 +139,11 @@ export async function verifyTrades(): Promise<{
       let patch: Partial<TradeRecord>;
 
       if (fetchErr) {
-        patch = { verifyStatus: 'error', verifyNote: fetchErr, verifiedAt: now };
+        patch = {
+          verifyStatus: 'error',
+          verifyNote: fetchErr,
+          verifiedAt: now,
+        };
       } else {
         // Re-use the already-fetched fills — pass them as a pre-fetched set.
         patch = await verifyFromFills(t, fills, now);
@@ -166,17 +167,16 @@ function verifyFromFills(
   fills: DataApiFill[],
   now: string
 ): Partial<TradeRecord> {
-  const matched =
-    t.orderId
-      ? fills.filter(f => {
-          const { orderId } = normFill(f);
-          return orderId === t.orderId;
-        })
-      : fills.filter(f => {
-          const placed = Date.parse(t.placedAt);
-          const ft = (f.timestamp ?? 0) * 1000;
-          return Math.abs(ft - placed) < 60_000;
-        });
+  const matched = t.orderId
+    ? fills.filter(f => {
+        const { orderId } = normFill(f);
+        return orderId === t.orderId;
+      })
+    : fills.filter(f => {
+        const placed = Date.parse(t.placedAt);
+        const ft = (f.timestamp ?? 0) * 1000;
+        return Math.abs(ft - placed) < 60_000;
+      });
 
   if (matched.length === 0) {
     return {

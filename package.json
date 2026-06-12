@@ -16,7 +16,7 @@
     "trade:check": "bun run scripts/trade-setup.ts --check",
     "trade:redeem": "bun run scripts/trade-redeem.ts",
     "trade:verify": "bun run scripts/trade-verify.ts",
-    "build:client": "bun build src/client/live.ts src/client/history.ts --outdir public/dist --target browser",
+    "build:client": "bun build src/client/live.tsx src/client/history.tsx --outdir public/dist --target browser",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src scripts",
     "lint:fix": "eslint src scripts --fix",
@@ -36,6 +36,8 @@
   },
   "dependencies": {
     "@polymarket/clob-client": "^5.8.1",
-    "ethers": "5.8.0"
+    "@preact/signals": "^2.9.1",
+    "ethers": "5.8.0",
+    "preact": "^10.29.2"
   }
 }

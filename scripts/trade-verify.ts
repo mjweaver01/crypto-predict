@@ -14,7 +14,9 @@ import { verifyTrades } from '../src/server/trade/verify.ts';
 
 const DRY = process.argv.includes('--dry');
 if (DRY) {
-  console.log('[verify] dry-run flag detected — not supported; run without --dry to patch records');
+  console.log(
+    '[verify] dry-run flag detected — not supported; run without --dry to patch records'
+  );
   process.exit(0);
 }
 

@@ -20,6 +20,10 @@ export const fmtUsd2 = (n: number) =>
 
 export const fmtPct = (p: number) => `${(p * 100).toFixed(1)}%`;
 
+/** Price formatter that adapts to sub-dollar assets (XRP/DOGE). */
+export const fmtPx = (n: number) =>
+  n >= 1000 ? fmtUsd(n) : n >= 1 ? fmtUsd2(n) : `$${n.toFixed(4)}`;
+
 export const fmtClock = (iso: string) =>
   new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 

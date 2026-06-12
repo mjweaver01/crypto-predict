@@ -26,7 +26,7 @@ const IS_DEV = process.env.NODE_ENV !== 'production';
 // Bundle the client on startup so there is no separate build step in dev.
 async function buildClient() {
   const result = await Bun.build({
-    entrypoints: ['src/client/live.ts', 'src/client/history.ts'],
+    entrypoints: ['src/client/live.tsx', 'src/client/history.tsx'],
     outdir: 'public/dist',
     target: 'browser',
     minify: !IS_DEV,
@@ -40,7 +40,7 @@ async function buildClient() {
 await buildClient();
 
 // Dev live-reload setup.
-let makeSseResponse: (() => Response) | null = null;
+let makeSseResponse: ((req: Request) => Response) | null = null;
 if (IS_DEV) {
   const dev = await import('./dev.ts');
   makeSseResponse = dev.makeSseResponse;
@@ -98,7 +98,7 @@ const server = Bun.serve({
 
     // Dev live-reload SSE stream.
     if (IS_DEV && pathname === '/api/__reload' && makeSseResponse) {
-      return makeSseResponse();
+      return makeSseResponse(req);
     }
 
     // Live spot price stream (SSE fan-out from one Binance websocket).
@@ -126,9 +126,7 @@ const server = Bun.serve({
         // Date-range filter applied to windowStart.
         let ranged = allEntries;
         if (dateFrom !== undefined)
-          ranged = ranged.filter(
-            e => Date.parse(e.windowStart) >= dateFrom
-          );
+          ranged = ranged.filter(e => Date.parse(e.windowStart) >= dateFrom);
         if (dateTo !== undefined)
           ranged = ranged.filter(e => Date.parse(e.windowStart) <= dateTo);
 
@@ -139,7 +137,9 @@ const server = Bun.serve({
         // Sort newest first so page 1 is always the most recent data.
         ranged = ranged
           .slice()
-          .sort((a, b) => Date.parse(b.windowStart) - Date.parse(a.windowStart));
+          .sort(
+            (a, b) => Date.parse(b.windowStart) - Date.parse(a.windowStart)
+          );
 
         const pageSize = Math.min(
           Math.max(1, Number(searchParams.get('pageSize') || 100)),
