@@ -539,12 +539,10 @@ header {
   border-radius: 12px;
   transition:
     border-color 0.18s ease,
-    background 0.18s ease,
-    transform 0.18s ease;
+    background 0.18s ease;
 }
 .tab:hover {
   border-color: rgba(247, 147, 26, 0.35);
-  transform: translateY(-1px);
 }
 .tab.active {
   background:
@@ -1539,11 +1537,27 @@ header {
   flex-shrink: 0;
   cursor: default;
 }
-.lt-badge-match   { background: color-mix(in srgb, var(--up) 20%, transparent);   color: var(--up); }
-.lt-badge-mismatch{ background: color-mix(in srgb, var(--down) 20%, transparent); color: var(--down); }
-.lt-badge-notfound{ background: color-mix(in srgb, var(--text-muted) 20%, transparent); color: var(--text-muted); }
-.lt-badge-error   { background: color-mix(in srgb, var(--down) 15%, transparent); color: var(--down); }
-.lt-badge-none    { background: var(--bg); color: var(--text-dim); border: 1px solid var(--border); }
+.lt-badge-match {
+  background: color-mix(in srgb, var(--up) 20%, transparent);
+  color: var(--up);
+}
+.lt-badge-mismatch {
+  background: color-mix(in srgb, var(--down) 20%, transparent);
+  color: var(--down);
+}
+.lt-badge-notfound {
+  background: color-mix(in srgb, var(--text-muted) 20%, transparent);
+  color: var(--text-muted);
+}
+.lt-badge-error {
+  background: color-mix(in srgb, var(--down) 15%, transparent);
+  color: var(--down);
+}
+.lt-badge-none {
+  background: var(--bg);
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+}
 /* Status pill */
 .lt-status {
   padding: 1px 6px;
@@ -1553,10 +1567,22 @@ header {
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
-.lt-status-filled  { background: color-mix(in srgb, var(--up) 15%, transparent);   color: var(--up); }
-.lt-status-partial { background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); }
-.lt-status-dryrun  { background: color-mix(in srgb, var(--text-muted) 15%, transparent); color: var(--text-muted); }
-.lt-status-other   { background: color-mix(in srgb, var(--down) 15%, transparent); color: var(--down); }
+.lt-status-filled {
+  background: color-mix(in srgb, var(--up) 15%, transparent);
+  color: var(--up);
+}
+.lt-status-partial {
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--accent);
+}
+.lt-status-dryrun {
+  background: color-mix(in srgb, var(--text-muted) 15%, transparent);
+  color: var(--text-muted);
+}
+.lt-status-other {
+  background: color-mix(in srgb, var(--down) 15%, transparent);
+  color: var(--down);
+}
 /* On-chain tx links */
 .lt-tx {
   font-size: 11px;
@@ -1564,7 +1590,9 @@ header {
   text-decoration: none;
   white-space: nowrap;
 }
-.lt-tx:hover { text-decoration: underline; }
+.lt-tx:hover {
+  text-decoration: underline;
+}
 /* Verified detail text */
 .lt-verified-detail {
   width: 100%;
