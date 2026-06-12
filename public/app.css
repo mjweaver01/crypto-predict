@@ -51,6 +51,18 @@ header {
   margin-bottom: 14px;
 }
 
+.brand-group {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.brand-icon {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+}
+
 .brand {
   font-size: 12px;
   font-weight: 700;

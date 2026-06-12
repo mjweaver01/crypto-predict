@@ -19,7 +19,10 @@ export function Header({ page, updated, liveTrading, children }: Props) {
   return (
     <header>
       <div class="header-left">
-        <div class="brand">Crypto Predict</div>
+        <div class="brand-group">
+          <img src="/favicon.svg" alt="Crypto Predict logo" class="brand-icon" />
+          <div class="brand">Crypto Predict</div>
+        </div>
         <CryptoSelect />
         <nav class="nav">
           <a href="/" class={page === 'live' ? 'active' : ''}>
