@@ -546,6 +546,15 @@ header {
   align-items: center;
   gap: 8px;
 }
+.tab .tab-badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.tab .tab-badges .paper-chip {
+  margin-right: 0;
+  vertical-align: baseline;
+}
 .tab .tab-label {
   font-size: 10px;
   font-weight: 700;

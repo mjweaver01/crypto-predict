@@ -8,6 +8,11 @@ import type {
 } from '../shared/types.ts';
 import { CRYPTOS, CRYPTO_IDS, type CryptoId } from '../shared/cryptos.ts';
 import {
+  buildDescription,
+  buildNarrative,
+  toRangeDetail,
+} from '../shared/narrative.ts';
+import {
   $,
   COLORS,
   fmtClock,
@@ -227,10 +232,17 @@ function renderTabs(p: Prediction) {
       // otherwise the live lean (hollow) so every family shows its yes/no.
       const side = r.committed?.side ?? (r.probUp >= 0.5 ? 'UP' : 'DOWN');
       const chipCls = `tab-side ${side === 'UP' ? 'up' : 'down'}${r.committed ? '' : ' tentative'}`;
+      const betPill =
+        r.paper?.action === 'BET'
+          ? `<span class="paper-chip bet">BET</span>`
+          : '';
       return `<button class="tab${active}" role="tab" data-id="${r.id}">
         <span class="tab-top">
           <span class="tab-label">${r.label}</span>
-          <span class="${chipCls}">${side}</span>
+          <span class="tab-badges">
+            <span class="${chipCls}">${side}</span>
+            ${betPill}
+          </span>
         </span>
         <span class="tab-timer" data-end="${r.windowEnd}">—</span>
         <span class="tab-sub">${sub}</span>
@@ -243,6 +255,7 @@ function renderTabs(p: Prediction) {
       savePref('tab', selected);
       if (latest) {
         renderTabs(latest);
+        renderNarrative(latest);
         renderDetail(latest);
       }
     });
@@ -478,6 +491,69 @@ function renderDetail(p: Prediction) {
     `${fmtUsd(r.forecast.low)} – ${fmtUsd(r.forecast.high)}`;
 
   renderMarketBlock(r);
+}
+
+/** Model read headline + description for the active prediction tab. */
+function renderNarrative(p: Prediction) {
+  const range =
+    (selected && p.ranges.find(r => r.id === selected)) ?? p.ranges[0];
+  if (!range) {
+    $('narrative').textContent = p.narrative;
+    renderDescription('');
+    return;
+  }
+  const asset = `${CRYPTOS[p.crypto].ticker}/USDT`;
+  const ctx = { asset, price: p.stats.price };
+  $('narrative').textContent = buildNarrative(p.stats, {
+    ...ctx,
+    reads: [
+      {
+        label: range.label,
+        horizonMin: range.horizonMinutes,
+        strike: range.strike,
+        probUp: range.probUp,
+        marketImpliedUp: range.market?.impliedUp,
+      },
+    ],
+  });
+  renderDescription(
+    buildDescription(p.stats, { ...ctx, range: toRangeDetail(range) })
+  );
+}
+
+// ── Description paragraph, clamped behind a "read more" toggle ───────────
+let reasoningExpanded = false;
+let lastDescription = '';
+
+function renderDescription(text: string) {
+  const el = $('reasoning');
+  const toggle = $<HTMLButtonElement>('reasoning-toggle');
+  if (!text) {
+    el.textContent = '';
+    toggle.style.display = 'none';
+    lastDescription = '';
+    return;
+  }
+  if (text !== lastDescription) {
+    lastDescription = text;
+    reasoningExpanded = false;
+  }
+  el.textContent = text;
+  el.classList.toggle('clamped', !reasoningExpanded);
+  const overflows = el.scrollHeight > el.clientHeight + 1;
+  el.classList.toggle('truncated', !reasoningExpanded && overflows);
+  toggle.style.display = reasoningExpanded || overflows ? '' : 'none';
+  toggle.textContent = reasoningExpanded ? 'Show less' : 'Read more';
+}
+
+function wireReasoningToggle() {
+  $<HTMLButtonElement>('reasoning-toggle').addEventListener('click', () => {
+    reasoningExpanded = !reasoningExpanded;
+    renderDescription(lastDescription);
+  });
+  window.addEventListener('resize', () => {
+    if (lastDescription) renderDescription(lastDescription);
+  });
 }
 
 // ── Spot price range toggle (LIVE, 1H … 1W) ──────────────────────────────
@@ -783,11 +859,9 @@ function render(p: Prediction) {
   renderSpotRanges();
   renderHero();
 
-  // Stats-grounded one-line narrative
-  $('narrative').textContent = p.narrative;
-
-  // Tabs + selected range detail
+  // Tabs + selected range detail (narrative follows the active tab)
   renderTabs(p);
+  renderNarrative(p);
   renderDetail(p);
 
   $('updated').textContent = new Date(p.asOf).toLocaleTimeString();
@@ -901,6 +975,7 @@ function connectPriceStream() {
 }
 
 wireCryptoSelect();
+wireReasoningToggle();
 applyViewMode();
 refresh();
 setInterval(refresh, 5_000);
