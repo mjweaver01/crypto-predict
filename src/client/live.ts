@@ -376,12 +376,12 @@ function renderMarketBlock(r: RangePrediction) {
     if (pd.action === 'BET') {
       const sized =
         pd.stake !== undefined
-          ? `bet ${fmtUsd2(pd.stake)} to win ${fmtUsd2((pd.stake * (1 - pd.cost!)) / pd.cost!)} ` +
-            `(${(pd.stakeFraction * 100).toFixed(1)}% of bankroll)`
-          : `stake ${(pd.stakeFraction * 100).toFixed(1)}% of bankroll`;
+          ? `bet ${fmtUsd2(pd.stake)} to win ${fmtUsd2((pd.stake * (1 - pd.cost!)) / pd.cost!)}`
+          : `bet ${(pd.stakeFraction * 100).toFixed(1)}% of bankroll`;
       paperEl.innerHTML =
         `<span class="paper-chip bet">PAPER BET</span>` +
-        `${pd.side} at ${cents(pd.cost!)} · edge +${cents(pd.edge!)} · ${sized}`;
+        `${sized} · ${pd.side} at ${cents(pd.cost!)} · edge +${cents(pd.edge!)} · ` +
+        `${(pd.stakeFraction * 100).toFixed(1)}% bankroll`;
     } else {
       const why =
         pd.reason === 'no-book'
