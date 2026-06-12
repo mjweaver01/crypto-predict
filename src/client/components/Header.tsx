@@ -3,8 +3,7 @@
 // link is active and which "updated" signal to show.
 
 import type { ComponentChildren } from 'preact';
-import { CRYPTOS, CRYPTO_IDS } from '../../shared/cryptos.ts';
-import { selectedCrypto, type CryptoChoice } from '../crypto.ts';
+import { CryptoSelect } from './CryptoSelect.tsx';
 
 interface Props {
   page: 'live' | 'history';
@@ -21,21 +20,7 @@ export function Header({ page, updated, liveTrading, children }: Props) {
     <header>
       <div class="header-left">
         <div class="brand">Crypto Predict</div>
-        <select
-          class="crypto-select"
-          value={selectedCrypto.value}
-          onChange={e => {
-            selectedCrypto.value = (e.target as HTMLSelectElement)
-              .value as CryptoChoice;
-          }}
-        >
-          <option value="all">All cryptos</option>
-          {CRYPTO_IDS.map(id => (
-            <option value={id}>
-              {CRYPTOS[id].label} ({CRYPTOS[id].ticker})
-            </option>
-          ))}
-        </select>
+        <CryptoSelect />
         <nav class="nav">
           <a href="/" class={page === 'live' ? 'active' : ''}>
             Live
