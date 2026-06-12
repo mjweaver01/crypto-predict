@@ -81,7 +81,7 @@ export function AllPanel() {
               const meta = CRYPTOS[p.crypto];
               const c = r.committed;
               const side = c?.side ?? (r.probUp >= 0.5 ? 'UP' : 'DOWN');
-              const vs = p.stats.price >= r.strike ? 'above' : 'below';
+              const vs = p.stats.price >= r.strike ? '↑' : '↓';
               return (
                 <tr
                   key={p.crypto}
@@ -105,7 +105,7 @@ export function AllPanel() {
                   <td>{r.market ? fmtPct(r.market.impliedUp) : '—'}</td>
                   <td>
                     {fmtPx(r.strike)}{' '}
-                    <span style={{ color: 'var(--text-dim)' }}>({vs})</span>
+                    <span style={{ color: 'var(--text-dim)' }}>{vs}</span>
                   </td>
                   <td>
                     <Verdict r={r} />

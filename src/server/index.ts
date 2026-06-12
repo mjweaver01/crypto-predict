@@ -130,31 +130,18 @@ const server = Bun.serve({
         if (dateTo !== undefined)
           ranged = ranged.filter(e => Date.parse(e.windowStart) <= dateTo);
 
-        // Summary over the date-filtered set (pre-pagination) — drives the
-        // hit-rate headline stats so they reflect the selected window.
+        // Summary over the date-filtered set — drives the hit-rate headline
+        // stats so they reflect the selected window.
         const filteredSummary = summarize(ranged);
 
-        // Sort newest first so page 1 is always the most recent data.
-        ranged = ranged
+        // Newest first; the client virtualizes the full list (no pagination).
+        const entries = ranged
           .slice()
           .sort(
             (a, b) => Date.parse(b.windowStart) - Date.parse(a.windowStart)
           );
 
-        const pageSize = Math.min(
-          Math.max(1, Number(searchParams.get('pageSize') || 100)),
-          500
-        );
-        const page = Math.max(1, Number(searchParams.get('page') || 1));
-        const total = ranged.length;
-        const entries = ranged.slice((page - 1) * pageSize, page * pageSize);
-
-        return json({
-          summary,
-          filteredSummary,
-          entries,
-          pagination: { page, pageSize, total },
-        });
+        return json({ summary, filteredSummary, entries });
       }
       if (pathname === '/api/insights') {
         return json({ entries: getInsights(crypto) });

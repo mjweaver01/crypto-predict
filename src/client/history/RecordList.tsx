@@ -3,50 +3,8 @@
 
 import type { LedgerEntry } from '../../shared/types.ts';
 import { fmtDateTime, fmtPct, fmtUsd2 } from '../format.ts';
-import {
-  goToPage,
-  ledgerEntries,
-  paperById,
-  recordFilter,
-  recordPage,
-  recordPagination,
-} from './state.ts';
-
-function Pagination() {
-  const p = recordPagination.value;
-  if (!p || p.total === 0) return null;
-  const totalPages = Math.ceil(p.total / p.pageSize);
-  if (totalPages <= 1) {
-    return (
-      <div class="rec-pagination">
-        <span class="rec-page-info">{p.total} entries</span>
-      </div>
-    );
-  }
-  const from = (p.page - 1) * p.pageSize + 1;
-  const to = Math.min(p.page * p.pageSize, p.total);
-  return (
-    <div class="rec-pagination">
-      <button
-        class="rec-page-btn"
-        disabled={p.page <= 1}
-        onClick={() => goToPage(recordPage.value - 1)}
-      >
-        ← Prev
-      </button>
-      <span class="rec-page-info">
-        {from}–{to} of {p.total}
-      </span>
-      <button
-        class="rec-page-btn"
-        disabled={p.page >= totalPages}
-        onClick={() => goToPage(recordPage.value + 1)}
-      >
-        Next →
-      </button>
-    </div>
-  );
-}
+import { VirtualList } from '../components/VirtualList.tsx';
+import { ledgerEntries, paperById, recordFilter } from './state.ts';
 
 function RecordRow({ e }: { e: LedgerEntry }) {
   const sideCls = e.side === 'UP' ? 'up' : 'down';
@@ -125,18 +83,19 @@ export function RecordList() {
       <div class="card-title record-list-title">
         <span>Call history</span>
       </div>
-      <div class="record-list">
-        {filtered.map(e => (
-          <RecordRow key={e.id} e={e} />
-        ))}
-      </div>
-      <div
-        class="record-empty"
-        style={{ display: filtered.length ? 'none' : 'block' }}
-      >
-        {all.length ? 'No calls for this range yet.' : 'No resolved calls yet.'}
-      </div>
-      <Pagination />
+      {filtered.length > 0 ? (
+        <VirtualList
+          class="record-list"
+          items={filtered}
+          estimate={64}
+          itemKey={e => e.id}
+          renderItem={e => <RecordRow e={e} />}
+        />
+      ) : (
+        <div class="record-empty" style={{ display: 'block' }}>
+          {all.length ? 'No calls for this range yet.' : 'No resolved calls yet.'}
+        </div>
+      )}
     </div>
   );
 }

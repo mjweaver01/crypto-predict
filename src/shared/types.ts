@@ -95,14 +95,6 @@ export interface LedgerEntry {
   resolvedAt?: string;
 }
 
-/** Pagination metadata returned with paginated list responses. */
-export interface LedgerPagination {
-  page: number;
-  pageSize: number;
-  /** Total entries in the (date-range-filtered) result set, before paging. */
-  total: number;
-}
-
 /** Aggregate stats over a set of resolved ledger entries. */
 export interface LedgerSummary {
   total: number;

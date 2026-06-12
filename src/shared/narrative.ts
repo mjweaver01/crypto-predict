@@ -147,7 +147,7 @@ export function buildNarrative(
   const change = `${change24hPct >= 0 ? '+' : ''}${change24hPct.toFixed(2)}% on 24h`;
   const lead = ctx?.reads[0];
   if (lead && ctx) {
-    const vs = ctx.price >= lead.strike ? 'above' : 'below';
+    const vs = ctx.price >= lead.strike ? '↑' : '↓';
     const strike = lead.strike.toLocaleString('en-US', {
       maximumFractionDigits: lead.strike >= 10 ? 0 : 4,
     });
@@ -250,7 +250,7 @@ export function buildDescription(
   const { range: r, price } = ctx;
   const ticker = ctx.asset?.split('/')[0] ?? 'BTC';
   const delta = price - r.strike;
-  const vs = delta >= 0 ? 'above' : 'below';
+  const vs = delta >= 0 ? '↑' : '↓';
   const deltaAbs = Math.abs(delta);
   const deltaStr =
     deltaAbs >= 10 ? fmtUsd(deltaAbs) : `$${deltaAbs.toFixed(2)}`;

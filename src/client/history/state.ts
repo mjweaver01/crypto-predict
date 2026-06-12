@@ -7,7 +7,6 @@ import { computed, effect, signal } from '@preact/signals';
 import type {
   InsightSnapshot,
   LedgerEntry,
-  LedgerPagination,
   LedgerSummary,
   MetricsResponse,
   PaperBet,
@@ -56,11 +55,6 @@ export const recordFilter = signal<RecordFilter>(
 );
 effect(() => savePref('filter', recordFilter.value));
 
-// ── Pagination ─────────────────────────────────────────────────────────────
-const PAGE_SIZE = 100;
-export const recordPage = signal(1);
-export const recordPagination = signal<LedgerPagination | null>(null);
-
 // ── Server data ──────────────────────────────────────────────────────────
 export const insights = signal<InsightSnapshot[]>([]);
 export const ledgerEntries = signal<LedgerEntry[]>([]);
@@ -86,23 +80,13 @@ export const paperById = computed(() => {
 const cryptoQS = () =>
   selectedCrypto.value === 'all' ? '' : `?crypto=${selectedCrypto.value}`;
 
-/** crypto + date range (metrics, paper). */
+/** crypto + date range (ledger, metrics, paper). */
 const dateQS = (): string => {
   const parts: string[] = [];
   if (selectedCrypto.value !== 'all') parts.push(`crypto=${selectedCrypto.value}`);
   const from = dateFrom();
   if (from) parts.push(`from=${encodeURIComponent(from)}`);
   return parts.length ? `?${parts.join('&')}` : '';
-};
-
-/** crypto + date range + pagination (ledger). */
-const ledgerQS = (): string => {
-  const parts: string[] = [];
-  if (selectedCrypto.value !== 'all') parts.push(`crypto=${selectedCrypto.value}`);
-  const from = dateFrom();
-  if (from) parts.push(`from=${encodeURIComponent(from)}`);
-  parts.push(`page=${recordPage.value}`, `pageSize=${PAGE_SIZE}`);
-  return `?${parts.join('&')}`;
 };
 
 async function refreshHistory() {
@@ -118,18 +102,16 @@ async function refreshHistory() {
 
 export async function refreshRecord() {
   try {
-    const res = await fetch(`/api/ledger${ledgerQS()}`);
+    const res = await fetch(`/api/ledger${dateQS()}`);
     if (!res.ok) return;
     const data = (await res.json()) as {
       summary: LedgerSummary;
       filteredSummary: LedgerSummary;
       entries: LedgerEntry[];
-      pagination: LedgerPagination;
     };
     ledgerEntries.value = data.entries;
     ledgerSummary.value = data.summary;
     ledgerFilteredSummary.value = data.filteredSummary;
-    recordPagination.value = data.pagination;
     updatedAt.value = new Date().toLocaleTimeString();
     loading.value = false;
   } catch {
@@ -179,17 +161,6 @@ export async function verifyFills(): Promise<Record<string, number>> {
   return data.counts;
 }
 
-/** Jump to a record page (clamped) and refetch just the ledger. */
-export function goToPage(page: number) {
-  const p = recordPagination.value;
-  const totalPages = p ? Math.ceil(p.total / p.pageSize) : 1;
-  const next = Math.min(Math.max(1, page), Math.max(1, totalPages));
-  if (next === recordPage.value) return;
-  recordPage.value = next;
-  loading.value = true;
-  void refreshRecord();
-}
-
 const refreshAll = () => {
   void refreshHistory();
   void refreshRecord();
@@ -199,8 +170,7 @@ const refreshAll = () => {
 };
 
 export function startHistory() {
-  // Re-fetch everything whenever the asset OR the date window changes (both
-  // reset pagination to page 1).
+  // Re-fetch everything whenever the asset OR the date window changes.
   let prevCrypto = selectedCrypto.value;
   let prevPreset = datePreset.value;
   effect(() => {
@@ -209,21 +179,9 @@ export function startHistory() {
     if (c !== prevCrypto || dp !== prevPreset) {
       prevCrypto = c;
       prevPreset = dp;
-      recordPage.value = 1;
       loading.value = true;
     }
     refreshAll();
-  });
-
-  // Changing the family filter resets to page 1; the data is already in hand
-  // (metrics covers all families, the list filters client-side), so no refetch.
-  let prevFilter = recordFilter.value;
-  effect(() => {
-    const f = recordFilter.value;
-    if (f !== prevFilter) {
-      prevFilter = f;
-      recordPage.value = 1;
-    }
   });
 
   setInterval(() => void refreshHistory(), 5_000);
