@@ -4,7 +4,7 @@
 
 import { env } from '../cache.ts';
 import { fetchCandleAt } from '../sources/binance.ts';
-import { fetchMarketOutcome, marketSlug } from '../sources/polymarket.ts';
+import { fetchOutcome, marketIdFor } from '../sources/market.ts';
 import { CRYPTOS, type CryptoId } from '../../shared/cryptos.ts';
 import type {
   LedgerEntry,
@@ -44,14 +44,14 @@ async function save(store: Store): Promise<void> {
   await Bun.write(PATH, JSON.stringify(store, null, 2));
 }
 
-/** Polymarket slug for a window (daily is keyed by its resolution noon). */
+/** Market id for a window on the active platform, when it offers one. */
 function slugForRange(
   crypto: CryptoId,
   id: RangeId,
   startMs: number,
   endMs: number
-): string {
-  return marketSlug(crypto, id, id === '1d' ? endMs : startMs);
+): string | undefined {
+  return marketIdFor(crypto, id, startMs, endMs) ?? undefined;
 }
 
 /**
@@ -116,16 +116,17 @@ export async function recordPredictions(p: Prediction): Promise<void> {
 async function resolveOne(
   e: LedgerEntry
 ): Promise<Partial<LedgerEntry> | null> {
-  // Prefer the real market resolution (Chainlink for 5m/15m/4h, Binance for
-  // 1h/daily) so the record reflects exactly what the market settled.
+  // Prefer the real market resolution so the record reflects exactly what the
+  // market settled. Routed by the slug's own shape, so rows recorded under
+  // either platform keep resolving after a TRADING_PLATFORM switch.
   if (e.slug) {
-    const o = await fetchMarketOutcome(e.slug).catch(() => null);
+    const o = await fetchOutcome(e.slug).catch(() => null);
     if (o) {
       const outcome: Side = o.outcomeUp ? 'UP' : 'DOWN';
       return {
         outcome,
         correct: outcome === e.side,
-        resolvedBy: 'polymarket',
+        resolvedBy: o.platform,
         resolvedAt: new Date().toISOString(),
       };
     }

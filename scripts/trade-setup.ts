@@ -31,6 +31,17 @@ import {
   getTradeConfig,
 } from '../src/server/trade/config.ts';
 
+import { getPlatform } from '../src/server/sources/market.ts';
+
+if (getPlatform() === 'kalshi') {
+  console.error(
+    'This script is Polymarket-only. TRADING_PLATFORM=kalshi needs no ' +
+      'on-chain setup or redemption — fund your Kalshi account and set ' +
+      'KALSHI_API_KEY_ID + KALSHI_PRIVATE_KEY instead.'
+  );
+  process.exit(1);
+}
+
 const ERC20_ABI = [
   'function balanceOf(address) view returns (uint256)',
   'function allowance(address owner, address spender) view returns (uint256)',

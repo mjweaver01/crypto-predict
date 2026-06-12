@@ -25,10 +25,11 @@ import { recordInsight } from '../model/insights.ts';
 import { executeTrades } from '../trade/executor.ts';
 import { dailyWindowAt } from '../model/windows.ts';
 import {
-  fetchMarket,
-  fetchPolymarketStrike,
-  marketSlug,
-} from '../sources/polymarket.ts';
+  fetchMarketQuote,
+  fetchPlatformStrike,
+  marketIdFor,
+  resolutionSourceFor,
+} from '../sources/market.ts';
 import { CRYPTOS, CRYPTO_IDS, type CryptoId } from '../../shared/cryptos.ts';
 import type {
   Prediction,
@@ -151,15 +152,15 @@ function windowsAt(now: number) {
   } as Record<RangeId, { start: number; end: number }>;
 }
 
-const META: Record<
-  RangeId,
-  { label: string; resolutionSource: 'chainlink' | 'binance' }
-> = {
-  '5m': { label: '5 min', resolutionSource: 'chainlink' },
-  '15m': { label: '15 min', resolutionSource: 'chainlink' },
-  '1h': { label: 'Hourly', resolutionSource: 'binance' },
-  '4h': { label: '4 hour', resolutionSource: 'chainlink' },
-  '1d': { label: 'Daily', resolutionSource: 'binance' },
+// Labels are platform-independent; what each family's market settles against
+// is not (Polymarket: Chainlink for 5m/15m/4h; Kalshi: CF Benchmarks for its
+// 15m family) — resolutionSourceFor() answers per the active platform.
+const LABELS: Record<RangeId, string> = {
+  '5m': '5 min',
+  '15m': '15 min',
+  '1h': 'Hourly',
+  '4h': '4 hour',
+  '1d': 'Daily',
 };
 
 /** Ms until the next 5m boundary — the lattice every market window closes on
@@ -227,9 +228,9 @@ async function computePrediction(crypto: CryptoId): Promise<Prediction> {
       open1h,
       open4h,
       openDay,
-      pmStrike5m,
-      pmStrike15m,
-      pmStrike4h,
+      platformStrike5m,
+      platformStrike15m,
+      platformStrike4h,
     ] = await Promise.all([
       fetchPrice(symbol),
       fetch24hChangePct(symbol),
@@ -241,17 +242,18 @@ async function computePrediction(crypto: CryptoId): Promise<Prediction> {
       fetchCandleAt('1m', win['1h'].start, symbol),
       fetchCandleAt('1m', win['4h'].start, symbol),
       fetchCandleAt('1m', win['1d'].start, symbol),
-      // Polymarket's exact Chainlink-derived "price to beat" for 5m/15m/4h.
-      fetchPolymarketStrike('5m', win['5m'].start, win['5m'].end, crypto).catch(
+      // The platform's exact "price to beat" where it exposes one (Polymarket:
+      // Chainlink-derived 5m/15m/4h; Kalshi: the 15m floor_strike).
+      fetchPlatformStrike('5m', win['5m'].start, win['5m'].end, crypto).catch(
         () => undefined
       ),
-      fetchPolymarketStrike(
+      fetchPlatformStrike(
         '15m',
         win['15m'].start,
         win['15m'].end,
         crypto
       ).catch(() => undefined),
-      fetchPolymarketStrike('4h', win['4h'].start, win['4h'].end, crypto).catch(
+      fetchPlatformStrike('4h', win['4h'].start, win['4h'].end, crypto).catch(
         () => undefined
       ),
     ]);
@@ -263,19 +265,20 @@ async function computePrediction(crypto: CryptoId): Promise<Prediction> {
       hourCandles,
     });
 
-    // Strike (price to beat) per family, anchored to how each market settles:
-    //  5m/15m/4h → Chainlink BTC/USD. We read Polymarket's EXACT openPrice from
-    //           their crypto-price API; only if it's unavailable do we fall
-    //           back to the Binance 1m-open proxy (which carries a basis error).
-    //  1h     → Binance BTC/USDT 1h candle OPEN = exact (1m open at boundary).
-    //  1d     → Binance BTC/USDT 1m candle CLOSE at the prior noon ET = exact.
+    // Strike (price to beat) per family, anchored to how each market settles.
+    // Where the platform exposes its EXACT settlement open (Polymarket's
+    // crypto-price API / Kalshi's floor_strike) we use that; only if it's
+    // unavailable do we fall back to the Binance 1m-open proxy (which carries
+    // a basis error vs Chainlink / CF Benchmarks). Families that settle on
+    // Binance itself (1h/1d on Polymarket; everything without a Kalshi
+    // market) get the exact boundary candle directly.
     const strikeByRange: Record<RangeId, number> = {
       '5m':
-        pmStrike5m ??
+        platformStrike5m ??
         open5m?.open ??
         strikeAt(win['5m'].start, fiveMinCandles, minuteCandles, price),
       '15m':
-        pmStrike15m ??
+        platformStrike15m ??
         open15m?.open ??
         strikeAt(win['15m'].start, fiveMinCandles, minuteCandles, price),
       '1h':
@@ -284,7 +287,7 @@ async function computePrediction(crypto: CryptoId): Promise<Prediction> {
         lastCloseBefore(hourCandles, win['1h'].start) ??
         price,
       '4h':
-        pmStrike4h ??
+        platformStrike4h ??
         open4h?.open ??
         candleOpenAt(hourCandles, win['4h'].start) ??
         lastCloseBefore(hourCandles, win['4h'].start) ??
@@ -296,24 +299,30 @@ async function computePrediction(crypto: CryptoId): Promise<Prediction> {
         price,
     };
 
-    // Chainlink-family strikes are only a "proxy" when we couldn't get
-    // Polymarket's exact openPrice and fell back to the Binance boundary
-    // candle. 1h/1d are always exact Binance settlement prices.
-    const strikeIsProxyByRange: Record<RangeId, boolean> = {
-      '5m': pmStrike5m === undefined,
-      '15m': pmStrike15m === undefined,
-      '1h': false,
-      '4h': pmStrike4h === undefined,
-      '1d': false,
+    // A strike is only a "proxy" when the family settles off-Binance (per the
+    // active platform) and the platform's exact open wasn't available, so we
+    // fell back to the Binance boundary candle.
+    const platformStrikes: Partial<Record<RangeId, number | undefined>> = {
+      '5m': platformStrike5m,
+      '15m': platformStrike15m,
+      '4h': platformStrike4h,
     };
+    const strikeIsProxyByRange = Object.fromEntries(
+      (['5m', '15m', '1h', '4h', '1d'] as RangeId[]).map(id => [
+        id,
+        resolutionSourceFor(id) !== 'binance' &&
+          platformStrikes[id] === undefined,
+      ])
+    ) as Record<RangeId, boolean>;
 
     const order: RangeId[] = ['5m', '15m', '1h', '4h', '1d'];
 
     const markets = await Promise.all(
       order.map(id => {
         const w = win[id];
-        const slug = marketSlug(crypto, id, id === '1d' ? w.end : w.start);
-        return fetchMarket(slug, w.start, w.end).catch(() => null);
+        const marketId = marketIdFor(crypto, id, w.start, w.end);
+        if (!marketId) return null; // family not offered on this platform
+        return fetchMarketQuote(marketId, w.start, w.end).catch(() => null);
       })
     );
 
@@ -331,7 +340,7 @@ async function computePrediction(crypto: CryptoId): Promise<Prediction> {
         new Date(w.end).toISOString()
       ).probAbove;
       return {
-        label: META[id].label,
+        label: LABELS[id],
         horizonMin: remaining,
         strike,
         probUp,
@@ -383,8 +392,8 @@ async function computePrediction(crypto: CryptoId): Promise<Prediction> {
       const range: RangePrediction = {
         id,
         crypto,
-        label: META[id].label,
-        resolutionSource: META[id].resolutionSource,
+        label: LABELS[id],
+        resolutionSource: resolutionSourceFor(id),
         strikeIsProxy: strikeIsProxyByRange[id],
         horizonMinutes: remaining,
         probUp,

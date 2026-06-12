@@ -7,6 +7,7 @@
 // data/trades.json before a single dollar is risked.
 
 import { env } from '../cache.ts';
+import { getPlatform, type PlatformId } from '../sources/market.ts';
 import { CRYPTO_IDS, type CryptoId } from '../../shared/cryptos.ts';
 import type { RangeId } from '../../shared/types.ts';
 
@@ -15,6 +16,8 @@ export interface TradeConfig {
   enabled: boolean;
   /** Run the full decision path but never post an order (default true). */
   dryRun: boolean;
+  /** Which prediction market to quote and trade on (TRADING_PLATFORM). */
+  platform: PlatformId;
   /** Polygon private key of the trading wallet (hex, with or without 0x). */
   privateKey: string;
   /**
@@ -47,6 +50,14 @@ export interface TradeConfig {
   rpcUrl: string;
   /** CLOB endpoint (same default as the market-data source). */
   clobUrl: string;
+  /** Kalshi API key id (UUID from the Kalshi account page). */
+  kalshiApiKeyId: string;
+  /** Kalshi RSA private key: PEM text (KALSHI_PRIVATE_KEY, \n-escaped ok). */
+  kalshiPrivateKey: string;
+  /** Or a path to the PEM file (KALSHI_PRIVATE_KEY_PATH). */
+  kalshiPrivateKeyPath: string;
+  /** Kalshi trade API base (same default as the market-data source). */
+  kalshiApiUrl: string;
 }
 
 const RANGE_IDS: RangeId[] = ['5m', '15m', '1h', '4h', '1d'];
@@ -57,8 +68,11 @@ function num(key: string, fallback: number): number {
 }
 
 export function getTradeConfig(): TradeConfig {
+  const platform = getPlatform();
+  // Kalshi only runs the 15m up/down family, so default to it there; the 5m
+  // default is Polymarket's proven-edge family.
   const families = new Set<RangeId>(
-    env('TRADE_FAMILIES', '5m')
+    env('TRADE_FAMILIES', platform === 'kalshi' ? '15m' : '5m')
       .split(',')
       .map(s => s.trim())
       .filter((s): s is RangeId => (RANGE_IDS as string[]).includes(s))
@@ -74,6 +88,7 @@ export function getTradeConfig(): TradeConfig {
   return {
     enabled: env('TRADING_ENABLED', 'false') === 'true',
     dryRun: env('TRADING_DRY_RUN', 'true') !== 'false',
+    platform,
     privateKey: env('POLYMARKET_PRIVATE_KEY', ''),
     signatureType: num('POLYMARKET_SIGNATURE_TYPE', 0),
     funder: env('POLYMARKET_FUNDER', '') || undefined,
@@ -88,6 +103,13 @@ export function getTradeConfig(): TradeConfig {
     autoRedeem: env('TRADE_AUTO_REDEEM', 'true') !== 'false',
     rpcUrl: env('POLYGON_RPC_URL', 'https://polygon-bor-rpc.publicnode.com'),
     clobUrl: env('POLYMARKET_CLOB_URL', 'https://clob.polymarket.com'),
+    kalshiApiKeyId: env('KALSHI_API_KEY_ID', ''),
+    kalshiPrivateKey: env('KALSHI_PRIVATE_KEY', ''),
+    kalshiPrivateKeyPath: env('KALSHI_PRIVATE_KEY_PATH', ''),
+    kalshiApiUrl: env(
+      'KALSHI_API_URL',
+      'https://api.elections.kalshi.com/trade-api/v2'
+    ),
   };
 }
 

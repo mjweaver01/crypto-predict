@@ -97,18 +97,22 @@ export async function verifyTrades(): Promise<{
   notfound: number;
   error: number;
 }> {
-  const wallet = getWallet();
-  if (!wallet) throw new Error('POLYMARKET_PRIVATE_KEY not set');
-  const walletAddress = wallet.address;
-
   const all = await getTrades();
+  // Kalshi trades (instrument key `ticker|side`) have no on-chain tape to
+  // verify against — the exchange's own fill report is already authoritative.
   const toVerify = all.filter(
     t =>
       t.status !== 'dry-run' &&
-      (t.status === 'filled' || t.status === 'partial')
+      (t.status === 'filled' || t.status === 'partial') &&
+      !t.tokenId.includes('|')
   );
 
   const counts = { processed: 0, match: 0, mismatch: 0, notfound: 0, error: 0 };
+  if (toVerify.length === 0) return counts;
+
+  const wallet = getWallet();
+  if (!wallet) throw new Error('POLYMARKET_PRIVATE_KEY not set');
+  const walletAddress = wallet.address;
 
   // Group by conditionId to batch the API calls — one fetch per market covers
   // all of our fills in that condition.

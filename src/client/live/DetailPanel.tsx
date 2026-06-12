@@ -29,10 +29,11 @@ function MarketBlock({ r }: { r: RangePrediction }) {
   if (!m) {
     return (
       <div class="market-block muted">
-        No live Polymarket market for this window right now.
+        No live market for this window right now.
       </div>
     );
   }
+  const venue = m.source === 'kalshi' ? 'Kalshi' : 'Polymarket';
 
   const c = r.committed;
   const wagerUp = c ? c.probUp : r.probUp;
@@ -64,13 +65,17 @@ function MarketBlock({ r }: { r: RangePrediction }) {
 
   const hasBook = m.upBestBid !== undefined || m.upBestAsk !== undefined;
   const noteTkr = CRYPTOS[r.crypto]?.ticker ?? 'BTC';
+  const oracle =
+    r.resolutionSource === 'cfbenchmarks'
+      ? `the CF Benchmarks ${noteTkr} index`
+      : `Chainlink ${noteTkr}/USD`;
   const note = r.strikeIsProxy
-    ? `Resolves on Chainlink ${noteTkr}/USD; strike shown is a Binance-open proxy (Polymarket price-to-beat unavailable).`
-    : r.resolutionSource === 'chainlink'
-      ? `Resolves on Chainlink ${noteTkr}/USD; strike is Polymarket's exact price to beat.`
+    ? `Resolves on ${oracle}; strike shown is a Binance-open proxy (${venue} price-to-beat unavailable).`
+    : r.resolutionSource !== 'binance'
+      ? `Resolves on ${oracle}; strike is ${venue}'s exact price to beat.`
       : r.id === '1d'
         ? `Resolves on the Binance ${noteTkr}/USDT 1m close at noon ET vs the prior noon.`
-        : `Resolves on the Binance ${noteTkr}/USDT 1h candle (close vs open).`;
+        : `Resolves on the Binance ${noteTkr}/USDT window candle (close vs open).`;
 
   return (
     <div class="market-block">
@@ -188,7 +193,9 @@ export function DetailPanel() {
             <span class="src-tag">
               {r.resolutionSource === 'chainlink'
                 ? `Chainlink ${tkr}/USD`
-                : `Binance ${tkr}/USDT`}
+                : r.resolutionSource === 'cfbenchmarks'
+                  ? `CF Benchmarks ${tkr}`
+                  : `Binance ${tkr}/USDT`}
             </span>
           </div>
           <div class="detail-window">

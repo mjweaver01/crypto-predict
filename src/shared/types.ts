@@ -32,7 +32,7 @@ export interface LedgerEntry {
   /** Asset of the market. Absent on legacy rows (= btc). */
   crypto?: CryptoId;
   rangeId: RangeId;
-  /** Polymarket slug for this window, when known. */
+  /** Market id (Polymarket slug / Kalshi ticker) for this window, when known. */
   slug?: string;
   windowStart: string;
   windowEnd: string;
@@ -90,7 +90,7 @@ export interface LedgerEntry {
   /** Whether our pick matched the outcome. */
   correct?: boolean | null;
   /** Where the outcome came from: the real market, or a Binance proxy. */
-  resolvedBy?: 'polymarket' | 'binance';
+  resolvedBy?: 'polymarket' | 'kalshi' | 'binance';
   /** ISO time the outcome was recorded. */
   resolvedAt?: string;
 }
@@ -179,10 +179,13 @@ export interface BookLevel {
   s: number;
 }
 
-/** Live quote for the matching Polymarket "BTC Up or Down 5m" market. */
+/** Live quote for the matching up/down market on the active platform. */
 export interface MarketQuote {
-  source: 'polymarket';
-  /** Deterministic market slug, e.g. btc-updown-5m-1780721400 */
+  source: 'polymarket' | 'kalshi';
+  /**
+   * Deterministic market id: a Polymarket slug (btc-updown-5m-1780721400) or
+   * a Kalshi ticker (KXBTC15M-26JUN120945-45).
+   */
   slug: string;
   /** Human-readable question, e.g. "Bitcoin Up or Down - June 6, 12:50AM-12:55AM ET" */
   question: string;
@@ -295,10 +298,17 @@ export interface PaperPolicy {
   /** Stake used by the non-compounding flat-stake scoreboard. */
   flatStakeUsd: number;
   /**
-   * Polymarket taker fee (basis points) applied to every cost/edge/P&L
-   * computation. All BTC up/down families currently charge 1000 (10%).
+   * Taker fee (basis points) applied to every cost/edge/P&L computation.
+   * Polymarket's BTC up/down families currently charge 1000 (10%); Kalshi's
+   * standard rate is 700 under the quadratic model.
    */
   takerFeeBps: number;
+  /**
+   * How `takerFeeBps` turns into an effective cost: 'shares' is Polymarket's
+   * fee-in-outcome-tokens model (rate · min(p,1−p) netted from shares);
+   * 'quadratic' is Kalshi's cash fee of rate · p · (1−p) per contract.
+   */
+  feeModel: 'shares' | 'quadratic';
 }
 
 /** One simulated bet in the paper-trading replay. */
@@ -401,7 +411,10 @@ export interface TradeRecord {
   windowEnd: string;
   /** Side bought (the committed side). */
   side: Side;
-  /** CLOB token id of the outcome token bought. */
+  /**
+   * Venue id of the instrument bought: the CLOB token id (Polymarket) or
+   * `ticker|yes` / `ticker|no` (Kalshi).
+   */
   tokenId: string;
   /** Outcome index of `tokenId` in the market (0 = Up, 1 = Down). */
   outcomeIndex: number;
@@ -490,7 +503,7 @@ export interface RangePrediction {
   /** Short human label, e.g. "5 min", "Hourly". */
   label: string;
   /** What the real market settles against. */
-  resolutionSource: 'chainlink' | 'binance';
+  resolutionSource: 'chainlink' | 'binance' | 'cfbenchmarks';
   /**
    * True when `strike` is a proxy for a settlement price not exposed by any
    * public API (the Chainlink-resolved 5m/15m markets).

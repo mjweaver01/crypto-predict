@@ -13,6 +13,7 @@
 // bid/ask are evaluated — midpoint-only legacy rows are not bankable evidence.
 
 import { env } from '../cache.ts';
+import { getPlatform } from '../sources/market.ts';
 import type {
   BookLevel,
   LedgerEntry,
@@ -57,24 +58,46 @@ export function getPolicy(): PaperPolicy {
     maxStakeUsd: num('PAPER_MAX_STAKE_USD', 50),
     fillSlippage: num('PAPER_FILL_SLIPPAGE', 0.01),
     flatStakeUsd: num('PAPER_FLAT_STAKE_USD', 10),
-    // Polymarket charges a taker fee on ALL the BTC up/down families
-    // (CLOB /fee-rate returned 1000 bps = 10% on every family, June 2026).
-    // Fees are the single largest cost of this strategy — never zero this
-    // out to make a backtest look better.
-    takerFeeBps: num('PAPER_TAKER_FEE_BPS', 1000),
+    // Platform taker fee. Polymarket charges 1000 bps (10%) on ALL the BTC
+    // up/down families, netted from the shares received; Kalshi charges
+    // 700 bps quadratically (rate · p · (1−p)) in cash. Fees are the single
+    // largest cost of this strategy — never zero this out to make a backtest
+    // look better.
+    takerFeeBps: num(
+      'PAPER_TAKER_FEE_BPS',
+      getPlatform() === 'kalshi' ? 700 : 1000
+    ),
+    feeModel:
+      env('PAPER_FEE_MODEL', '') === 'quadratic' ||
+      (env('PAPER_FEE_MODEL', '') === '' && getPlatform() === 'kalshi')
+        ? 'quadratic'
+        : 'shares',
   };
 }
 
 /**
- * True cost per $1 of payout AFTER Polymarket's taker fee. Buy fees are taken
- * in outcome shares: feeShares = rate · min(p, 1−p)/p · shares, so a $1 spend
- * at price p nets (1/p)·(1 − rate·min(p,1−p)/p) shares — i.e. the effective
- * price is p / (1 − rate·min(p,1−p)/p). At 1000 bps this turns a 50¢ buy into
- * ~55.6¢: more than the whole 2–5¢ edge gate, which is why every EV decision
- * must run on THIS number, not the raw book price.
+ * True cost per $1 of payout AFTER the platform's taker fee.
+ *
+ * 'shares' (Polymarket): buy fees are taken in outcome shares — feeShares =
+ * rate · min(p, 1−p)/p · shares, so a $1 spend at price p nets
+ * (1/p)·(1 − rate·min(p,1−p)/p) shares, i.e. an effective price of
+ * p / (1 − rate·min(p,1−p)/p). At 1000 bps this turns a 50¢ buy into ~55.6¢:
+ * more than the whole 2–5¢ edge gate, which is why every EV decision must run
+ * on THIS number, not the raw book price.
+ *
+ * 'quadratic' (Kalshi): a cash fee of rate · p · (1−p) per contract on top of
+ * the price, so the effective price is p + rate·p·(1−p). At 700 bps a 50¢ buy
+ * costs 51.75¢ — cheaper than Polymarket everywhere, cheapest at the tails.
  */
-export function feeAdjustedCost(cost: number, feeBps: number): number {
+export function feeAdjustedCost(
+  cost: number,
+  feeBps: number,
+  model: 'shares' | 'quadratic' = getPolicy().feeModel
+): number {
   if (feeBps <= 0) return cost;
+  if (model === 'quadratic') {
+    return Math.min(1, cost + (feeBps / 10_000) * cost * (1 - cost));
+  }
   const k = ((feeBps / 10_000) * Math.min(cost, 1 - cost)) / cost;
   if (k >= 1) return 1;
   return Math.min(1, cost / (1 - k));
@@ -152,7 +175,7 @@ export function decideBet(
   if (raw === undefined) {
     return { action: 'PASS', side, stakeFraction: 0, reason: 'no-book' };
   }
-  const cost = feeAdjustedCost(raw, policy.takerFeeBps);
+  const cost = feeAdjustedCost(raw, policy.takerFeeBps, policy.feeModel);
   const pSide = side === 'UP' ? probUp : 1 - probUp;
   const edge = pSide - cost;
   if (edge < policy.minEdge[family]) {
@@ -260,7 +283,11 @@ export function simulatePaper(
       continue;
     }
     const { stake, depthCapped } = filled;
-    const cost = feeAdjustedCost(filled.cost, policy.takerFeeBps);
+    const cost = feeAdjustedCost(
+      filled.cost,
+      policy.takerFeeBps,
+      policy.feeModel
+    );
     const bet: PaperBet = {
       id: e.id,
       rangeId: e.rangeId,
@@ -298,7 +325,11 @@ export function simulatePaper(
     // This is the extrapolation-safe number.
     const flat = fill(e, rawTouch, policy.flatStakeUsd);
     if (flat) {
-      const flatCost = feeAdjustedCost(flat.cost, policy.takerFeeBps);
+      const flatCost = feeAdjustedCost(
+        flat.cost,
+        policy.takerFeeBps,
+        policy.feeModel
+      );
       flatStaked += flat.stake;
       flatPnl += won ? (flat.stake * (1 - flatCost)) / flatCost : -flat.stake;
     }

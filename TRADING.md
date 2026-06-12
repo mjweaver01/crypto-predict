@@ -24,6 +24,38 @@ not exempt an account from those terms. Confirm you can lawfully trade on
 Polymarket from where the bot will run **before** funding anything. This is
 your responsibility, not the bot's.
 
+**Trading from the US? Use Kalshi instead.** Kalshi is a CFTC-regulated
+exchange running the same style of crypto up/down markets and is legal for US
+residents. Set `TRADING_PLATFORM=kalshi` and the whole stack — quotes,
+strikes, fees, execution, settlement — switches over. Differences that
+matter:
+
+- **Only the 15m family has a live market** (`KXBTC15M` etc., all six
+  assets). There is no 5m/4h equivalent, and Kalshi's hourly/daily series are
+  fixed-strike ladders, not up/down. `TRADE_FAMILIES` defaults to `15m` on
+  Kalshi. The other families keep predicting and building paper history —
+  they just have nothing to quote or trade.
+- **Section 1's wallet steps are replaced by an API key.** No wallet, no
+  allowances, no gas, no `trade:setup`: fund your Kalshi account on the
+  website, create an API key (account → API keys), and set
+  `KALSHI_API_KEY_ID` + `KALSHI_PRIVATE_KEY` (or `KALSHI_PRIVATE_KEY_PATH`)
+  in `.env`. Dry-run needs no credentials at all.
+- **Settlement is automatic.** Winning contracts pay $1 cash; there is no
+  redemption step, so `TRADE_AUTO_REDEEM` and `trade:redeem` are inert.
+- **Fees are cheaper and shaped differently**: 7% · p · (1−p) per contract,
+  charged in cash (≈1.75¢ on a 50¢ contract) vs Polymarket's 10% taken in
+  shares. The paper layer and executor model this automatically
+  (`PAPER_FEE_MODEL=quadratic`, `PAPER_TAKER_FEE_BPS=700` by default).
+- **Markets resolve on CF Benchmarks' real-time index**, and the exact strike
+  is published on the market record (`floor_strike`), so the strike-proxy
+  caveat mostly disappears.
+- The backfill/backtest scripts and `trade:verify` remain Polymarket-only; on
+  Kalshi the paper record accumulates from live commits.
+
+Shadow-mode evidence gathered on one platform does **not** carry to the
+other: different family, different book depth, different fees. Restart the
+shadow-mode clock after switching.
+
 Also decide where the process will live. The executor only fires inside the
 first 20% of each window (`COMMIT_BY_FRACTION`) — for the 5m family that is a
 ~60-second span every 5 minutes — so the server must run continuously

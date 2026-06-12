@@ -228,7 +228,10 @@ const server = Bun.serve({
   },
 });
 
-console.log(`Bitcoin Predict → http://localhost:${server.port}`);
+console.log(
+  `Bitcoin Predict → http://localhost:${server.port} ` +
+    `(platform: ${getTradeConfig().platform})`
+);
 
 // Resolve matured predictions on startup and then on a slow cadence, so the
 // track record fills in outcomes without the request path doing it. After each
@@ -246,13 +249,17 @@ const resolveLoop = async () => {
   );
   // Settle real trades against the freshly resolved outcomes, then redeem any
   // winning positions back into USDC (no-ops unless trading is enabled live).
-  if (getTradeConfig().enabled) {
+  // Redemption is a Polymarket-only concept — Kalshi settles to cash itself.
+  const tradeCfg = getTradeConfig();
+  if (tradeCfg.enabled) {
     await settleTrades().catch(err =>
       console.warn('[trade] settle failed:', err)
     );
-    await redeemSettled().catch(err =>
-      console.warn('[trade] redeem failed:', err)
-    );
+    if (tradeCfg.platform === 'polymarket') {
+      await redeemSettled().catch(err =>
+        console.warn('[trade] redeem failed:', err)
+      );
+    }
   }
 };
 void resolveLoop();

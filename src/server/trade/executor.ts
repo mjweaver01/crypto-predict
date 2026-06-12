@@ -1,13 +1,15 @@
 // Live order execution: turns a freshly committed call whose EV verdict says
-// BET into a real Polymarket CLOB order (or a faithful dry-run record).
+// BET into a real order on the configured platform (Polymarket CLOB or
+// Kalshi), or a faithful dry-run record. All venue mechanics live behind the
+// Venue interface in venue.ts; this module owns the decision.
 //
 // The decision logic deliberately mirrors the paper layer — same per-family
 // min-edge gate, same fractional-Kelly sizing — but is re-checked against the
-// EXECUTION-TIME book for the actual token being bought, not the commit-time
-// snapshot: the book can move in the seconds between commit and execution, and
-// an edge that evaporated must not be chased. Orders are marketable-limit FAK
-// (fill what's there up to the cap, cancel the rest), so a fill can never be
-// worse than the price the edge was re-validated at.
+// EXECUTION-TIME book for the actual instrument being bought, not the
+// commit-time snapshot: the book can move in the seconds between commit and
+// execution, and an edge that evaporated must not be chased. Orders are
+// marketable-limit IOC (fill what's there up to the cap, cancel the rest), so
+// a fill can never be worse than the price the edge was re-validated at.
 //
 // Safety rails, all enforced here:
 //   - one trade max per window, persisted across restarts (trades.json)
@@ -17,20 +19,14 @@
 //   - daily realized-loss kill switch (resets at UTC midnight)
 //   - slippage cap vs the frozen commit-time cost
 
-import { OrderType, Side as ClobSide } from '@polymarket/clob-client';
 import { env } from '../cache.ts';
-import {
-  bookTop,
-  fetchFeeBps,
-  fetchMarketTokens,
-} from '../sources/polymarket.ts';
 import {
   feeAdjustedCost,
   fillSide,
   getPolicy,
   kellyFraction,
 } from '../model/paper.ts';
-import { getClobClient, getUsdcBalance } from './clob.ts';
+import { getVenue } from './venue.ts';
 import { getTradeConfig } from './config.ts';
 import {
   openTradeCount,
@@ -42,7 +38,6 @@ import type {
   Prediction,
   RangePrediction,
   TradeRecord,
-  TradeStatus,
 } from '../../shared/types.ts';
 
 /** Windows we already traded (or tried to) — never send a second order. */
@@ -118,29 +113,30 @@ export async function maybeTrade(
     return null;
   }
 
-  // ── Resolve the token being bought and its live book ─────────────────
-  const tokens = await fetchMarketTokens(r.market.slug).catch(() => null);
-  if (!tokens || tokens.tokenIds.length !== 2) {
-    skip(windowId, 'market tokens unavailable');
+  // ── Resolve the instrument being bought and its live book ────────────
+  const venue = getVenue();
+  const inst = await venue
+    .resolveInstrument(r.market.slug, c.side)
+    .catch(() => null);
+  if (!inst) {
+    skip(windowId, 'market instrument unavailable');
     return null;
   }
-  const outcomeIndex = c.side === 'UP' ? tokens.upIndex : 1 - tokens.upIndex;
-  const tokenId = tokens.tokenIds[outcomeIndex]!;
 
   const [top, feeBps] = await Promise.all([
-    bookTop(tokenId).catch(() => undefined),
-    fetchFeeBps(tokenId),
+    venue.fetchBook(inst).catch(() => undefined),
+    venue.fetchFeeBps(inst),
   ]);
   const ask = top?.ask;
   if (ask === undefined || ask <= 0 || ask >= 1) {
-    skip(windowId, 'no ask on side token');
+    skip(windowId, 'no ask on side instrument');
     return null;
   }
 
   // ── Re-validate the edge at the execution-time, FEE-ADJUSTED price ────
   const policy = getPolicy();
   const pSide = c.side === 'UP' ? c.probUp : 1 - c.probUp;
-  const effAsk = feeAdjustedCost(ask, feeBps);
+  const effAsk = feeAdjustedCost(ask, feeBps, policy.feeModel);
   const edge = pSide - effAsk;
   if (edge < policy.minEdge[r.id]) {
     // The book may come back within the commit span — don't mark attempted.
@@ -165,7 +161,7 @@ export async function maybeTrade(
   // never above what keeps the minimum edge AFTER fees, and never above the
   // slippage cap. The book quotes raw prices, so walk the raw limit down by
   // ticks until its fee-adjusted cost clears both effective ceilings.
-  const tick = tokens.tickSize && tokens.tickSize > 0 ? tokens.tickSize : 0.01;
+  const tick = inst.tickSize;
   const effCeiling = Math.min(
     pSide - policy.minEdge[r.id],
     frozenCost + cfg.maxSlippage
@@ -173,7 +169,7 @@ export async function maybeTrade(
   let limitPrice = roundDownToTick(Math.min(ask + tick, 1 - tick), tick);
   while (
     limitPrice >= ask &&
-    feeAdjustedCost(limitPrice, feeBps) > effCeiling
+    feeAdjustedCost(limitPrice, feeBps, policy.feeModel) > effCeiling
   ) {
     limitPrice = roundDownToTick(limitPrice - tick, tick);
   }
@@ -188,7 +184,7 @@ export async function maybeTrade(
     balance = cfg.bankrollCapUsd;
   } else {
     try {
-      balance = await getUsdcBalance();
+      balance = await venue.getBalanceUsd();
     } catch (err) {
       skip(windowId, `balance unavailable: ${err}`);
       return null;
@@ -208,9 +204,9 @@ export async function maybeTrade(
     return null;
   }
   // Size the order to the dollars VISIBLY fillable at or below the limit —
-  // FAK would cancel the remainder anyway, and the dry-run record must not
-  // pretend deeper fills than the book showed. (This is the side token's own
-  // book, so its asks are walked directly via the UP path of fillSide.)
+  // IOC would cancel the remainder anyway, and the dry-run record must not
+  // pretend deeper fills than the book showed. (This is the side instrument's
+  // own book, so its asks are walked directly via the UP path of fillSide.)
   const fillable = fillSide('UP', stakeUsd, undefined, top!.asks, limitPrice);
   if (!fillable || fillable.stake < cfg.minStakeUsd) {
     skip(
@@ -220,11 +216,10 @@ export async function maybeTrade(
     return null;
   }
   const orderUsd = fillable.stake;
-  const minShares = tokens.minOrderSize ?? 0;
-  if (orderUsd / limitPrice < minShares) {
+  if (orderUsd / limitPrice < inst.minOrderSize) {
     skip(
       windowId,
-      `stake $${orderUsd.toFixed(2)} under market min size (${minShares} shares)`
+      `stake $${orderUsd.toFixed(2)} under market min size (${inst.minOrderSize} shares)`
     );
     return null;
   }
@@ -242,10 +237,10 @@ export async function maybeTrade(
     windowStart: r.windowStart,
     windowEnd: r.windowEnd,
     side: c.side,
-    tokenId,
-    outcomeIndex,
-    conditionId: tokens.conditionId,
-    negRisk: tokens.negRisk,
+    tokenId: inst.key,
+    outcomeIndex: inst.outcomeIndex,
+    conditionId: inst.conditionId,
+    negRisk: inst.negRisk,
     pSide,
     edge,
     quotedCost: ask,
@@ -257,9 +252,10 @@ export async function maybeTrade(
   };
 
   if (cfg.dryRun) {
-    // Shadow fill = walking the visible book, with the taker fee deducted
-    // from the shares received (Polymarket takes buy fees in outcome tokens).
-    const effCost = feeAdjustedCost(fillable.cost, feeBps);
+    // Shadow fill = walking the visible book, with the taker fee folded into
+    // the effective cost (Polymarket takes buy fees in outcome tokens; Kalshi
+    // takes a cash fee on top — feeAdjustedCost models whichever applies).
+    const effCost = feeAdjustedCost(fillable.cost, feeBps, policy.feeModel);
     const trade: TradeRecord = {
       ...base,
       costUsd: orderUsd,
@@ -274,80 +270,35 @@ export async function maybeTrade(
     return trade;
   }
 
-  let status: TradeStatus = 'failed';
-  let orderId: string | undefined;
-  let costUsd: number | undefined;
-  let shares: number | undefined;
-  let error: string | undefined;
-  try {
-    const client = await getClobClient();
-    const order = await client.createMarketOrder(
-      {
-        tokenID: tokenId,
-        side: ClobSide.BUY,
-        amount: orderUsd,
-        price: limitPrice,
-        orderType: OrderType.FAK,
-      },
-      {
-        tickSize: String(tick) as '0.1' | '0.01' | '0.001' | '0.0001',
-        negRisk: tokens.negRisk,
-      }
-    );
-    const res = (await client.postOrder(order, OrderType.FAK)) as {
-      success?: boolean;
-      errorMsg?: string;
-      orderID?: string;
-      status?: string;
-      makingAmount?: string;
-      takingAmount?: string;
-    };
-    orderId = res?.orderID;
-    if (res?.success) {
-      // For a BUY, makingAmount is the USD spent and takingAmount the matched
-      // shares. The taker fee is collected in outcome tokens on top of the
-      // match, so net the estimated fee out of the recorded position — P&L
-      // and redemption accounting must reflect shares actually held.
-      costUsd = Number(res.makingAmount) || 0;
-      const matched = Number(res.takingAmount) || 0;
-      if (matched > 0 && costUsd > 0) {
-        const px = costUsd / matched;
-        shares =
-          matched * (1 - ((feeBps / 10_000) * Math.min(px, 1 - px)) / px);
-      } else {
-        shares = 0;
-      }
-      status =
-        shares > 0
-          ? costUsd >= orderUsd * 0.99
-            ? 'filled'
-            : 'partial'
-          : 'unfilled';
-    } else {
-      error = res?.errorMsg || 'order rejected';
-    }
-  } catch (err) {
-    error = String(err);
-  }
+  const placed = await venue.placeOrder(inst, {
+    usd: orderUsd,
+    limitPrice,
+    feeBps,
+  });
 
   const trade: TradeRecord = {
     ...base,
-    status,
-    orderId,
-    costUsd,
-    shares,
-    avgPrice: shares && costUsd ? costUsd / shares : undefined,
-    error,
+    status: placed.status,
+    orderId: placed.orderId,
+    costUsd: placed.costUsd,
+    shares: placed.shares,
+    avgPrice:
+      placed.shares && placed.costUsd
+        ? placed.costUsd / placed.shares
+        : undefined,
+    error: placed.error,
   };
   await recordTrade(trade);
-  if (status === 'filled' || status === 'partial') {
+  if (trade.status === 'filled' || trade.status === 'partial') {
     console.log(
-      `[trade] ${status.toUpperCase()} ${windowId} BUY ${c.side} ` +
-        `$${costUsd!.toFixed(2)} → ${shares!.toFixed(2)} shares ` +
-        `@ ${(costUsd! / shares!).toFixed(3)} (edge ${edge.toFixed(3)})`
+      `[trade] ${trade.status.toUpperCase()} ${windowId} BUY ${c.side} ` +
+        `$${trade.costUsd!.toFixed(2)} → ${trade.shares!.toFixed(2)} shares ` +
+        `@ ${(trade.costUsd! / trade.shares!).toFixed(3)} (edge ${edge.toFixed(3)})`
     );
   } else {
-    console.warn(`[trade] ${status} ${windowId}: ${error ?? 'no fill'}`);
+    console.warn(
+      `[trade] ${trade.status} ${windowId}: ${trade.error ?? 'no fill'}`
+    );
   }
   return trade;
 }

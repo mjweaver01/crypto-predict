@@ -294,11 +294,18 @@ default $1,000).
 
 ### Live trading (`GET /api/trades`) — REAL MONEY
 
-The paper policy, executed for real on the Polymarket CLOB. Off by default and
-**dry-run by default even when enabled** — the intended path is enable →
-shadow → live. **[TRADING.md](TRADING.md) is the full go-live runbook**
-(wallet funding, the USDC.e trap, shadow-mode exit criteria, kill switches);
-the short version:
+The paper policy, executed for real on the configured platform
+(`TRADING_PLATFORM`): the **Polymarket** CLOB by default, or **Kalshi** — the
+CFTC-regulated, US-legal exchange running the same style of up/down markets.
+On Kalshi, quotes/strikes/fees/execution all switch together; only the 15m
+family has a live market there (all six assets, `KXBTC15M` etc.), setup is an
+API key (`KALSHI_API_KEY_ID` + `KALSHI_PRIVATE_KEY`) instead of a wallet, and
+settlement is automatic cash — no allowances, no redemption, no gas.
+
+Off by default and **dry-run by default even when enabled** — the intended
+path is enable → shadow → live. **[TRADING.md](TRADING.md) is the full
+go-live runbook** (platform choice, wallet funding, the USDC.e trap,
+shadow-mode exit criteria, kill switches); the short version:
 
 ```bash
 # 1. Create a DEDICATED bot wallet (never your main wallet), fund it on
@@ -458,15 +465,17 @@ countdown hits zero rather than waiting for the next poll.
 | `CALIB_PRIOR`                                    | `10`             | Shrinkage strength toward the identity calibrator ($w_0$, $b$) |
 | `CALIB_FEATURE_PRIOR`                            | `10`             | Shrinkage strength pulling feature weights toward 0            |
 | `CALIB_HALF_LIFE_HOURS_5M/_15M/_1H/_1D`          | `24/48/168/1440` | Recency half-life per family (hours)                           |
+| `TRADING_PLATFORM`                               | `polymarket`     | Prediction market to quote/trade on (`polymarket` \| `kalshi`) |
 | `TRADING_ENABLED`                                | `false`          | Master switch for the live-trading layer                       |
 | `TRADING_DRY_RUN`                                | `true`           | Full execution path with simulated fills (shadow mode)         |
 | `POLYMARKET_PRIVATE_KEY`                         | —                | Dedicated bot wallet key (dry-run works without it)            |
-| `TRADE_FAMILIES`                                 | `5m`             | Families allowed to trade for real                             |
+| `KALSHI_API_KEY_ID` / `KALSHI_PRIVATE_KEY`       | —                | Kalshi API credentials (live trading on Kalshi only)           |
+| `TRADE_FAMILIES`                                 | `5m` (`15m` on Kalshi) | Families allowed to trade for real                       |
 | `TRADE_CRYPTOS`                                  | `btc`            | Assets allowed to trade for real                               |
 | `TRADE_MAX_STAKE_USD` / `TRADE_BANKROLL_CAP_USD` | `10` / `250`     | Per-trade and Kelly-base caps                                  |
 | `TRADE_MAX_SLIPPAGE` / `TRADE_MAX_OPEN`          | `0.01` / `4`     | Execution-price and concurrency rails                          |
 | `TRADE_DAILY_LOSS_LIMIT_USD`                     | `25`             | Daily realized-loss kill switch (UTC reset)                    |
-| `PAPER_TAKER_FEE_BPS`                            | `1000`           | Taker fee assumed by the paper replay (live reads the CLOB)    |
+| `PAPER_TAKER_FEE_BPS`                            | `1000` (`700` on Kalshi) | Taker fee assumed by the paper replay (live reads the venue) |
 
 See `.env.example` for the full annotated list.
 

@@ -35,7 +35,7 @@ export interface RangeDetail {
   probUp: number;
   rawProbUp: number;
   strikeIsProxy: boolean;
-  resolutionSource: 'chainlink' | 'binance';
+  resolutionSource: 'chainlink' | 'binance' | 'cfbenchmarks';
   windowStart: string;
   windowEnd: string;
   forecast: { point: number; low: number; high: number };
@@ -48,6 +48,7 @@ export interface RangeDetail {
   };
   calibration?: { active: boolean; samples: number };
   market?: {
+    source?: 'polymarket' | 'kalshi';
     impliedUp: number;
     upBestBid?: number;
     upBestAsk?: number;
@@ -119,6 +120,7 @@ export function toRangeDetail(r: RangePrediction): RangeDetail {
     calibration: r.calibration,
     market: r.market
       ? {
+          source: r.market.source,
           impliedUp: r.market.impliedUp,
           upBestBid: r.market.upBestBid,
           upBestAsk: r.market.upBestAsk,
@@ -180,7 +182,8 @@ function calibrationClause(r: RangeDetail): string {
 
 function marketClause(r: RangeDetail): string {
   const m = r.market;
-  if (!m) return 'No live Polymarket quote for this window.';
+  if (!m) return 'No live market quote for this window.';
+  const venue = m.source === 'kalshi' ? 'Kalshi' : 'Polymarket';
 
   const wagerUp = r.committed?.probUp ?? r.probUp;
   const basis = r.committed ? 'committed' : 'live';
@@ -196,14 +199,14 @@ function marketClause(r: RangeDetail): string {
     const pSide = side === 'UP' ? wagerUp : 1 - wagerUp;
     const edge = pSide - cost;
     return (
-      `Polymarket prices Up at ${pct1(m.impliedUp)}; our ${basis} read shows ` +
+      `${venue} prices Up at ${pct1(m.impliedUp)}; our ${basis} read shows ` +
       `${edge >= 0 ? '+' : ''}${cents(edge)} tradable edge on ${side} (costs ${cents(cost)}).`
     );
   }
 
   const edge = wagerUp - m.impliedUp;
   return (
-    `Polymarket prices Up at ${pct1(m.impliedUp)}; edge vs our ${basis} read is ` +
+    `${venue} prices Up at ${pct1(m.impliedUp)}; edge vs our ${basis} read is ` +
     `${edge >= 0 ? '+' : ''}${(edge * 100).toFixed(1)} pts.`
   );
 }
@@ -230,16 +233,23 @@ function paperClause(r: RangeDetail): string | null {
 }
 
 function resolutionNote(r: RangeDetail, ticker: string): string | null {
+  const oracle =
+    r.resolutionSource === 'cfbenchmarks'
+      ? `the CF Benchmarks ${ticker} index`
+      : `Chainlink ${ticker}/USD`;
   if (r.strikeIsProxy) {
-    return `Strike is a Binance-open proxy; resolves on Chainlink ${ticker}/USD.`;
+    return `Strike is a Binance-open proxy; resolves on ${oracle}.`;
+  }
+  if (r.resolutionSource === 'cfbenchmarks') {
+    return `Resolves on ${oracle} at Kalshi's price to beat.`;
   }
   if (r.resolutionSource === 'chainlink') {
-    return `Resolves on Chainlink ${ticker}/USD at Polymarket's price to beat.`;
+    return `Resolves on ${oracle} at Polymarket's price to beat.`;
   }
   if (r.id === '1d') {
     return `Resolves on the Binance ${ticker}/USDT 1m close at noon ET vs the prior noon.`;
   }
-  return `Resolves on the Binance ${ticker}/USDT 1h candle (close vs open).`;
+  return `Resolves on the Binance ${ticker}/USDT window candle (close vs open).`;
 }
 
 /** A longer stats-grounded paragraph for the active window. */
