@@ -21,7 +21,7 @@ import {
 } from '../model/llmAssist.ts';
 import { getLedger, recordPredictions } from '../model/ledger.ts';
 import { decide, ensureHydrated } from '../model/commitments.ts';
-import { decideBet, simulatePaper } from '../model/paper.ts';
+import { decideBet, getPolicy, simulatePaper } from '../model/paper.ts';
 import {
   applyCalibration,
   calibrationInfo,
@@ -436,7 +436,10 @@ async function computePrediction(assistWaitMs: number): Promise<Prediction> {
           c.marketAskUp
         );
         if (range.paper.action === 'BET' && bankroll !== undefined) {
-          range.paper.stake = bankroll * range.paper.stakeFraction;
+          range.paper.stake = Math.min(
+            bankroll * range.paper.stakeFraction,
+            getPolicy().maxStakeUsd
+          );
         }
       }
       return range;

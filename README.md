@@ -257,6 +257,24 @@ dashboard and on every range as `paper`):
 - **PASS** otherwise — abstention is the discipline that converts calibration
   into profit.
 
+All costs, edges, Kelly sizes, and P&L are **fee-adjusted**: Polymarket
+charges a taker fee on every BTC up/down family (1000 bps = 10% as of June
+2026; `PAPER_TAKER_FEE_BPS`, and the live executor reads the real rate from
+the CLOB per trade). A 50¢ buy effectively costs ~55.6¢ — more than the whole
+edge gate — so no decision in the system ever sees a pre-fee price.
+
+Fills are **depth-aware**: each commitment freezes the top order-book levels
+*with sizes*, and the replay fills by walking those levels (within
+`PAPER_FILL_SLIPPAGE` of the touch) instead of assuming unlimited size at the
+best price. Stakes are additionally capped at `PAPER_MAX_STAKE_USD` (default
+$50) — market capacity, not risk appetite: without it the compounding bankroll
+quickly "fills" sizes a tens-of-dollars-per-level book never held. Legacy rows
+without stored depth fill at the touch under the dollar cap and are flagged
+implicitly by their age. The summary also reports a **flat-stake scoreboard**
+(`summary.flat`, default $10/bet, no compounding) — that is the
+extrapolation-safe number; the compounded bankroll is a stress test of the
+policy, not a forecast of riches.
+
 The scoreboard is a deterministic replay of this policy over every resolved
 ledger entry carrying real commit-time bid/ask (legacy midpoint-only rows are
 excluded — they are not bankable evidence). Nothing is stored: the ledger
@@ -403,6 +421,7 @@ server (Bun)
 | `TRADE_MAX_STAKE_USD` / `TRADE_BANKROLL_CAP_USD` | `10` / `250` | Per-trade and Kelly-base caps |
 | `TRADE_MAX_SLIPPAGE` / `TRADE_MAX_OPEN` | `0.01` / `4` | Execution-price and concurrency rails |
 | `TRADE_DAILY_LOSS_LIMIT_USD` | `25` | Daily realized-loss kill switch (UTC reset) |
+| `PAPER_TAKER_FEE_BPS` | `1000` | Taker fee assumed by the paper replay (live reads the CLOB) |
 
 See `.env.example` for the full annotated list.
 

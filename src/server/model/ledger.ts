@@ -82,6 +82,8 @@ export async function recordPredictions(p: Prediction): Promise<void> {
         // live quote is later than the commit instant the call came from.
         marketBidUp: c.marketBidUp ?? r.market?.upBestBid,
         marketAskUp: c.marketAskUp ?? r.market?.upBestAsk,
+        marketUpBids: c.marketUpBids ?? r.market?.upBids,
+        marketUpAsks: c.marketUpAsks ?? r.market?.upAsks,
         marketQuotedAt: r.market?.quotedAt,
         bookSource:
           (c.marketBidUp ?? r.market?.upBestBid) !== undefined ||

@@ -48,6 +48,13 @@ export interface LedgerEntry {
    */
   marketBidUp?: number;
   marketAskUp?: number;
+  /**
+   * Commit-time book depth (top levels with sizes, best first) — lets the
+   * paper replay fill realistically instead of assuming unlimited size at the
+   * touch. Absent on rows recorded before depth capture existed.
+   */
+  marketUpBids?: BookLevel[];
+  marketUpAsks?: BookLevel[];
   /** ISO time the commit-time order book was read (staleness audit). */
   marketQuotedAt?: string;
   /**
@@ -154,6 +161,15 @@ export interface PriceTick {
   t: number;
 }
 
+/**
+ * One visible order-book level: price `p` (0..1) and size `s` in shares.
+ * Field names are short because these are persisted per ledger row.
+ */
+export interface BookLevel {
+  p: number;
+  s: number;
+}
+
 /** Live quote for the matching Polymarket "BTC Up or Down 5m" market. */
 export interface MarketQuote {
   source: 'polymarket';
@@ -173,6 +189,13 @@ export interface MarketQuote {
   upBestBid?: number;
   /** Best ask for the UP token (0..1) — the price you could BUY Up at. */
   upBestAsk?: number;
+  /**
+   * Top visible UP-token book levels (best first), WITH sizes — what a fill
+   * could actually consume. The paper layer walks these instead of pretending
+   * unlimited depth at the touch.
+   */
+  upBids?: BookLevel[];
+  upAsks?: BookLevel[];
   /** ISO time the order book was read, to audit staleness vs commit time. */
   quotedAt?: string;
 }
@@ -211,6 +234,9 @@ export interface CommittedCall {
    */
   marketBidUp?: number;
   marketAskUp?: number;
+  /** Frozen commit-time book depth (top levels with sizes, best first). */
+  marketUpBids?: BookLevel[];
+  marketUpAsks?: BookLevel[];
 }
 
 /**
@@ -249,6 +275,21 @@ export interface PaperPolicy {
   kellyFraction: number;
   /** Hard cap on the fraction of bankroll staked on any single bet. */
   maxStakeFraction: number;
+  /**
+   * Hard DOLLAR cap per bet — models market capacity. Without it the
+   * compounding replay grows stakes past anything the book could fill and the
+   * equity curve becomes fiction.
+   */
+  maxStakeUsd: number;
+  /** Max price deterioration past the touch a fill may walk into the book. */
+  fillSlippage: number;
+  /** Stake used by the non-compounding flat-stake scoreboard. */
+  flatStakeUsd: number;
+  /**
+   * Polymarket taker fee (basis points) applied to every cost/edge/P&L
+   * computation. All BTC up/down families currently charge 1000 (10%).
+   */
+  takerFeeBps: number;
 }
 
 /** One simulated bet in the paper-trading replay. */
@@ -258,8 +299,14 @@ export interface PaperBet {
   decidedAt: string;
   windowEnd: string;
   side: Side;
-  /** Cost (0..1) per $1 of payout at the commit-time book. */
+  /**
+   * Effective cost (0..1) per $1 of payout: the depth-weighted average fill
+   * price from walking the commit-time book (top-of-book on legacy rows
+   * without stored depth).
+   */
   cost: number;
+  /** True when visible depth capped the stake below what Kelly wanted. */
+  depthCapped?: boolean;
   /** Model probability of the side taken, frozen at commit. */
   pSide: number;
   edge: number;
@@ -298,6 +345,12 @@ export interface PaperResponse {
     evaluated: number;
     /** Where evaluated rows' tradable prices came from. */
     sources: { live: number; trades: number };
+    /**
+     * Non-compounding scoreboard: the same bets at a fixed small stake. This
+     * is the number to extrapolate from — it can't inflate itself by
+     * compounding into sizes the book never held.
+     */
+    flat: { stakeUsd: number; staked: number; pnl: number; roi: number };
   };
   families: PaperFamilyStats[];
   /** Bankroll after each resolved bet, for the equity curve. */
@@ -349,8 +402,10 @@ export interface TradeRecord {
   pSide: number;
   /** Edge (pSide − execution-time ask) that justified the trade. */
   edge: number;
-  /** Best ask for the side token at execution time. */
+  /** Best ask for the side token at execution time (raw, pre-fee). */
   quotedCost: number;
+  /** Taker fee (bps) the market charged, from the CLOB at execution time. */
+  feeBps?: number;
   /** Marketable-limit price cap actually sent. */
   limitPrice: number;
   /** USD the order intended to spend. */

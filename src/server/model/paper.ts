@@ -14,6 +14,7 @@
 
 import { env } from '../cache.ts';
 import type {
+  BookLevel,
   LedgerEntry,
   PaperBet,
   PaperDecision,
@@ -50,7 +51,66 @@ export function getPolicy(): PaperPolicy {
     // A ~6% edge does not justify 10% swings: the backfilled replay hit a 48%
     // drawdown at 0.10. Half the cap costs little growth, halves the pain.
     maxStakeFraction: num('PAPER_MAX_STAKE_FRACTION', 0.05),
+    // Market capacity, not risk appetite: a 5m BTC book holds tens of dollars
+    // per top level, so an uncapped compounding bankroll quickly "fills" sizes
+    // that never existed and the equity curve becomes fiction.
+    maxStakeUsd: num('PAPER_MAX_STAKE_USD', 50),
+    fillSlippage: num('PAPER_FILL_SLIPPAGE', 0.01),
+    flatStakeUsd: num('PAPER_FLAT_STAKE_USD', 10),
+    // Polymarket charges a taker fee on ALL the BTC up/down families
+    // (CLOB /fee-rate returned 1000 bps = 10% on every family, June 2026).
+    // Fees are the single largest cost of this strategy — never zero this
+    // out to make a backtest look better.
+    takerFeeBps: num('PAPER_TAKER_FEE_BPS', 1000),
   };
+}
+
+/**
+ * True cost per $1 of payout AFTER Polymarket's taker fee. Buy fees are taken
+ * in outcome shares: feeShares = rate · min(p, 1−p)/p · shares, so a $1 spend
+ * at price p nets (1/p)·(1 − rate·min(p,1−p)/p) shares — i.e. the effective
+ * price is p / (1 − rate·min(p,1−p)/p). At 1000 bps this turns a 50¢ buy into
+ * ~55.6¢: more than the whole 2–5¢ edge gate, which is why every EV decision
+ * must run on THIS number, not the raw book price.
+ */
+export function feeAdjustedCost(cost: number, feeBps: number): number {
+  if (feeBps <= 0) return cost;
+  const k = ((feeBps / 10_000) * Math.min(cost, 1 - cost)) / cost;
+  if (k >= 1) return 1;
+  return Math.min(1, cost / (1 - k));
+}
+
+/**
+ * Simulate filling `stakeUsd` of `side` against the frozen UP-token book by
+ * walking visible levels (buying Up consumes asks; buying Down consumes bids
+ * at cost 1 − bid), never paying more than `maxCost` per $1 of payout.
+ * Returns the dollars actually fillable and the depth-weighted average cost,
+ * or undefined when nothing is fillable within the cap.
+ */
+export function fillSide(
+  side: Side,
+  stakeUsd: number,
+  bidsUp: BookLevel[] | undefined,
+  asksUp: BookLevel[] | undefined,
+  maxCost: number
+): { stake: number; cost: number } | undefined {
+  // Cost per $1 payout and dollar capacity per level, best price first (asks
+  // arrive ascending, bids descending — both orders put the cheapest first).
+  const levels =
+    side === 'UP'
+      ? (asksUp ?? []).map(l => ({ cost: l.p, usd: l.p * l.s }))
+      : (bidsUp ?? []).map(l => ({ cost: 1 - l.p, usd: (1 - l.p) * l.s }));
+  let filled = 0;
+  let shares = 0;
+  for (const l of levels) {
+    if (l.cost <= 0 || l.cost >= 1 || l.cost > maxCost) break;
+    const take = Math.min(stakeUsd - filled, l.usd);
+    filled += take;
+    shares += take / l.cost;
+    if (filled >= stakeUsd - 1e-9) break;
+  }
+  if (filled <= 0 || shares <= 0) return undefined;
+  return { stake: filled, cost: filled / shares };
 }
 
 /**
@@ -75,7 +135,11 @@ export function kellyFraction(p: number, cost: number): number {
   return Math.max(0, p - ((1 - p) * cost) / (1 - cost));
 }
 
-/** The EV verdict for one committed call against its frozen book. */
+/**
+ * The EV verdict for one committed call against its frozen book. The cost,
+ * edge, and Kelly sizing are all computed on the FEE-ADJUSTED price — the
+ * only price the strategy actually pays.
+ */
 export function decideBet(
   probUp: number,
   side: Side,
@@ -84,10 +148,11 @@ export function decideBet(
   askUp: number | undefined,
   policy: PaperPolicy = getPolicy()
 ): PaperDecision {
-  const cost = costOfSide(side, bidUp, askUp);
-  if (cost === undefined) {
+  const raw = costOfSide(side, bidUp, askUp);
+  if (raw === undefined) {
     return { action: 'PASS', side, stakeFraction: 0, reason: 'no-book' };
   }
+  const cost = feeAdjustedCost(raw, policy.takerFeeBps);
   const pSide = side === 'UP' ? probUp : 1 - probUp;
   const edge = pSide - cost;
   if (edge < policy.minEdge[family]) {
@@ -127,6 +192,8 @@ export function simulatePaper(
   let maxDrawdown = 0;
   let passes = 0;
   let staked = 0;
+  let flatStaked = 0;
+  let flatPnl = 0;
   // Rows recorded before the bookSource field existed are live captures.
   const sources = { live: 0, trades: 0 };
   const bets: PaperBet[] = [];
@@ -138,6 +205,32 @@ export function simulatePaper(
       { rangeId: id, bets: 0, wins: 0, staked: 0, pnl: 0, roi: 0 },
     ])
   );
+
+  /**
+   * Fill `requested` dollars against the entry's frozen book. With stored
+   * depth the fill walks real levels (within the slippage cap past the
+   * touch); legacy rows without depth fill at the touch, bounded only by the
+   * dollar cap — flattering, and the reason new rows store depth.
+   */
+  const fill = (
+    e: LedgerEntry,
+    touchCost: number,
+    requested: number
+  ): { stake: number; cost: number; depthCapped: boolean } | undefined => {
+    const hasDepth =
+      (e.marketUpBids?.length ?? 0) > 0 || (e.marketUpAsks?.length ?? 0) > 0;
+    if (!hasDepth)
+      return { stake: requested, cost: touchCost, depthCapped: false };
+    const f = fillSide(
+      e.side,
+      requested,
+      e.marketUpBids,
+      e.marketUpAsks,
+      touchCost + policy.fillSlippage
+    );
+    if (!f) return undefined;
+    return { ...f, depthCapped: f.stake < requested - 1e-9 };
+  };
 
   for (const e of book) {
     const d = decideBet(
@@ -154,9 +247,20 @@ export function simulatePaper(
       if (resolved) passes++;
       continue;
     }
-    const cost = d.cost!;
     const pSide = e.side === 'UP' ? e.probUp : 1 - e.probUp;
-    const stake = bankroll * d.stakeFraction;
+    const requested = Math.min(bankroll * d.stakeFraction, policy.maxStakeUsd);
+    // The book is walked at RAW prices (that's what the levels quote); the
+    // taker fee is then applied to the achieved average to get the cost the
+    // bet actually pays.
+    const rawTouch = costOfSide(e.side, e.marketBidUp, e.marketAskUp)!;
+    const filled = fill(e, rawTouch, requested);
+    if (!filled) {
+      // Nothing fillable within the slippage cap — no bet was possible.
+      if (resolved) passes++;
+      continue;
+    }
+    const { stake, depthCapped } = filled;
+    const cost = feeAdjustedCost(filled.cost, policy.takerFeeBps);
     const bet: PaperBet = {
       id: e.id,
       rangeId: e.rangeId,
@@ -164,6 +268,7 @@ export function simulatePaper(
       windowEnd: e.windowEnd,
       side: e.side,
       cost,
+      depthCapped: depthCapped || undefined,
       pSide,
       edge: d.edge!,
       stake,
@@ -189,6 +294,14 @@ export function simulatePaper(
     if (won) f.wins++;
     f.staked += stake;
     f.pnl += pnl;
+    // Flat-stake scoreboard: same bet at a fixed small stake, no compounding.
+    // This is the extrapolation-safe number.
+    const flat = fill(e, rawTouch, policy.flatStakeUsd);
+    if (flat) {
+      const flatCost = feeAdjustedCost(flat.cost, policy.takerFeeBps);
+      flatStaked += flat.stake;
+      flatPnl += won ? (flat.stake * (1 - flatCost)) / flatCost : -flat.stake;
+    }
   }
 
   for (const f of families.values()) f.roi = f.staked ? f.pnl / f.staked : 0;
@@ -205,6 +318,12 @@ export function simulatePaper(
       passes,
       evaluated: bets.length + passes,
       sources,
+      flat: {
+        stakeUsd: policy.flatStakeUsd,
+        staked: flatStaked,
+        pnl: flatPnl,
+        roi: flatStaked ? flatPnl / flatStaked : 0,
+      },
     },
     families: [...families.values()].filter(f => f.bets > 0),
     equity,

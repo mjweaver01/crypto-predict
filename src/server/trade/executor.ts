@@ -19,8 +19,17 @@
 
 import { OrderType, Side as ClobSide } from '@polymarket/clob-client';
 import { env } from '../cache.ts';
-import { bookTop, fetchMarketTokens } from '../sources/polymarket.ts';
-import { getPolicy, kellyFraction } from '../model/paper.ts';
+import {
+  bookTop,
+  fetchFeeBps,
+  fetchMarketTokens,
+} from '../sources/polymarket.ts';
+import {
+  feeAdjustedCost,
+  fillSide,
+  getPolicy,
+  kellyFraction,
+} from '../model/paper.ts';
 import { getClobClient, getUsdcBalance } from './clob.ts';
 import { getTradeConfig } from './config.ts';
 import {
@@ -117,49 +126,58 @@ export async function maybeTrade(
   const outcomeIndex = c.side === 'UP' ? tokens.upIndex : 1 - tokens.upIndex;
   const tokenId = tokens.tokenIds[outcomeIndex]!;
 
-  const top = await bookTop(tokenId).catch(() => undefined);
+  const [top, feeBps] = await Promise.all([
+    bookTop(tokenId).catch(() => undefined),
+    fetchFeeBps(tokenId),
+  ]);
   const ask = top?.ask;
   if (ask === undefined || ask <= 0 || ask >= 1) {
     skip(windowId, 'no ask on side token');
     return null;
   }
 
-  // ── Re-validate the edge at the execution-time price ─────────────────
+  // ── Re-validate the edge at the execution-time, FEE-ADJUSTED price ────
   const policy = getPolicy();
   const pSide = c.side === 'UP' ? c.probUp : 1 - c.probUp;
-  const edge = pSide - ask;
+  const effAsk = feeAdjustedCost(ask, feeBps);
+  const edge = pSide - effAsk;
   if (edge < policy.minEdge[r.id]) {
     // The book may come back within the commit span — don't mark attempted.
     skip(
       windowId,
-      `edge gone at execution (${edge.toFixed(3)} < ${policy.minEdge[r.id]})`
+      `edge gone at execution (${edge.toFixed(3)} < ${policy.minEdge[r.id]} after ${feeBps}bps fee)`
     );
     return null;
   }
-  // Frozen commit-time cost of the side (what the paper verdict priced).
-  const frozenCost = r.paper.cost ?? ask;
-  if (ask > frozenCost + cfg.maxSlippage) {
+  // Frozen commit-time cost of the side (what the paper verdict priced —
+  // already fee-adjusted by decideBet, so compare in effective terms).
+  const frozenCost = r.paper.cost ?? effAsk;
+  if (effAsk > frozenCost + cfg.maxSlippage) {
     skip(
       windowId,
-      `slippage cap (ask ${ask} > frozen ${frozenCost} + ${cfg.maxSlippage})`
+      `slippage cap (eff ask ${effAsk.toFixed(3)} > frozen ${frozenCost.toFixed(3)} + ${cfg.maxSlippage})`
     );
     return null;
   }
 
   // Marketable-limit cap: one tick through the ask to absorb book jitter, but
-  // never above what keeps the minimum edge, and never above the slippage cap.
+  // never above what keeps the minimum edge AFTER fees, and never above the
+  // slippage cap. The book quotes raw prices, so walk the raw limit down by
+  // ticks until its fee-adjusted cost clears both effective ceilings.
   const tick = tokens.tickSize && tokens.tickSize > 0 ? tokens.tickSize : 0.01;
-  const limitPrice = roundDownToTick(
-    Math.min(
-      ask + tick,
-      pSide - policy.minEdge[r.id],
-      frozenCost + cfg.maxSlippage,
-      1 - tick
-    ),
-    tick
+  const effCeiling = Math.min(
+    pSide - policy.minEdge[r.id],
+    frozenCost + cfg.maxSlippage
   );
+  let limitPrice = roundDownToTick(Math.min(ask + tick, 1 - tick), tick);
+  while (
+    limitPrice >= ask &&
+    feeAdjustedCost(limitPrice, feeBps) > effCeiling
+  ) {
+    limitPrice = roundDownToTick(limitPrice - tick, tick);
+  }
   if (limitPrice < ask) {
-    skip(windowId, `limit ${limitPrice} below ask ${ask} after caps`);
+    skip(windowId, `limit below ask after fee/edge caps`);
     return null;
   }
 
@@ -178,7 +196,7 @@ export async function maybeTrade(
   const bankroll = Math.min(balance, cfg.bankrollCapUsd);
   const stakeFraction = Math.min(
     policy.maxStakeFraction,
-    policy.kellyFraction * kellyFraction(pSide, ask)
+    policy.kellyFraction * kellyFraction(pSide, effAsk)
   );
   const stakeUsd = Math.min(stakeFraction * bankroll, cfg.maxStakeUsd, balance);
   if (stakeUsd < cfg.minStakeUsd) {
@@ -188,11 +206,24 @@ export async function maybeTrade(
     );
     return null;
   }
-  const minShares = tokens.minOrderSize ?? 0;
-  if (stakeUsd / limitPrice < minShares) {
+  // Size the order to the dollars VISIBLY fillable at or below the limit —
+  // FAK would cancel the remainder anyway, and the dry-run record must not
+  // pretend deeper fills than the book showed. (This is the side token's own
+  // book, so its asks are walked directly via the UP path of fillSide.)
+  const fillable = fillSide('UP', stakeUsd, undefined, top!.asks, limitPrice);
+  if (!fillable || fillable.stake < cfg.minStakeUsd) {
     skip(
       windowId,
-      `stake $${stakeUsd.toFixed(2)} under market min size (${minShares} shares)`
+      `book too thin within limit (fillable $${(fillable?.stake ?? 0).toFixed(2)})`
+    );
+    return null;
+  }
+  const orderUsd = fillable.stake;
+  const minShares = tokens.minOrderSize ?? 0;
+  if (orderUsd / limitPrice < minShares) {
+    skip(
+      windowId,
+      `stake $${orderUsd.toFixed(2)} under market min size (${minShares} shares)`
     );
     return null;
   }
@@ -216,23 +247,27 @@ export async function maybeTrade(
     pSide,
     edge,
     quotedCost: ask,
+    feeBps,
     limitPrice,
-    intendedUsd: stakeUsd,
+    intendedUsd: orderUsd,
     status: 'dry-run',
     placedAt: new Date(now).toISOString(),
   };
 
   if (cfg.dryRun) {
+    // Shadow fill = walking the visible book, with the taker fee deducted
+    // from the shares received (Polymarket takes buy fees in outcome tokens).
+    const effCost = feeAdjustedCost(fillable.cost, feeBps);
     const trade: TradeRecord = {
       ...base,
-      costUsd: stakeUsd,
-      shares: stakeUsd / ask,
-      avgPrice: ask,
+      costUsd: orderUsd,
+      shares: orderUsd / effCost,
+      avgPrice: effCost,
     };
     await recordTrade(trade);
     console.log(
-      `[trade] DRY-RUN ${windowId} BUY ${c.side} $${stakeUsd.toFixed(2)} ` +
-        `@ ${ask} (edge ${edge.toFixed(3)})`
+      `[trade] DRY-RUN ${windowId} BUY ${c.side} $${orderUsd.toFixed(2)} ` +
+        `@ ${effCost.toFixed(3)} incl ${feeBps}bps fee (edge ${edge.toFixed(3)})`
     );
     return trade;
   }
@@ -248,7 +283,7 @@ export async function maybeTrade(
       {
         tokenID: tokenId,
         side: ClobSide.BUY,
-        amount: stakeUsd,
+        amount: orderUsd,
         price: limitPrice,
         orderType: OrderType.FAK,
       },
@@ -267,12 +302,22 @@ export async function maybeTrade(
     };
     orderId = res?.orderID;
     if (res?.success) {
-      // For a BUY, makingAmount is the USD spent and takingAmount the shares.
+      // For a BUY, makingAmount is the USD spent and takingAmount the matched
+      // shares. The taker fee is collected in outcome tokens on top of the
+      // match, so net the estimated fee out of the recorded position — P&L
+      // and redemption accounting must reflect shares actually held.
       costUsd = Number(res.makingAmount) || 0;
-      shares = Number(res.takingAmount) || 0;
+      const matched = Number(res.takingAmount) || 0;
+      if (matched > 0 && costUsd > 0) {
+        const px = costUsd / matched;
+        shares =
+          matched * (1 - ((feeBps / 10_000) * Math.min(px, 1 - px)) / px);
+      } else {
+        shares = 0;
+      }
       status =
         shares > 0
-          ? costUsd >= stakeUsd * 0.99
+          ? costUsd >= orderUsd * 0.99
             ? 'filled'
             : 'partial'
           : 'unfilled';

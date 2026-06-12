@@ -43852,7 +43852,11 @@
     "horizonMinutes": 59.86495,
     "decidedAt": "2026-06-12T01:00:08.103Z",
     "source": "live",
-    "outcome": null
+    "outcome": "DOWN",
+    "closePrice": 63426.2,
+    "correct": true,
+    "resolvedBy": "binance",
+    "resolvedAt": "2026-06-12T02:00:28.186Z"
   },
   "5m:1781226300000": {
     "id": "5m:1781226300000",
@@ -43988,7 +43992,11 @@
     "horizonMinutes": 14.86355,
     "decidedAt": "2026-06-12T01:15:08.187Z",
     "source": "live",
-    "outcome": null
+    "outcome": "DOWN",
+    "closePrice": 63355.93,
+    "correct": false,
+    "resolvedBy": "binance",
+    "resolvedAt": "2026-06-12T01:30:28.187Z"
   },
   "5m:1781227200000": {
     "id": "5m:1781227200000",
@@ -44018,6 +44026,1322 @@
     },
     "horizonMinutes": 4.8633,
     "decidedAt": "2026-06-12T01:20:08.202Z",
+    "source": "live",
+    "outcome": "UP",
+    "closePrice": 63392.05,
+    "correct": true,
+    "resolvedBy": "binance",
+    "resolvedAt": "2026-06-12T01:25:28.192Z"
+  },
+  "5m:1781227500000": {
+    "id": "5m:1781227500000",
+    "rangeId": "5m",
+    "slug": "btc-updown-5m-1781227500",
+    "windowStart": "2026-06-12T01:25:00.000Z",
+    "windowEnd": "2026-06-12T01:30:00.000Z",
+    "strike": 63329.94020313118,
+    "probUp": 0.9492410119942483,
+    "rawProbUp": 0.957638650883391,
+    "side": "UP",
+    "confidence": 0.9492410119942483,
+    "marketImpliedUp": 0.505,
+    "marketBidUp": 0.5,
+    "marketAskUp": 0.51,
+    "marketQuotedAt": "2026-06-12T01:25:08.526Z",
+    "bookSource": "live",
+    "features": {
+      "z": 1.7239173068231652,
+      "m15": -1.6004264505422774,
+      "m60": -1.5015287198792053,
+      "m240": -0.334028635514603,
+      "vr": -0.1185298088119714,
+      "todSin": 0.36243803828370164,
+      "todCos": 0.9320078692827986,
+      "mkt": 0.020000666706669435
+    },
+    "horizonMinutes": 4.862833333333334,
+    "decidedAt": "2026-06-12T01:25:08.230Z",
+    "source": "live",
+    "outcome": "UP",
+    "closePrice": 63355.93,
+    "correct": true,
+    "resolvedBy": "binance",
+    "resolvedAt": "2026-06-12T01:30:28.222Z"
+  },
+  "5m:1781227800000": {
+    "id": "5m:1781227800000",
+    "rangeId": "5m",
+    "slug": "btc-updown-5m-1781227800",
+    "windowStart": "2026-06-12T01:30:00.000Z",
+    "windowEnd": "2026-06-12T01:35:00.000Z",
+    "strike": 63286.05162906262,
+    "probUp": 0.9565737276381072,
+    "rawProbUp": 0.9623782637545114,
+    "side": "UP",
+    "confidence": 0.9565737276381072,
+    "marketImpliedUp": 0.555,
+    "marketBidUp": 0.55,
+    "marketAskUp": 0.56,
+    "marketQuotedAt": "2026-06-12T01:30:01.959Z",
+    "bookSource": "live",
+    "features": {
+      "z": 1.7789767632084548,
+      "m15": -1.3237733838817967,
+      "m60": -1.6750996395925157,
+      "m240": -0.42867705550712293,
+      "vr": 0.013285479586137709,
+      "todSin": 0.3826834323650898,
+      "todCos": 0.9238795325112867,
+      "mkt": 0.22089383158019443
+    },
+    "horizonMinutes": 4.9801166666666665,
+    "decidedAt": "2026-06-12T01:30:01.193Z",
+    "source": "live",
+    "outcome": "UP",
+    "closePrice": 63361.59,
+    "correct": true,
+    "resolvedBy": "binance",
+    "resolvedAt": "2026-06-12T01:35:28.169Z"
+  },
+  "15m:1781227800000": {
+    "id": "15m:1781227800000",
+    "rangeId": "15m",
+    "slug": "btc-updown-15m-1781227800",
+    "windowStart": "2026-06-12T01:30:00.000Z",
+    "windowEnd": "2026-06-12T01:45:00.000Z",
+    "strike": 63286.05162906262,
+    "probUp": 0.7997651238018545,
+    "rawProbUp": 0.8474902036674552,
+    "side": "UP",
+    "confidence": 0.7997651238018545,
+    "marketImpliedUp": 0.535,
+    "marketBidUp": 0.53,
+    "marketAskUp": 0.54,
+    "marketQuotedAt": "2026-06-12T01:30:01.987Z",
+    "bookSource": "live",
+    "features": {
+      "z": 1.02572853162015,
+      "m15": -1.3237733838817967,
+      "m60": -1.6750996395925157,
+      "m240": -0.42867705550712293,
+      "vr": 0.013285479586137709,
+      "todSin": 0.3826834323650898,
+      "todCos": 0.9238795325112867,
+      "mkt": 0.1402293413086503
+    },
+    "horizonMinutes": 14.980116666666667,
+    "decidedAt": "2026-06-12T01:30:01.193Z",
+    "source": "live",
+    "outcome": "UP",
+    "closePrice": 63362,
+    "correct": true,
+    "resolvedBy": "binance",
+    "resolvedAt": "2026-06-12T01:45:28.216Z"
+  },
+  "5m:1781228100000": {
+    "id": "5m:1781228100000",
+    "rangeId": "5m",
+    "slug": "btc-updown-5m-1781228100",
+    "windowStart": "2026-06-12T01:35:00.000Z",
+    "windowEnd": "2026-06-12T01:40:00.000Z",
+    "strike": 63361.59,
+    "probUp": 0.5159532854642517,
+    "rawProbUp": 0.4261446565507663,
+    "side": "UP",
+    "confidence": 0.5159532854642517,
+    "marketImpliedUp": 0.545,
+    "marketBidUp": 0.54,
+    "marketAskUp": 0.55,
+    "marketQuotedAt": "2026-06-12T01:35:01.651Z",
+    "bookSource": "live",
+    "features": {
+      "z": -0.18619825658925285,
+      "m15": -0.9827180915618686,
+      "m60": -2.158225893772297,
+      "m240": 0,
+      "vr": -0.0835021086017507,
+      "todSin": 0.40274668985873724,
+      "todCos": 0.9153114791194471,
+      "mkt": 0.1804883757122938
+    },
+    "horizonMinutes": 4.992183333333333,
+    "decidedAt": "2026-06-12T01:35:00.469Z",
+    "source": "live",
+    "outcome": "UP",
+    "closePrice": 63370.01,
+    "correct": true,
+    "resolvedBy": "binance",
+    "resolvedAt": "2026-06-12T01:40:28.177Z"
+  },
+  "5m:1781228400000": {
+    "id": "5m:1781228400000",
+    "rangeId": "5m",
+    "slug": "btc-updown-5m-1781228400",
+    "windowStart": "2026-06-12T01:40:00.000Z",
+    "windowEnd": "2026-06-12T01:45:00.000Z",
+    "strike": 63370.01,
+    "probUp": 0.5450292390173763,
+    "rawProbUp": 0.4998996112575317,
+    "side": "UP",
+    "confidence": 0.5450292390173763,
+    "marketImpliedUp": 0.425,
+    "marketBidUp": 0.42,
+    "marketAskUp": 0.43,
+    "marketQuotedAt": "2026-06-12T01:40:01.075Z",
+    "bookSource": "live",
+    "features": {
+      "z": -0.0002516343357954081,
+      "m15": -0.4355861563848883,
+      "m60": -2.2736467311897965,
+      "m240": 0,
+      "vr": -0.14900085627448809,
+      "todSin": 0.4226182617406994,
+      "todCos": 0.9063077870366499,
+      "mkt": -0.3022808718729335
+    },
+    "horizonMinutes": 4.993133333333334,
+    "decidedAt": "2026-06-12T01:40:00.412Z",
+    "source": "live",
+    "outcome": "DOWN",
+    "closePrice": 63362,
+    "correct": false,
+    "resolvedBy": "binance",
+    "resolvedAt": "2026-06-12T01:45:28.255Z"
+  },
+  "5m:1781228700000": {
+    "id": "5m:1781228700000",
+    "rangeId": "5m",
+    "slug": "btc-updown-5m-1781228700",
+    "windowStart": "2026-06-12T01:45:00.000Z",
+    "windowEnd": "2026-06-12T01:50:00.000Z",
+    "strike": 63362,
+    "probUp": 0.6063424351385287,
+    "rawProbUp": 0.49999999947519136,
+    "side": "UP",
+    "confidence": 0.6063424351385287,
+    "marketImpliedUp": 0.635,
+    "marketBidUp": 0.63,
+    "marketAskUp": 0.64,
+    "marketQuotedAt": "2026-06-12T01:45:01.088Z",
+    "bookSource": "live",
+    "features": {
+      "z": 0,
+      "m15": -0.5353577063993472,
+      "m60": -2.4327028429059845,
+      "m240": 0,
+      "vr": -0.1816526949720211,
+      "todSin": 0.44228869021900125,
+      "todCos": 0.8968727415326884,
+      "mkt": 0.5537276453102001
+    },
+    "horizonMinutes": 4.991666666666666,
+    "decidedAt": "2026-06-12T01:45:00.500Z",
+    "source": "live",
+    "outcome": "UP",
+    "closePrice": 63452.04,
+    "correct": true,
+    "resolvedBy": "binance",
+    "resolvedAt": "2026-06-12T01:50:28.192Z"
+  },
+  "15m:1781228700000": {
+    "id": "15m:1781228700000",
+    "rangeId": "15m",
+    "slug": "btc-updown-15m-1781228700",
+    "windowStart": "2026-06-12T01:45:00.000Z",
+    "windowEnd": "2026-06-12T02:00:00.000Z",
+    "strike": 63292.72106621798,
+    "probUp": 0.7496882650815088,
+    "rawProbUp": 0.8517244550132888,
+    "side": "UP",
+    "confidence": 0.7496882650815088,
+    "marketImpliedUp": 0.535,
+    "marketBidUp": 0.53,
+    "marketAskUp": 0.54,
+    "marketQuotedAt": "2026-06-12T01:45:01.115Z",
+    "bookSource": "live",
+    "features": {
+      "z": 1.0438581009349905,
+      "m15": -0.5353577063993472,
+      "m60": -2.4327028429059845,
+      "m240": 0,
+      "vr": -0.1816526949720211,
+      "todSin": 0.44228869021900125,
+      "todCos": 0.8968727415326884,
+      "mkt": 0.1402293413086503
+    },
+    "horizonMinutes": 14.991666666666667,
+    "decidedAt": "2026-06-12T01:45:00.500Z",
+    "source": "live",
+    "outcome": "UP",
+    "closePrice": 63426.2,
+    "correct": true,
+    "resolvedBy": "binance",
+    "resolvedAt": "2026-06-12T02:00:28.224Z"
+  },
+  "5m:1781229000000": {
+    "id": "5m:1781229000000",
+    "rangeId": "5m",
+    "slug": "btc-updown-5m-1781229000",
+    "windowStart": "2026-06-12T01:50:00.000Z",
+    "windowEnd": "2026-06-12T01:55:00.000Z",
+    "strike": 63452.04,
+    "probUp": 0.48142611394851514,
+    "rawProbUp": 0.49999999947519136,
+    "side": "DOWN",
+    "confidence": 0.5185738860514848,
+    "marketImpliedUp": 0.415,
+    "marketBidUp": 0.41,
+    "marketAskUp": 0.42,
+    "marketQuotedAt": "2026-06-12T01:50:02.885Z",
+    "bookSource": "live",
+    "features": {
+      "z": 0,
+      "m15": 1.7972702937884508,
+      "m60": -1.4284142658372296,
+      "m240": 0,
+      "vr": -0.05472165979906561,
+      "todSin": 0.46174861323503397,
+      "todCos": 0.8870108331782217,
+      "mkt": -0.34333332700115815
+    },
+    "horizonMinutes": 4.99165,
+    "decidedAt": "2026-06-12T01:50:00.501Z",
+    "source": "live",
+    "outcome": "UP",
+    "closePrice": 63461.67,
+    "correct": false,
+    "resolvedBy": "binance",
+    "resolvedAt": "2026-06-12T01:55:28.179Z"
+  },
+  "5m:1781229300000": {
+    "id": "5m:1781229300000",
+    "rangeId": "5m",
+    "slug": "btc-updown-5m-1781229300",
+    "windowStart": "2026-06-12T01:55:00.000Z",
+    "windowEnd": "2026-06-12T02:00:00.000Z",
+    "strike": 63461.67,
+    "probUp": 0.49028485900481195,
+    "rawProbUp": 0.49999999947519136,
+    "side": "DOWN",
+    "confidence": 0.5097151409951881,
+    "marketImpliedUp": 0.385,
+    "marketBidUp": 0.38,
+    "marketAskUp": 0.39,
+    "marketQuotedAt": "2026-06-12T01:55:00.985Z",
+    "bookSource": "live",
+    "features": {
+      "z": 0,
+      "m15": 1.6934370288384086,
+      "m60": -1.8015425061702521,
+      "m240": 0,
+      "vr": -0.16429021464748647,
+      "todSin": 0.48098876891938763,
+      "todCos": 0.8767267557075077,
+      "mkt": -0.46837893351873355
+    },
+    "horizonMinutes": 4.991866666666667,
+    "decidedAt": "2026-06-12T01:55:00.488Z",
+    "source": "live",
+    "outcome": "DOWN",
+    "closePrice": 63426.2,
+    "correct": true,
+    "resolvedBy": "binance",
+    "resolvedAt": "2026-06-12T02:00:28.263Z"
+  },
+  "5m:1781229600000": {
+    "id": "5m:1781229600000",
+    "rangeId": "5m",
+    "slug": "btc-updown-5m-1781229600",
+    "windowStart": "2026-06-12T02:00:00.000Z",
+    "windowEnd": "2026-06-12T02:05:00.000Z",
+    "strike": 63426.21,
+    "probUp": 0.5360071481914366,
+    "rawProbUp": 0.49999999947519136,
+    "side": "UP",
+    "confidence": 0.5360071481914366,
+    "marketImpliedUp": 0.495,
+    "marketBidUp": 0.49,
+    "marketAskUp": 0.5,
+    "marketQuotedAt": "2026-06-12T02:00:01.547Z",
+    "bookSource": "live",
+    "features": {
+      "z": 0,
+      "m15": 0.35781149858776995,
+      "m60": -1.0447827472405349,
+      "m240": 0,
+      "vr": -0.295244159589311,
+      "todSin": 0.49999999999999994,
+      "todCos": 0.8660254037844387,
+      "mkt": -0.020000666706669543
+    },
+    "horizonMinutes": 4.9917,
+    "decidedAt": "2026-06-12T02:00:00.498Z",
+    "source": "live",
+    "outcome": "UP",
+    "closePrice": 63474.39,
+    "correct": true,
+    "resolvedBy": "binance",
+    "resolvedAt": "2026-06-12T02:05:01.203Z"
+  },
+  "15m:1781229600000": {
+    "id": "15m:1781229600000",
+    "rangeId": "15m",
+    "slug": "btc-updown-15m-1781229600",
+    "windowStart": "2026-06-12T02:00:00.000Z",
+    "windowEnd": "2026-06-12T02:15:00.000Z",
+    "strike": 63351.24236496272,
+    "probUp": 0.7881929706453975,
+    "rawProbUp": 0.8866951383957508,
+    "side": "UP",
+    "confidence": 0.7881929706453975,
+    "marketImpliedUp": 0.495,
+    "marketBidUp": 0.49,
+    "marketAskUp": 0.5,
+    "marketQuotedAt": "2026-06-12T02:00:01.522Z",
+    "bookSource": "live",
+    "features": {
+      "z": 1.2091386090157215,
+      "m15": 0.35781149858776995,
+      "m60": -1.0447827472405349,
+      "m240": 0,
+      "vr": -0.295244159589311,
+      "todSin": 0.49999999999999994,
+      "todCos": 0.8660254037844387,
+      "mkt": -0.020000666706669543
+    },
+    "horizonMinutes": 14.9917,
+    "decidedAt": "2026-06-12T02:00:00.498Z",
+    "source": "live",
+    "outcome": "UP",
+    "closePrice": 63665.21,
+    "correct": true,
+    "resolvedBy": "binance",
+    "resolvedAt": "2026-06-12T02:15:45.305Z"
+  },
+  "1h:1781229600000": {
+    "id": "1h:1781229600000",
+    "rangeId": "1h",
+    "slug": "bitcoin-up-or-down-june-11-2026-10pm-et",
+    "windowStart": "2026-06-12T02:00:00.000Z",
+    "windowEnd": "2026-06-12T03:00:00.000Z",
+    "strike": 63426.21,
+    "probUp": 0.5295133917100322,
+    "rawProbUp": 0.49999999947519136,
+    "side": "UP",
+    "confidence": 0.5295133917100322,
+    "marketImpliedUp": 0.54,
+    "marketBidUp": 0.53,
+    "marketAskUp": 0.55,
+    "marketQuotedAt": "2026-06-12T02:00:01.567Z",
+    "bookSource": "live",
+    "features": {
+      "z": 0,
+      "m15": 0.35781149858776995,
+      "m60": -1.0447827472405349,
+      "m240": 0,
+      "vr": -0.295244159589311,
+      "todSin": 0.49999999999999994,
+      "todCos": 0.8660254037844387,
+      "mkt": 0.16034265007517948
+    },
+    "horizonMinutes": 59.9917,
+    "decidedAt": "2026-06-12T02:00:00.498Z",
+    "source": "live",
+    "outcome": null
+  },
+  "5m:1781229900000": {
+    "id": "5m:1781229900000",
+    "rangeId": "5m",
+    "slug": "btc-updown-5m-1781229900",
+    "windowStart": "2026-06-12T02:05:00.000Z",
+    "windowEnd": "2026-06-12T02:10:00.000Z",
+    "strike": 63397.50137322614,
+    "probUp": 0.9631970667454386,
+    "rawProbUp": 0.98,
+    "side": "UP",
+    "confidence": 0.9631970667454386,
+    "marketImpliedUp": 0.455,
+    "marketBidUp": 0.45,
+    "marketAskUp": 0.46,
+    "marketQuotedAt": "2026-06-12T02:05:06.173Z",
+    "bookSource": "live",
+    "features": {
+      "z": 2.3965200656992782,
+      "m15": 0.9639832463915681,
+      "m60": -0.05014856228434055,
+      "m240": 0,
+      "vr": -0.42525302131195425,
+      "todSin": 0.5187732581605214,
+      "todCos": 0.8549118706729466,
+      "mkt": -0.18048837571229354
+    },
+    "horizonMinutes": 4.92405,
+    "decidedAt": "2026-06-12T02:05:04.557Z",
+    "source": "live",
+    "outcome": "UP",
+    "closePrice": 63653.85,
+    "correct": true,
+    "resolvedBy": "binance",
+    "resolvedAt": "2026-06-12T02:10:46.872Z"
+  },
+  "5m:1781230200000": {
+    "id": "5m:1781230200000",
+    "rangeId": "5m",
+    "slug": "btc-updown-5m-1781230200",
+    "windowStart": "2026-06-12T02:10:00.000Z",
+    "windowEnd": "2026-06-12T02:15:00.000Z",
+    "strike": 63653.86,
+    "probUp": 0.0316273848148411,
+    "rawProbUp": 0.02,
+    "side": "DOWN",
+    "confidence": 0.9683726151851589,
+    "marketImpliedUp": 0.575,
+    "marketBidUp": 0.57,
+    "marketAskUp": 0.58,
+    "marketUpBids": [
+      {
+        "p": 0.57,
+        "s": 320.09
+      },
+      {
+        "p": 0.56,
+        "s": 304.01
+      },
+      {
+        "p": 0.55,
+        "s": 211.92
+      },
+      {
+        "p": 0.54,
+        "s": 385
+      },
+      {
+        "p": 0.53,
+        "s": 449.16
+      }
+    ],
+    "marketUpAsks": [
+      {
+        "p": 0.58,
+        "s": 218.01
+      },
+      {
+        "p": 0.59,
+        "s": 274.29
+      },
+      {
+        "p": 0.6,
+        "s": 590.5
+      },
+      {
+        "p": 0.61,
+        "s": 207.99
+      },
+      {
+        "p": 0.62,
+        "s": 212.05
+      }
+    ],
+    "marketQuotedAt": "2026-06-12T02:10:05.467Z",
+    "bookSource": "live",
+    "features": {
+      "z": -2.1413520635558356,
+      "m15": 2.884955143143235,
+      "m60": 0.6287859987786215,
+      "m240": -0.19377026111931572,
+      "vr": -0.3054071933683405,
+      "todSin": 0.5372996083468238,
+      "todCos": 0.8433914458128857,
+      "mkt": 0.3022808718729335
+    },
+    "horizonMinutes": 4.914666666666666,
+    "decidedAt": "2026-06-12T02:10:05.120Z",
+    "source": "live",
+    "outcome": "UP",
+    "closePrice": 63665.21,
+    "correct": false,
+    "resolvedBy": "binance",
+    "resolvedAt": "2026-06-12T02:15:45.359Z"
+  },
+  "5m:1781230500000": {
+    "id": "5m:1781230500000",
+    "rangeId": "5m",
+    "slug": "btc-updown-5m-1781230500",
+    "windowStart": "2026-06-12T02:15:00.000Z",
+    "windowEnd": "2026-06-12T02:20:00.000Z",
+    "strike": 63665.2,
+    "probUp": 0.47909512894925044,
+    "rawProbUp": 0.5230000080051036,
+    "side": "DOWN",
+    "confidence": 0.5209048710507496,
+    "marketImpliedUp": 0.505,
+    "marketBidUp": 0.5,
+    "marketAskUp": 0.51,
+    "marketUpBids": [
+      {
+        "p": 0.5,
+        "s": 635.84
+      },
+      {
+        "p": 0.49,
+        "s": 348.7
+      },
+      {
+        "p": 0.48,
+        "s": 332.89
+      },
+      {
+        "p": 0.47,
+        "s": 258.57
+      },
+      {
+        "p": 0.46,
+        "s": 470.24
+      }
+    ],
+    "marketUpAsks": [
+      {
+        "p": 0.51,
+        "s": 352.11
+      },
+      {
+        "p": 0.52,
+        "s": 105.25
+      },
+      {
+        "p": 0.53,
+        "s": 75.29
+      },
+      {
+        "p": 0.54,
+        "s": 517.49
+      },
+      {
+        "p": 0.55,
+        "s": 173.59
+      }
+    ],
+    "marketQuotedAt": "2026-06-12T02:15:05.517Z",
+    "bookSource": "live",
+    "features": {
+      "z": 0.05768426861074482,
+      "m15": 2.3244524902044965,
+      "m60": 1.0426139207732847,
+      "m240": 0.13044784922968491,
+      "vr": 0.29036789681073827,
+      "todSin": 0.5555702330196022,
+      "todCos": 0.8314696123025452,
+      "mkt": 0.020000666706669435
+    },
+    "horizonMinutes": 4.914383333333333,
+    "decidedAt": "2026-06-12T02:15:05.137Z",
+    "source": "live",
+    "outcome": "DOWN",
+    "closePrice": 63636,
+    "correct": true,
+    "resolvedBy": "binance",
+    "resolvedAt": "2026-06-12T02:20:45.336Z"
+  },
+  "15m:1781230500000": {
+    "id": "15m:1781230500000",
+    "rangeId": "15m",
+    "slug": "btc-updown-15m-1781230500",
+    "windowStart": "2026-06-12T02:15:00.000Z",
+    "windowEnd": "2026-06-12T02:30:00.000Z",
+    "strike": 63582.13026002012,
+    "probUp": 0.6931093341390409,
+    "rawProbUp": 0.8134247494255997,
+    "side": "UP",
+    "confidence": 0.6931093341390409,
+    "marketImpliedUp": 0.495,
+    "marketBidUp": 0.49,
+    "marketAskUp": 0.5,
+    "marketUpBids": [
+      {
+        "p": 0.49,
+        "s": 742.47
+      },
+      {
+        "p": 0.48,
+        "s": 502.82
+      },
+      {
+        "p": 0.47,
+        "s": 132
+      },
+      {
+        "p": 0.46,
+        "s": 135.01
+      },
+      {
+        "p": 0.45,
+        "s": 114
+      }
+    ],
+    "marketUpAsks": [
+      {
+        "p": 0.5,
+        "s": 278.72
+      },
+      {
+        "p": 0.51,
+        "s": 21.12
+      },
+      {
+        "p": 0.52,
+        "s": 5
+      },
+      {
+        "p": 0.54,
+        "s": 195.14
+      },
+      {
+        "p": 0.55,
+        "s": 227
+      }
+    ],
+    "marketQuotedAt": "2026-06-12T02:15:05.519Z",
+    "bookSource": "live",
+    "features": {
+      "z": 0.8905873728278928,
+      "m15": 2.3244524902044965,
+      "m60": 1.0426139207732847,
+      "m240": 0.13044784922968491,
+      "vr": 0.29036789681073827,
+      "todSin": 0.5555702330196022,
+      "todCos": 0.8314696123025452,
+      "mkt": -0.020000666706669543
+    },
+    "horizonMinutes": 14.914383333333333,
+    "decidedAt": "2026-06-12T02:15:05.137Z",
+    "source": "live",
+    "outcome": "DOWN",
+    "closePrice": 63555.98,
+    "correct": false,
+    "resolvedBy": "binance",
+    "resolvedAt": "2026-06-12T02:30:45.346Z"
+  },
+  "5m:1781230800000": {
+    "id": "5m:1781230800000",
+    "rangeId": "5m",
+    "slug": "btc-updown-5m-1781230800",
+    "windowStart": "2026-06-12T02:20:00.000Z",
+    "windowEnd": "2026-06-12T02:25:00.000Z",
+    "strike": 63636,
+    "probUp": 0.39366146056181156,
+    "rawProbUp": 0.37713547754040566,
+    "side": "DOWN",
+    "confidence": 0.6063385394381884,
+    "marketImpliedUp": 0.475,
+    "marketBidUp": 0.47,
+    "marketAskUp": 0.48,
+    "marketUpBids": [
+      {
+        "p": 0.47,
+        "s": 1127.31
+      },
+      {
+        "p": 0.46,
+        "s": 74.2
+      },
+      {
+        "p": 0.45,
+        "s": 10
+      },
+      {
+        "p": 0.44,
+        "s": 40
+      },
+      {
+        "p": 0.43,
+        "s": 126.36
+      }
+    ],
+    "marketUpAsks": [
+      {
+        "p": 0.48,
+        "s": 308.5
+      },
+      {
+        "p": 0.49,
+        "s": 295.38
+      },
+      {
+        "p": 0.5,
+        "s": 395
+      },
+      {
+        "p": 0.51,
+        "s": 162.28
+      },
+      {
+        "p": 0.52,
+        "s": 571.08
+      }
+    ],
+    "marketQuotedAt": "2026-06-12T02:20:02.942Z",
+    "bookSource": "live",
+    "features": {
+      "z": -0.31301294723248113,
+      "m15": 1.368406238156786,
+      "m60": 1.0982074867995573,
+      "m240": -0.010681013930299776,
+      "vr": 0.13539535749722928,
+      "todSin": 0.5735764363510462,
+      "todCos": 0.8191520442889918,
+      "mkt": -0.10008345855698265
+    },
+    "horizonMinutes": 4.9595666666666665,
+    "decidedAt": "2026-06-12T02:20:02.426Z",
+    "source": "live",
+    "outcome": "UP",
+    "closePrice": 63646.21,
+    "correct": false,
+    "resolvedBy": "binance",
+    "resolvedAt": "2026-06-12T02:25:45.312Z"
+  },
+  "5m:1781231100000": {
+    "id": "5m:1781231100000",
+    "rangeId": "5m",
+    "slug": "btc-updown-5m-1781231100",
+    "windowStart": "2026-06-12T02:25:00.000Z",
+    "windowEnd": "2026-06-12T02:30:00.000Z",
+    "strike": 63646.21,
+    "probUp": 0.48145286167429857,
+    "rawProbUp": 0.48751756585113115,
+    "side": "DOWN",
+    "confidence": 0.5185471383257014,
+    "marketImpliedUp": 0.435,
+    "marketBidUp": 0.43,
+    "marketAskUp": 0.44,
+    "marketUpBids": [
+      {
+        "p": 0.43,
+        "s": 115.07
+      },
+      {
+        "p": 0.42,
+        "s": 196
+      },
+      {
+        "p": 0.41,
+        "s": 210
+      },
+      {
+        "p": 0.4,
+        "s": 182.1
+      },
+      {
+        "p": 0.39,
+        "s": 155
+      }
+    ],
+    "marketUpAsks": [
+      {
+        "p": 0.44,
+        "s": 202.25
+      },
+      {
+        "p": 0.45,
+        "s": 80.81
+      },
+      {
+        "p": 0.46,
+        "s": 58
+      },
+      {
+        "p": 0.47,
+        "s": 53
+      },
+      {
+        "p": 0.48,
+        "s": 160.59
+      }
+    ],
+    "marketQuotedAt": "2026-06-12T02:25:01.328Z",
+    "bookSource": "live",
+    "features": {
+      "z": -0.03129379097296773,
+      "m15": -0.8752837211077715,
+      "m60": 1.475517919314911,
+      "m240": 0,
+      "vr": 0.02184932800705738,
+      "todSin": 0.5913096483635824,
+      "todCos": 0.8064446042674827,
+      "mkt": -0.2614797000577567
+    },
+    "horizonMinutes": 4.992933333333333,
+    "decidedAt": "2026-06-12T02:25:00.424Z",
+    "source": "live",
+    "outcome": "DOWN",
+    "closePrice": 63555.98,
+    "correct": true,
+    "resolvedBy": "binance",
+    "resolvedAt": "2026-06-12T02:30:45.387Z"
+  },
+  "5m:1781231400000": {
+    "id": "5m:1781231400000",
+    "rangeId": "5m",
+    "slug": "btc-updown-5m-1781231400",
+    "windowStart": "2026-06-12T02:30:00.000Z",
+    "windowEnd": "2026-06-12T02:35:00.000Z",
+    "strike": 63555.98,
+    "probUp": 0.5405883278017048,
+    "rawProbUp": 0.5133995840455639,
+    "side": "UP",
+    "confidence": 0.5405883278017048,
+    "marketImpliedUp": 0.515,
+    "marketBidUp": 0.51,
+    "marketAskUp": 0.52,
+    "marketUpBids": [
+      {
+        "p": 0.51,
+        "s": 640.9
+      },
+      {
+        "p": 0.5,
+        "s": 107
+      },
+      {
+        "p": 0.49,
+        "s": 241.26
+      },
+      {
+        "p": 0.48,
+        "s": 369
+      },
+      {
+        "p": 0.47,
+        "s": 152
+      }
+    ],
+    "marketUpAsks": [
+      {
+        "p": 0.52,
+        "s": 10
+      },
+      {
+        "p": 0.53,
+        "s": 10
+      },
+      {
+        "p": 0.54,
+        "s": 215
+      },
+      {
+        "p": 0.55,
+        "s": 20
+      },
+      {
+        "p": 0.56,
+        "s": 77.83
+      }
+    ],
+    "marketQuotedAt": "2026-06-12T02:30:01.310Z",
+    "bookSource": "live",
+    "features": {
+      "z": 0.033593949902098894,
+      "m15": -1.3694040775233391,
+      "m60": 1.0207916210727175,
+      "m240": 0,
+      "vr": -0.0609202584641815,
+      "todSin": 0.6087614290087207,
+      "todCos": 0.7933533402912352,
+      "mkt": 0.06001800972625295
+    },
+    "horizonMinutes": 4.9916833333333335,
+    "decidedAt": "2026-06-12T02:30:00.499Z",
+    "source": "live",
+    "outcome": "DOWN",
+    "closePrice": 63515.75,
+    "correct": false,
+    "resolvedBy": "binance",
+    "resolvedAt": "2026-06-12T02:35:45.305Z"
+  },
+  "15m:1781231400000": {
+    "id": "15m:1781231400000",
+    "rangeId": "15m",
+    "slug": "btc-updown-15m-1781231400",
+    "windowStart": "2026-06-12T02:30:00.000Z",
+    "windowEnd": "2026-06-12T02:45:00.000Z",
+    "strike": 63555.98,
+    "probUp": 0.5435684423074105,
+    "rawProbUp": 0.5077329373731843,
+    "side": "UP",
+    "confidence": 0.5435684423074105,
+    "marketImpliedUp": 0.495,
+    "marketBidUp": 0.49,
+    "marketAskUp": 0.5,
+    "marketUpBids": [
+      {
+        "p": 0.49,
+        "s": 230.87
+      },
+      {
+        "p": 0.48,
+        "s": 126.23
+      },
+      {
+        "p": 0.47,
+        "s": 227
+      },
+      {
+        "p": 0.46,
+        "s": 378
+      },
+      {
+        "p": 0.45,
+        "s": 175
+      }
+    ],
+    "marketUpAsks": [
+      {
+        "p": 0.5,
+        "s": 22
+      },
+      {
+        "p": 0.51,
+        "s": 12
+      },
+      {
+        "p": 0.52,
+        "s": 32
+      },
+      {
+        "p": 0.53,
+        "s": 7
+      },
+      {
+        "p": 0.54,
+        "s": 133.92
+      }
+    ],
+    "marketQuotedAt": "2026-06-12T02:30:01.318Z",
+    "bookSource": "live",
+    "features": {
+      "z": 0.019384713353415076,
+      "m15": -1.3694040775233391,
+      "m60": 1.0207916210727175,
+      "m240": 0,
+      "vr": -0.0609202584641815,
+      "todSin": 0.6087614290087207,
+      "todCos": 0.7933533402912352,
+      "mkt": -0.020000666706669543
+    },
+    "horizonMinutes": 14.991683333333333,
+    "decidedAt": "2026-06-12T02:30:00.499Z",
+    "source": "live",
+    "outcome": "UP",
+    "closePrice": 63635.98,
+    "correct": true,
+    "resolvedBy": "binance",
+    "resolvedAt": "2026-06-12T02:45:46.152Z"
+  },
+  "5m:1781231700000": {
+    "id": "5m:1781231700000",
+    "rangeId": "5m",
+    "slug": "btc-updown-5m-1781231700",
+    "windowStart": "2026-06-12T02:35:00.000Z",
+    "windowEnd": "2026-06-12T02:40:00.000Z",
+    "strike": 63515.75,
+    "probUp": 0.5202702474690509,
+    "rawProbUp": 0.49999999947519136,
+    "side": "UP",
+    "confidence": 0.5202702474690509,
+    "marketImpliedUp": 0.535,
+    "marketBidUp": 0.53,
+    "marketAskUp": 0.54,
+    "marketUpBids": [
+      {
+        "p": 0.53,
+        "s": 674.12
+      },
+      {
+        "p": 0.52,
+        "s": 353.4
+      },
+      {
+        "p": 0.51,
+        "s": 246
+      },
+      {
+        "p": 0.5,
+        "s": 183.28
+      },
+      {
+        "p": 0.49,
+        "s": 299.4
+      }
+    ],
+    "marketUpAsks": [
+      {
+        "p": 0.54,
+        "s": 392.69
+      },
+      {
+        "p": 0.55,
+        "s": 192.14
+      },
+      {
+        "p": 0.56,
+        "s": 183.98
+      },
+      {
+        "p": 0.57,
+        "s": 207.24
+      },
+      {
+        "p": 0.58,
+        "s": 189.68
+      }
+    ],
+    "marketQuotedAt": "2026-06-12T02:35:02.633Z",
+    "bookSource": "live",
+    "features": {
+      "z": 0,
+      "m15": -1.5263032634322475,
+      "m60": 1.274296065996272,
+      "m240": 0,
+      "vr": -0.0631463394658487,
+      "todSin": 0.6259234721840591,
+      "todCos": 0.7798844830928818,
+      "mkt": 0.1402293413086503
+    },
+    "horizonMinutes": 4.992416666666666,
+    "decidedAt": "2026-06-12T02:35:00.455Z",
+    "source": "live",
+    "outcome": "UP",
+    "closePrice": 63609.77,
+    "correct": true,
+    "resolvedBy": "binance",
+    "resolvedAt": "2026-06-12T02:40:46.203Z"
+  },
+  "5m:1781232000000": {
+    "id": "5m:1781232000000",
+    "rangeId": "5m",
+    "slug": "btc-updown-5m-1781232000",
+    "windowStart": "2026-06-12T02:40:00.000Z",
+    "windowEnd": "2026-06-12T02:45:00.000Z",
+    "strike": 63522.55595629049,
+    "probUp": 0.9506598118500885,
+    "rawProbUp": 0.98,
+    "side": "UP",
+    "confidence": 0.9506598118500885,
+    "marketImpliedUp": 0.485,
+    "marketBidUp": 0.48,
+    "marketAskUp": 0.49,
+    "marketUpBids": [
+      {
+        "p": 0.48,
+        "s": 501.99
+      },
+      {
+        "p": 0.47,
+        "s": 602.03
+      },
+      {
+        "p": 0.46,
+        "s": 198.01
+      },
+      {
+        "p": 0.45,
+        "s": 168
+      },
+      {
+        "p": 0.44,
+        "s": 185
+      }
+    ],
+    "marketUpAsks": [
+      {
+        "p": 0.49,
+        "s": 145.42
+      },
+      {
+        "p": 0.5,
+        "s": 148.53
+      },
+      {
+        "p": 0.51,
+        "s": 142
+      },
+      {
+        "p": 0.52,
+        "s": 95.21
+      },
+      {
+        "p": 0.53,
+        "s": 352
+      }
+    ],
+    "marketQuotedAt": "2026-06-12T02:40:01.667Z",
+    "bookSource": "live",
+    "features": {
+      "z": 2.1106062517960935,
+      "m15": 0.11889640300070085,
+      "m60": 1.809956814993309,
+      "m240": 0,
+      "vr": -0.1192083877191958,
+      "todSin": 0.6427876096865393,
+      "todCos": 0.766044443118978,
+      "mkt": -0.06001800972625304
+    },
+    "horizonMinutes": 4.991666666666666,
+    "decidedAt": "2026-06-12T02:40:00.500Z",
+    "source": "live",
+    "outcome": "UP",
+    "closePrice": 63635.98,
+    "correct": true,
+    "resolvedBy": "binance",
+    "resolvedAt": "2026-06-12T02:45:46.187Z"
+  },
+  "5m:1781232300000": {
+    "id": "5m:1781232300000",
+    "rangeId": "5m",
+    "slug": "btc-updown-5m-1781232300",
+    "windowStart": "2026-06-12T02:45:00.000Z",
+    "windowEnd": "2026-06-12T02:50:00.000Z",
+    "strike": 63635.98,
+    "probUp": 0.4819197443013735,
+    "rawProbUp": 0.49999999947519136,
+    "side": "DOWN",
+    "confidence": 0.5180802556986265,
+    "marketImpliedUp": 0.495,
+    "marketBidUp": 0.49,
+    "marketAskUp": 0.5,
+    "marketUpBids": [
+      {
+        "p": 0.49,
+        "s": 254.65
+      },
+      {
+        "p": 0.48,
+        "s": 201.42
+      },
+      {
+        "p": 0.47,
+        "s": 123
+      },
+      {
+        "p": 0.46,
+        "s": 205
+      },
+      {
+        "p": 0.45,
+        "s": 272
+      }
+    ],
+    "marketUpAsks": [
+      {
+        "p": 0.5,
+        "s": 268.07
+      },
+      {
+        "p": 0.51,
+        "s": 143.48
+      },
+      {
+        "p": 0.52,
+        "s": 96
+      },
+      {
+        "p": 0.53,
+        "s": 220
+      },
+      {
+        "p": 0.54,
+        "s": 263.44
+      }
+    ],
+    "marketQuotedAt": "2026-06-12T02:45:01.416Z",
+    "bookSource": "live",
+    "features": {
+      "z": 0,
+      "m15": 0.6889391889300062,
+      "m60": 1.6674811034567956,
+      "m240": 0,
+      "vr": -0.19225116130540815,
+      "todSin": 0.6593458151000688,
+      "todCos": 0.7518398074789775,
+      "mkt": -0.020000666706669543
+    },
+    "horizonMinutes": 4.991733333333333,
+    "decidedAt": "2026-06-12T02:45:00.496Z",
+    "source": "live",
+    "outcome": null
+  },
+  "15m:1781232300000": {
+    "id": "15m:1781232300000",
+    "rangeId": "15m",
+    "slug": "btc-updown-15m-1781232300",
+    "windowStart": "2026-06-12T02:45:00.000Z",
+    "windowEnd": "2026-06-12T03:00:00.000Z",
+    "strike": 63542.708937916206,
+    "probUp": 0.8175375843581512,
+    "rawProbUp": 0.909850494505995,
+    "side": "UP",
+    "confidence": 0.8175375843581512,
+    "marketImpliedUp": 0.485,
+    "marketBidUp": 0.48,
+    "marketAskUp": 0.49,
+    "marketUpBids": [
+      {
+        "p": 0.48,
+        "s": 159.94
+      },
+      {
+        "p": 0.47,
+        "s": 237
+      },
+      {
+        "p": 0.46,
+        "s": 42
+      },
+      {
+        "p": 0.45,
+        "s": 37
+      },
+      {
+        "p": 0.44,
+        "s": 342
+      }
+    ],
+    "marketUpAsks": [
+      {
+        "p": 0.49,
+        "s": 47.93
+      },
+      {
+        "p": 0.5,
+        "s": 204.65
+      },
+      {
+        "p": 0.51,
+        "s": 35
+      },
+      {
+        "p": 0.52,
+        "s": 50
+      },
+      {
+        "p": 0.53,
+        "s": 160
+      }
+    ],
+    "marketQuotedAt": "2026-06-12T02:45:01.410Z",
+    "bookSource": "live",
+    "features": {
+      "z": 1.3398353256220539,
+      "m15": 0.6889391889300062,
+      "m60": 1.6674811034567956,
+      "m240": 0,
+      "vr": -0.19225116130540815,
+      "todSin": 0.6593458151000688,
+      "todCos": 0.7518398074789775,
+      "mkt": -0.06001800972625304
+    },
+    "horizonMinutes": 14.991733333333332,
+    "decidedAt": "2026-06-12T02:45:00.496Z",
     "source": "live",
     "outcome": null
   }

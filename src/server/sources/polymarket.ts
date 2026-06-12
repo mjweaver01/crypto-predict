@@ -1,5 +1,5 @@
 import { cached, env } from '../cache.ts';
-import type { MarketQuote, RangeId } from '../../shared/types.ts';
+import type { BookLevel, MarketQuote, RangeId } from '../../shared/types.ts';
 
 // Polymarket runs five recurring "BTC Up or Down" market families:
 //   5m     → slug btc-updown-5m-{startUnix}        (Chainlink BTC/USD)
@@ -48,38 +48,54 @@ interface ClobBookLevel {
   size?: string;
 }
 
+/** How many book levels per side we keep (and persist with commitments). */
+const BOOK_DEPTH_LEVELS = 5;
+
 /**
  * Best bid/ask (0..1) for a token from the CLOB order book — the prices a bet
- * could actually execute at, unlike the midpoint. Levels are scanned for the
- * extremes rather than trusting order. `quotedAt` is the book's own timestamp.
+ * could actually execute at, unlike the midpoint — plus the top levels WITH
+ * sizes, so fills can be simulated against real visible depth. `quotedAt` is
+ * the book's own timestamp.
  */
-export async function bookTop(
-  tokenId: string
-): Promise<{ bid?: number; ask?: number; quotedAt?: string } | undefined> {
+export async function bookTop(tokenId: string): Promise<
+  | {
+      bid?: number;
+      ask?: number;
+      bids: BookLevel[];
+      asks: BookLevel[];
+      quotedAt?: string;
+    }
+  | undefined
+> {
   const data = (await getJson(`${CLOB}/book?token_id=${tokenId}`)) as {
     timestamp?: string | number;
     bids?: ClobBookLevel[];
     asks?: ClobBookLevel[];
   };
-  const best = (
-    levels: ClobBookLevel[] | undefined,
-    pick: (a: number, b: number) => number
-  ): number | undefined => {
-    let out: number | undefined;
-    for (const l of levels ?? []) {
-      const p = Number(l.price);
-      if (!Number.isFinite(p) || p <= 0 || p >= 1) continue;
-      out = out === undefined ? p : pick(out, p);
-    }
-    return out;
-  };
-  const bid = best(data.bids, Math.max);
-  const ask = best(data.asks, Math.min);
-  if (bid === undefined && ask === undefined) return undefined;
+  const clean = (levels: ClobBookLevel[] | undefined): BookLevel[] =>
+    (levels ?? [])
+      .map(l => ({ p: Number(l.price), s: Number(l.size) }))
+      .filter(
+        l =>
+          Number.isFinite(l.p) &&
+          l.p > 0 &&
+          l.p < 1 &&
+          Number.isFinite(l.s) &&
+          l.s > 0
+      );
+  const bids = clean(data.bids)
+    .sort((a, b) => b.p - a.p)
+    .slice(0, BOOK_DEPTH_LEVELS);
+  const asks = clean(data.asks)
+    .sort((a, b) => a.p - b.p)
+    .slice(0, BOOK_DEPTH_LEVELS);
+  if (bids.length === 0 && asks.length === 0) return undefined;
   const ts = Number(data.timestamp);
   return {
-    bid,
-    ask,
+    bid: bids[0]?.p,
+    ask: asks[0]?.p,
+    bids,
+    asks,
     quotedAt:
       Number.isFinite(ts) && ts > 0 ? new Date(ts).toISOString() : undefined,
   };
@@ -224,9 +240,27 @@ export async function fetchMarket(
       impliedDown: 1 - impliedUp,
       upBestBid: top?.bid,
       upBestAsk: top?.ask,
+      upBids: top?.bids,
+      upAsks: top?.asks,
       quotedAt: top?.quotedAt ?? new Date().toISOString(),
     };
   });
+}
+
+/**
+ * Live taker fee (basis points) for a token from the CLOB. Falls back to
+ * 1000 bps — the rate every BTC up/down family charges as of June 2026 — so a
+ * fetch failure can never make a trade look cheaper than it is.
+ */
+export async function fetchFeeBps(tokenId: string): Promise<number> {
+  return cached(`pmfee:${tokenId}`, 300, async () => {
+    const data = (await getJson(`${CLOB}/fee-rate?token_id=${tokenId}`)) as {
+      base_fee?: number;
+    };
+    const bps = Number(data?.base_fee);
+    if (!Number.isFinite(bps) || bps < 0) throw new Error('fee unavailable');
+    return bps;
+  }).catch(() => 1000);
 }
 
 /** Everything the trade executor needs to place/redeem an order on a market. */

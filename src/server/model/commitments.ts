@@ -64,6 +64,8 @@ export async function ensureHydrated(): Promise<void> {
         horizonMinutes: e.horizonMinutes,
         marketBidUp: e.marketBidUp,
         marketAskUp: e.marketAskUp,
+        marketUpBids: e.marketUpBids,
+        marketUpAsks: e.marketUpAsks,
       });
     }
   } catch (err) {
@@ -109,8 +111,11 @@ export function decide(
     horizonMinutes: r.horizonMinutes,
     // Freeze the tradable book with the call: the paper bet must be priced at
     // what was executable when the wager was made, not a later (wiser) quote.
+    // Depth included, so fills can be sized against real visible liquidity.
     marketBidUp: r.market?.upBestBid,
     marketAskUp: r.market?.upBestAsk,
+    marketUpBids: r.market?.upBids,
+    marketUpAsks: r.market?.upAsks,
   };
   commitments.set(id, call);
   return call;
