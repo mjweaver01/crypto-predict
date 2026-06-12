@@ -5,6 +5,7 @@ import type {
   RangeId,
   RangePrediction,
   SpotRangeId,
+  TradesResponse,
 } from '../shared/types.ts';
 import { CRYPTOS, CRYPTO_IDS, type CryptoId } from '../shared/cryptos.ts';
 import {
@@ -848,7 +849,7 @@ function render(p: Prediction) {
   latest = p;
 
   // Header. Once the live stream is feeding the price/change, leave those to it
-  // so the (up-to-20s-cached) predict payload doesn't snap them backwards.
+  // so the (up-to-1s-cached) predict payload doesn't snap them backwards.
   if (!streaming) {
     $('price').textContent = fmtPx(p.stats.price);
     applyChange(p.stats.change24hPct);
@@ -974,11 +975,25 @@ function connectPriceStream() {
   };
 }
 
+async function refreshLiveTradingBadge() {
+  try {
+    const res = await fetch('/api/trades');
+    if (!res.ok) throw new Error(`trades ${res.status}`);
+    const data = (await res.json()) as TradesResponse;
+    const live = data.enabled && !data.dryRun;
+    $('live-trading-badge').style.display = live ? '' : 'none';
+  } catch {
+    // Keep last known state on transient failures.
+  }
+}
+
 wireCryptoSelect();
 wireReasoningToggle();
 applyViewMode();
 refresh();
-setInterval(refresh, 5_000);
+setInterval(refresh, 1_000);
 setInterval(tickCountdowns, 1_000);
 connectPriceStream();
+void refreshLiveTradingBadge();
+setInterval(refreshLiveTradingBadge, 30_000);
 requestAnimationFrame(animateHero);

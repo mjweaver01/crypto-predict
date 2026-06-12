@@ -65,6 +65,22 @@ header {
   gap: 18px;
   flex-wrap: wrap;
 }
+.header-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.live-trading-badge {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  padding: 3px 10px;
+  border-radius: 100px;
+  border: 1px solid rgba(248, 113, 113, 0.45);
+  color: #ffb4b4;
+  background: rgba(248, 113, 113, 0.16);
+  text-transform: uppercase;
+}
 
 /* ── Page nav (live ↔ history) ──────────────────────────── */
 .nav {

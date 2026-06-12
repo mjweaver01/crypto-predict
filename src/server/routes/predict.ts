@@ -38,7 +38,7 @@ import type {
   ServerSpotRangeId,
 } from '../../shared/types.ts';
 
-const TTL = Number(env('CACHE_TTL_PREDICT', '20'));
+const TTL = Number(env('CACHE_TTL_PREDICT', '1'));
 
 /**
  * The most recent prediction per crypto computed by the server-side commit

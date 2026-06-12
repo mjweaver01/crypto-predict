@@ -18,6 +18,14 @@ const CLOB = env('POLYMARKET_CLOB_URL', 'https://clob.polymarket.com');
 // for the Chainlink-resolved 5m/15m/4h markets via /api/crypto/crypto-price.
 const SITE = env('POLYMARKET_SITE_URL', 'https://polymarket.com');
 const TTL = Number(env('CACHE_TTL_POLYMARKET', '5')); // seconds
+// crypto-price openPrice is immutable per window, so cache it longer than live
+// quotes and back off briefly on 429s instead of retry-spamming every tick.
+const STRIKE_TTL = Number(env('CACHE_TTL_PM_STRIKE', '300')); // seconds
+const STRIKE_429_COOLDOWN_MS = Math.max(
+  1_000,
+  Number(env('PM_STRIKE_429_COOLDOWN_SECONDS', '30')) * 1000 || 30_000
+);
+const strikeRateLimitedUntil = new Map<string, number>();
 const ET = 'America/New_York';
 
 interface GammaMarket {
@@ -31,7 +39,13 @@ async function getJson(url: string): Promise<unknown> {
     headers: { 'User-Agent': 'bitcoin-predict/1.0' },
     signal: AbortSignal.timeout(8_000),
   });
-  if (!res.ok) throw new Error(`polymarket ${res.status} ${url}`);
+  if (!res.ok) {
+    const err = new Error(`polymarket ${res.status} ${url}`) as Error & {
+      status?: number;
+    };
+    err.status = res.status;
+    throw err;
+  }
   return res.json();
 }
 
@@ -194,12 +208,15 @@ export async function fetchPolymarketStrike(
     `&eventStartTime=${isoSec(windowStartMs)}` +
     `&variant=${variant}` +
     `&endDate=${isoSec(windowEndMs)}`;
-  // Throw on failure so `cached` never stores a bad/undefined strike (it can
-  // serve a prior good one instead) and the caller falls back to its proxy.
+  // On 429 we deliberately return undefined so the caller uses its boundary-
+  // candle proxy and this key is cached for STRIKE_TTL (preventing request
+  // storms). Non-429 failures still throw so stale values can be served.
   return cached(
     `pmstrike:${crypto}:${rangeId}:${windowStartMs}`,
-    TTL,
+    STRIKE_TTL,
     async () => {
+      const coolUntil = strikeRateLimitedUntil.get(url) ?? 0;
+      if (coolUntil > Date.now()) return undefined;
       let lastErr: unknown;
       for (let attempt = 0; attempt < 2; attempt++) {
         try {
@@ -208,6 +225,18 @@ export async function fetchPolymarketStrike(
           if (Number.isFinite(open) && open > 0) return open;
           lastErr = new Error(`crypto-price openPrice missing for ${variant}`);
         } catch (err) {
+          const status =
+            typeof err === 'object' && err !== null && 'status' in err
+              ? Number((err as { status?: unknown }).status)
+              : NaN;
+          if (status === 429) {
+            strikeRateLimitedUntil.set(
+              url,
+              Date.now() + STRIKE_429_COOLDOWN_MS
+            );
+            // Gracefully fall back to our boundary-candle proxy for this key.
+            return undefined;
+          }
           lastErr = err;
         }
       }

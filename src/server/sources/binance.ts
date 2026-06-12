@@ -5,7 +5,7 @@ import { cached, env } from '../cache.ts';
 // main api.binance.com returns HTTP 451 in some regions, e.g. the US).
 export const BASE = env('BINANCE_BASE_URL', 'https://data-api.binance.vision');
 const SYMBOL = env('BTC_SYMBOL', 'BTCUSDT');
-const TTL = Number(env('CACHE_TTL_KLINES', '20')); // seconds
+const TTL = Number(env('CACHE_TTL_KLINES', '1')); // seconds
 
 /** A single OHLC candle + open time. High/low enable range-based volatility. */
 export interface Candle {

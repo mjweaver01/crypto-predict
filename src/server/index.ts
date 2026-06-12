@@ -214,12 +214,12 @@ setInterval(resolveLoop, 60_000);
 // locked in (and the ledger keeps growing) even when no browser is polling the
 // dashboard. recordPredictions() runs inside predict() on each real recompute,
 // so this is what makes the system "learn on its own" while running unattended.
-// Matches the predict cache TTL (CACHE_TTL_PREDICT, 20s) so each tick recomputes
+// Matches the predict cache TTL (CACHE_TTL_PREDICT, 1s) so each tick recomputes
 // exactly one fresh snapshot. Underlying Binance/Polymarket fetches are cached
 // independently, so this never hammers the upstream APIs.
 const COMMIT_TICK_MS = Math.max(
   1_000,
-  Number(env('COMMIT_TICK_SECONDS', '20')) * 1000 || 20_000
+  Number(env('COMMIT_TICK_SECONDS', '1')) * 1000 || 1_000
 );
 const commitLoop = async () => {
   try {
