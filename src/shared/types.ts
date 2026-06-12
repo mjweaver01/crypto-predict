@@ -441,6 +441,20 @@ export interface TradeRecord {
   /** On-chain redemption tx hash once winnings were claimed. */
   redeemTx?: string;
   redeemedAt?: string;
+
+  // ── Fill verification (POST /api/trades/verify / bun run trade:verify) ──
+  /** On-chain tx hash(es) for the fill(s), sourced from Polymarket data API. */
+  fillTxHashes?: string[];
+  /** Cost the data API reports for our fills (may differ slightly from costUsd). */
+  verifiedCostUsd?: number;
+  /** Shares the data API reports for our fills. */
+  verifiedShares?: number;
+  /** 'match' = recorded fill agrees with data API within tolerance. */
+  verifyStatus?: 'match' | 'mismatch' | 'notfound' | 'error';
+  /** Human-readable detail, e.g. "2 fills · Δcost $0.01" or error message. */
+  verifyNote?: string;
+  /** ISO timestamp of the last verification attempt. */
+  verifiedAt?: string;
 }
 
 /** GET /api/trades — live-trading status and the execution record. */

@@ -7,6 +7,8 @@ import type {
   PaperBet,
   PaperResponse,
   RangeId,
+  TradeRecord,
+  TradesResponse,
 } from '../shared/types.ts';
 import {
   $,
@@ -762,13 +764,162 @@ async function refreshRecord() {
   }
 }
 
+// ── Live trades (real-money execution record + fill verification) ─────────
+let liveTrades: TradeRecord[] = [];
+
+const POLYGONSCAN = 'https://polygonscan.com/tx/';
+
+function verifyBadge(t: TradeRecord): string {
+  if (t.status === 'dry-run') return '';
+  if (!t.verifyStatus) return '<span class="lt-badge lt-badge-none" title="Not yet verified">?</span>';
+  if (t.verifyStatus === 'match')
+    return `<span class="lt-badge lt-badge-match" title="${t.verifyNote ?? ''}">✓</span>`;
+  if (t.verifyStatus === 'mismatch')
+    return `<span class="lt-badge lt-badge-mismatch" title="${t.verifyNote ?? ''}">⚠</span>`;
+  if (t.verifyStatus === 'notfound')
+    return `<span class="lt-badge lt-badge-notfound" title="${t.verifyNote ?? ''}">?</span>`;
+  return `<span class="lt-badge lt-badge-error" title="${t.verifyNote ?? ''}">✗</span>`;
+}
+
+function txLinks(t: TradeRecord): string {
+  const hashes = [
+    ...(t.fillTxHashes ?? []),
+    ...(t.redeemTx && t.redeemTx !== 'none' ? [t.redeemTx] : []),
+  ];
+  if (hashes.length === 0) return '';
+  return hashes
+    .map(
+      (h, i) =>
+        `<a class="lt-tx" href="${POLYGONSCAN}${h}" target="_blank" rel="noopener">` +
+        `${i === 0 ? 'fill' : 'redeem'} ↗</a>`
+    )
+    .join(' ');
+}
+
+function liveTradeRow(t: TradeRecord): string {
+  const statusCls =
+    t.status === 'filled'
+      ? 'lt-status-filled'
+      : t.status === 'partial'
+        ? 'lt-status-partial'
+        : t.status === 'dry-run'
+          ? 'lt-status-dryrun'
+          : 'lt-status-other';
+
+  const pnl =
+    t.pnlUsd !== undefined
+      ? `<span class="pt-pnl ${t.pnlUsd >= 0 ? 'up' : 'down'}">${t.pnlUsd >= 0 ? '+' : ''}${fmtUsd2(t.pnlUsd)}</span>`
+      : t.shares !== undefined && t.costUsd !== undefined
+        ? `<span class="pt-pnl">to win ${fmtUsd2((t.shares * (1 - t.quotedCost)) / t.quotedCost)}</span>`
+        : '';
+
+  const verifiedDetail =
+    t.verifyStatus === 'match' || t.verifyStatus === 'mismatch'
+      ? `<span class="lt-verified-detail">${t.verifyNote}</span>`
+      : '';
+
+  return `<div class="pt-bet lt-row">
+    ${verifyBadge(t)}
+    <span class="lt-status ${statusCls}">${t.status}</span>
+    <span class="rec-range">${t.rangeId}</span>
+    <span class="pt-when">${fmtDateTime(t.placedAt)}</span>
+    <span class="rec-side ${t.side === 'UP' ? 'up' : 'down'}">${t.side}</span>
+    <span class="pt-num">at ${(t.quotedCost * 100).toFixed(1)}¢</span>
+    <span class="pt-num">bet ${fmtUsd2(t.costUsd ?? t.intendedUsd)}</span>
+    ${pnl}
+    ${txLinks(t)}
+    ${verifiedDetail}
+  </div>`;
+}
+
+function renderLiveTrades(trades: TradeRecord[]) {
+  const card = $('live-trades-card');
+  if (trades.length === 0) {
+    card.style.display = 'none';
+    return;
+  }
+  card.style.display = '';
+
+  const settled = trades.filter(t => t.settledAt);
+  const wins = settled.filter(t => t.won).length;
+  const pnl = settled.reduce((s, t) => s + (t.pnlUsd ?? 0), 0);
+  const pnlSign = pnl >= 0 ? '+' : '';
+  const isDryRun = trades.every(t => t.status === 'dry-run');
+
+  $('lt-sub').textContent =
+    `${trades.length} trade${trades.length !== 1 ? 's' : ''}` +
+    (isDryRun ? ' · shadow mode' : '') +
+    ` · ${settled.length} settled (${wins}W–${settled.length - wins}L)`;
+
+  $('lt-stats').innerHTML = `
+    <div>
+      <div class="rstat-label">P&amp;L</div>
+      <div class="rstat-val" style="color:${pnl >= 0 ? COLORS.up : COLORS.down}">${pnlSign}${fmtUsd2(pnl)}</div>
+    </div>
+    <div>
+      <div class="rstat-label">Staked</div>
+      <div class="rstat-val">${fmtUsd2(settled.reduce((s, t) => s + (t.costUsd ?? 0), 0))}</div>
+    </div>
+    <div>
+      <div class="rstat-label">Verified</div>
+      <div class="rstat-val">${trades.filter(t => t.verifyStatus === 'match').length} / ${trades.filter(t => t.status !== 'dry-run' && (t.status === 'filled' || t.status === 'partial')).length}</div>
+    </div>`;
+
+  $('lt-trades').innerHTML = trades.map(liveTradeRow).join('');
+}
+
+async function refreshLiveTrades() {
+  try {
+    const res = await fetch('/api/trades');
+    if (!res.ok) return;
+    const data = (await res.json()) as TradesResponse;
+    liveTrades = data.trades;
+    renderLiveTrades(liveTrades);
+  } catch {
+    // Best-effort; keep last known state.
+  }
+}
+
+function wireLiveTradesVerify() {
+  const btn = $<HTMLButtonElement>('lt-verify-btn');
+  const status = $('lt-verify-status');
+  btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    btn.textContent = 'Verifying…';
+    status.textContent = '';
+    try {
+      const res = await fetch('/api/trades/verify', { method: 'POST' });
+      if (!res.ok) throw new Error(`server ${res.status}`);
+      const data = (await res.json()) as {
+        counts: Record<string, number>;
+        trades: TradeRecord[];
+      };
+      liveTrades = data.trades;
+      renderLiveTrades(liveTrades);
+      const c = data.counts;
+      status.textContent =
+        `✓ ${c.match} · ⚠ ${c.mismatch} · ? ${c.notfound}` +
+        (c.error ? ` · ✗ ${c.error}` : '');
+      status.className = 'lt-verify-status lt-verify-done';
+    } catch (err) {
+      status.textContent = `Error: ${err}`;
+      status.className = 'lt-verify-status lt-verify-err';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Verify fills';
+    }
+  });
+}
+
 const refreshAll = () => {
   refreshHistory();
   refreshRecord();
   refreshMetrics();
   refreshPaper();
+  refreshLiveTrades();
 };
 wireCryptoSelect(refreshAll);
+wireLiveTradesVerify();
 refreshHistory();
 setInterval(refreshHistory, 5_000);
 // The ledger only changes when windows resolve (server resolve loop ≈ 60s), so
@@ -777,6 +928,8 @@ setInterval(refreshHistory, 5_000);
 refreshRecord();
 refreshMetrics();
 refreshPaper();
+refreshLiveTrades();
 setInterval(refreshRecord, 30_000);
 setInterval(refreshMetrics, 30_000);
 setInterval(refreshPaper, 30_000);
+setInterval(refreshLiveTrades, 30_000);

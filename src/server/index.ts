@@ -15,6 +15,7 @@ import { makePriceStreamResponse } from './sources/priceStream.ts';
 import { getTradeConfig } from './trade/config.ts';
 import { getTrades, isOpen, settleTrades } from './trade/tradeLog.ts';
 import { redeemSettled } from './trade/redeem.ts';
+import { verifyTrades } from './trade/verify.ts';
 import type { TradesResponse } from '../shared/types.ts';
 
 // 8333 is Bitcoin's default P2P network port.
@@ -150,6 +151,14 @@ const server = Bun.serve({
           trades,
         };
         return json(body);
+      }
+      if (pathname === '/api/trades/verify' && req.method === 'POST') {
+        // Cross-check every live fill against the Polymarket data API. Patches
+        // each TradeRecord with fillTxHashes, verifyStatus, verifyNote, etc.
+        // Returns the updated trade list so the UI can refresh in one round-trip.
+        const counts = await verifyTrades();
+        const trades = (await getTrades()).filter(t => inCrypto(t.crypto));
+        return json({ counts, trades });
       }
     } catch (err) {
       console.error(err);

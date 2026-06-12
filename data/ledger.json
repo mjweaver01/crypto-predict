@@ -119512,7 +119512,11 @@
     "horizonMinutes": 59.991683333333334,
     "decidedAt": "2026-06-12T04:00:00.499Z",
     "source": "live",
-    "outcome": null
+    "outcome": "UP",
+    "closePrice": 603.53,
+    "correct": true,
+    "resolvedBy": "binance",
+    "resolvedAt": "2026-06-12T05:00:37.380Z"
   },
   "bnb:4h:1781236800000": {
     "id": "bnb:4h:1781236800000",
@@ -119824,7 +119828,11 @@
     "horizonMinutes": 59.9917,
     "decidedAt": "2026-06-12T04:00:00.498Z",
     "source": "live",
-    "outcome": null
+    "outcome": "UP",
+    "closePrice": 0.08701,
+    "correct": true,
+    "resolvedBy": "binance",
+    "resolvedAt": "2026-06-12T05:00:37.608Z"
   },
   "doge:4h:1781236800000": {
     "id": "doge:4h:1781236800000",
@@ -120136,7 +120144,11 @@
     "horizonMinutes": 59.97493333333333,
     "decidedAt": "2026-06-12T04:00:01.504Z",
     "source": "live",
-    "outcome": null
+    "outcome": "UP",
+    "closePrice": 1.1465,
+    "correct": true,
+    "resolvedBy": "binance",
+    "resolvedAt": "2026-06-12T05:00:37.821Z"
   },
   "xrp:4h:1781236800000": {
     "id": "xrp:4h:1781236800000",
@@ -120448,7 +120460,11 @@
     "horizonMinutes": 59.975,
     "decidedAt": "2026-06-12T04:00:01.500Z",
     "source": "live",
-    "outcome": null
+    "outcome": "UP",
+    "closePrice": 63700,
+    "correct": true,
+    "resolvedBy": "binance",
+    "resolvedAt": "2026-06-12T05:00:38.051Z"
   },
   "btc:4h:1781236800000": {
     "id": "btc:4h:1781236800000",
@@ -120760,7 +120776,11 @@
     "horizonMinutes": 59.97495,
     "decidedAt": "2026-06-12T04:00:01.503Z",
     "source": "live",
-    "outcome": null
+    "outcome": "UP",
+    "closePrice": 1677.47,
+    "correct": true,
+    "resolvedBy": "binance",
+    "resolvedAt": "2026-06-12T05:00:38.291Z"
   },
   "eth:4h:1781236800000": {
     "id": "eth:4h:1781236800000",
@@ -121072,7 +121092,11 @@
     "horizonMinutes": 59.9583,
     "decidedAt": "2026-06-12T04:00:02.502Z",
     "source": "live",
-    "outcome": null
+    "outcome": "UP",
+    "closePrice": 67.07,
+    "correct": true,
+    "resolvedBy": "binance",
+    "resolvedAt": "2026-06-12T05:00:38.506Z"
   },
   "sol:4h:1781236800000": {
     "id": "sol:4h:1781236800000",
@@ -126104,7 +126128,11 @@
     "horizonMinutes": 14.9962,
     "decidedAt": "2026-06-12T04:45:00.228Z",
     "source": "live",
-    "outcome": null
+    "outcome": "UP",
+    "closePrice": 63700,
+    "correct": true,
+    "resolvedBy": "binance",
+    "resolvedAt": "2026-06-12T05:00:38.555Z"
   },
   "sol:5m:1781239500000": {
     "id": "sol:5m:1781239500000",
@@ -126260,7 +126288,11 @@
     "horizonMinutes": 14.996166666666667,
     "decidedAt": "2026-06-12T04:45:00.230Z",
     "source": "live",
-    "outcome": null
+    "outcome": "UP",
+    "closePrice": 67.07,
+    "correct": true,
+    "resolvedBy": "binance",
+    "resolvedAt": "2026-06-12T05:00:38.610Z"
   },
   "bnb:5m:1781239500000": {
     "id": "bnb:5m:1781239500000",
@@ -126416,7 +126448,11 @@
     "horizonMinutes": 14.996083333333333,
     "decidedAt": "2026-06-12T04:45:00.235Z",
     "source": "live",
-    "outcome": null
+    "outcome": "UP",
+    "closePrice": 603.53,
+    "correct": true,
+    "resolvedBy": "binance",
+    "resolvedAt": "2026-06-12T05:00:38.683Z"
   },
   "xrp:5m:1781239500000": {
     "id": "xrp:5m:1781239500000",
@@ -126572,7 +126608,11 @@
     "horizonMinutes": 14.996133333333333,
     "decidedAt": "2026-06-12T04:45:00.232Z",
     "source": "live",
-    "outcome": null
+    "outcome": "UP",
+    "closePrice": 1.1465,
+    "correct": true,
+    "resolvedBy": "binance",
+    "resolvedAt": "2026-06-12T05:00:38.731Z"
   },
   "doge:5m:1781239500000": {
     "id": "doge:5m:1781239500000",
@@ -126728,7 +126768,11 @@
     "horizonMinutes": 14.991883333333334,
     "decidedAt": "2026-06-12T04:45:00.487Z",
     "source": "live",
-    "outcome": null
+    "outcome": "UP",
+    "closePrice": 0.08701,
+    "correct": true,
+    "resolvedBy": "binance",
+    "resolvedAt": "2026-06-12T05:00:38.787Z"
   },
   "eth:5m:1781239500000": {
     "id": "eth:5m:1781239500000",
@@ -126884,7 +126928,11 @@
     "horizonMinutes": 14.979533333333332,
     "decidedAt": "2026-06-12T04:45:01.228Z",
     "source": "live",
-    "outcome": null
+    "outcome": "UP",
+    "closePrice": 1677.47,
+    "correct": true,
+    "resolvedBy": "binance",
+    "resolvedAt": "2026-06-12T05:00:38.829Z"
   },
   "xrp:5m:1781239800000": {
     "id": "xrp:5m:1781239800000",
@@ -126960,7 +127008,11 @@
     "horizonMinutes": 4.991716666666667,
     "decidedAt": "2026-06-12T04:50:00.497Z",
     "source": "live",
-    "outcome": null
+    "outcome": "UP",
+    "closePrice": 1.1472,
+    "correct": true,
+    "resolvedBy": "binance",
+    "resolvedAt": "2026-06-12T04:55:00.339Z"
   },
   "btc:5m:1781239800000": {
     "id": "btc:5m:1781239800000",
@@ -127036,7 +127088,11 @@
     "horizonMinutes": 4.99185,
     "decidedAt": "2026-06-12T04:50:00.489Z",
     "source": "live",
-    "outcome": null
+    "outcome": "DOWN",
+    "closePrice": 63704.91,
+    "correct": true,
+    "resolvedBy": "binance",
+    "resolvedAt": "2026-06-12T04:55:00.655Z"
   },
   "sol:5m:1781239800000": {
     "id": "sol:5m:1781239800000",
@@ -127112,7 +127168,11 @@
     "horizonMinutes": 4.991783333333333,
     "decidedAt": "2026-06-12T04:50:00.493Z",
     "source": "live",
-    "outcome": null
+    "outcome": "UP",
+    "closePrice": 67.11,
+    "correct": true,
+    "resolvedBy": "binance",
+    "resolvedAt": "2026-06-12T04:55:01.152Z"
   },
   "eth:5m:1781239800000": {
     "id": "eth:5m:1781239800000",
@@ -127188,7 +127248,11 @@
     "horizonMinutes": 4.972933333333334,
     "decidedAt": "2026-06-12T04:50:01.624Z",
     "source": "live",
-    "outcome": null
+    "outcome": "UP",
+    "closePrice": 1678.54,
+    "correct": true,
+    "resolvedBy": "binance",
+    "resolvedAt": "2026-06-12T04:55:01.774Z"
   },
   "doge:5m:1781239800000": {
     "id": "doge:5m:1781239800000",
@@ -127264,7 +127328,11 @@
     "horizonMinutes": 4.972883333333334,
     "decidedAt": "2026-06-12T04:50:01.627Z",
     "source": "live",
-    "outcome": null
+    "outcome": "UP",
+    "closePrice": 0.087,
+    "correct": true,
+    "resolvedBy": "binance",
+    "resolvedAt": "2026-06-12T04:55:02.307Z"
   },
   "bnb:5m:1781239800000": {
     "id": "bnb:5m:1781239800000",
@@ -127339,6 +127407,1858 @@
     },
     "horizonMinutes": 4.972833333333333,
     "decidedAt": "2026-06-12T04:50:01.630Z",
+    "source": "live",
+    "outcome": "UP",
+    "closePrice": 603.91,
+    "correct": true,
+    "resolvedBy": "binance",
+    "resolvedAt": "2026-06-12T04:55:02.697Z"
+  },
+  "btc:5m:1781240100000": {
+    "id": "btc:5m:1781240100000",
+    "crypto": "btc",
+    "rangeId": "5m",
+    "slug": "btc-updown-5m-1781240100",
+    "windowStart": "2026-06-12T04:55:00.000Z",
+    "windowEnd": "2026-06-12T05:00:00.000Z",
+    "strike": 63704.91,
+    "probUp": 0.4666099412067783,
+    "rawProbUp": 0.49999999947519136,
+    "side": "DOWN",
+    "confidence": 0.5333900587932217,
+    "marketImpliedUp": 0.355,
+    "marketBidUp": 0.35,
+    "marketAskUp": 0.36,
+    "marketUpBids": [
+      {
+        "p": 0.35,
+        "s": 35
+      },
+      {
+        "p": 0.34,
+        "s": 20
+      },
+      {
+        "p": 0.33,
+        "s": 74
+      },
+      {
+        "p": 0.32,
+        "s": 120.25
+      },
+      {
+        "p": 0.31,
+        "s": 49
+      }
+    ],
+    "marketUpAsks": [
+      {
+        "p": 0.36,
+        "s": 131.5
+      },
+      {
+        "p": 0.37,
+        "s": 125.11
+      },
+      {
+        "p": 0.38,
+        "s": 493.68
+      },
+      {
+        "p": 0.39,
+        "s": 19.7
+      },
+      {
+        "p": 0.4,
+        "s": 10
+      }
+    ],
+    "marketQuotedAt": "2026-06-12T04:55:00.583Z",
+    "bookSource": "live",
+    "features": {
+      "z": 0,
+      "m15": -0.25186929047912077,
+      "m60": 1.292157458608041,
+      "m240": -0.009060415669111558,
+      "vr": -0.2042411726541102,
+      "todSin": 0.9600498543859287,
+      "todCos": 0.27982901403099203,
+      "mkt": -0.5971325273203567
+    },
+    "horizonMinutes": 4.99955,
+    "decidedAt": "2026-06-12T04:55:00.027Z",
+    "source": "live",
+    "outcome": "DOWN",
+    "closePrice": 63700,
+    "correct": true,
+    "resolvedBy": "binance",
+    "resolvedAt": "2026-06-12T05:00:38.872Z"
+  },
+  "xrp:5m:1781240100000": {
+    "id": "xrp:5m:1781240100000",
+    "crypto": "xrp",
+    "rangeId": "5m",
+    "slug": "xrp-updown-5m-1781240100",
+    "windowStart": "2026-06-12T04:55:00.000Z",
+    "windowEnd": "2026-06-12T05:00:00.000Z",
+    "strike": 1.1457842134429965,
+    "probUp": 0.9006157323114901,
+    "rawProbUp": 0.9013603931110149,
+    "side": "UP",
+    "confidence": 0.9006157323114901,
+    "marketImpliedUp": 0.5,
+    "marketBidUp": 0.42,
+    "marketAskUp": 0.58,
+    "marketUpBids": [
+      {
+        "p": 0.42,
+        "s": 7.14
+      },
+      {
+        "p": 0.4,
+        "s": 7.5
+      },
+      {
+        "p": 0.38,
+        "s": 12.38
+      },
+      {
+        "p": 0.37,
+        "s": 5.4
+      },
+      {
+        "p": 0.36,
+        "s": 5.55
+      }
+    ],
+    "marketUpAsks": [
+      {
+        "p": 0.58,
+        "s": 7.14
+      },
+      {
+        "p": 0.6,
+        "s": 7.5
+      },
+      {
+        "p": 0.62,
+        "s": 13.47
+      },
+      {
+        "p": 0.63,
+        "s": 5.4
+      },
+      {
+        "p": 0.64,
+        "s": 5.55
+      }
+    ],
+    "marketQuotedAt": "2026-06-12T04:55:01.076Z",
+    "bookSource": "live",
+    "features": {
+      "z": 1.2893423809523468,
+      "m15": -0.8918778827052296,
+      "m60": 0.8938637868702991,
+      "m240": 0.4864308231525667,
+      "vr": -0.24589613701081195,
+      "todSin": 0.9600498543859287,
+      "todCos": 0.27982901403099203,
+      "mkt": 0
+    },
+    "horizonMinutes": 4.991633333333334,
+    "decidedAt": "2026-06-12T04:55:00.502Z",
+    "source": "live",
+    "outcome": "UP",
+    "closePrice": 1.1465,
+    "correct": true,
+    "resolvedBy": "binance",
+    "resolvedAt": "2026-06-12T05:00:38.916Z"
+  },
+  "eth:5m:1781240100000": {
+    "id": "eth:5m:1781240100000",
+    "crypto": "eth",
+    "rangeId": "5m",
+    "slug": "eth-updown-5m-1781240100",
+    "windowStart": "2026-06-12T04:55:00.000Z",
+    "windowEnd": "2026-06-12T05:00:00.000Z",
+    "strike": 1676.2182212050054,
+    "probUp": 0.9705962310387947,
+    "rawProbUp": 0.9654112249294556,
+    "side": "UP",
+    "confidence": 0.9705962310387947,
+    "marketImpliedUp": 0.46499999999999997,
+    "marketBidUp": 0.46,
+    "marketAskUp": 0.47,
+    "marketUpBids": [
+      {
+        "p": 0.46,
+        "s": 40
+      },
+      {
+        "p": 0.45,
+        "s": 80
+      },
+      {
+        "p": 0.44,
+        "s": 50
+      },
+      {
+        "p": 0.43,
+        "s": 50
+      },
+      {
+        "p": 0.4,
+        "s": 15
+      }
+    ],
+    "marketUpAsks": [
+      {
+        "p": 0.47,
+        "s": 196.64
+      },
+      {
+        "p": 0.48,
+        "s": 12
+      },
+      {
+        "p": 0.51,
+        "s": 20
+      },
+      {
+        "p": 0.53,
+        "s": 30
+      },
+      {
+        "p": 0.54,
+        "s": 60
+      }
+    ],
+    "marketQuotedAt": "2026-06-12T04:55:01.234Z",
+    "bookSource": "live",
+    "features": {
+      "z": 1.817257701322937,
+      "m15": -0.004574694347995041,
+      "m60": 1.283059756390542,
+      "m240": 0.289568566086801,
+      "vr": -0.34241427504095545,
+      "todSin": 0.9600498543859287,
+      "todCos": 0.27982901403099203,
+      "mkt": -0.1402293413086504
+    },
+    "horizonMinutes": 4.999466666666667,
+    "decidedAt": "2026-06-12T04:55:00.032Z",
+    "source": "live",
+    "outcome": "UP",
+    "closePrice": 1677.47,
+    "correct": true,
+    "resolvedBy": "binance",
+    "resolvedAt": "2026-06-12T05:00:38.961Z"
+  },
+  "bnb:5m:1781240100000": {
+    "id": "bnb:5m:1781240100000",
+    "crypto": "bnb",
+    "rangeId": "5m",
+    "slug": "bnb-updown-5m-1781240100",
+    "windowStart": "2026-06-12T04:55:00.000Z",
+    "windowEnd": "2026-06-12T05:00:00.000Z",
+    "strike": 603.08733,
+    "probUp": 0.9944687499709227,
+    "rawProbUp": 0.994171000756744,
+    "side": "UP",
+    "confidence": 0.9944687499709227,
+    "marketImpliedUp": 0.495,
+    "marketBidUp": 0.38,
+    "marketAskUp": 0.61,
+    "marketUpBids": [
+      {
+        "p": 0.38,
+        "s": 50
+      },
+      {
+        "p": 0.37,
+        "s": 8.1
+      },
+      {
+        "p": 0.35,
+        "s": 5.71
+      },
+      {
+        "p": 0.3,
+        "s": 5
+      },
+      {
+        "p": 0.21,
+        "s": 5
+      }
+    ],
+    "marketUpAsks": [
+      {
+        "p": 0.61,
+        "s": 50
+      },
+      {
+        "p": 0.63,
+        "s": 8.1
+      },
+      {
+        "p": 0.65,
+        "s": 5.71
+      },
+      {
+        "p": 0.7,
+        "s": 5
+      },
+      {
+        "p": 0.79,
+        "s": 5
+      }
+    ],
+    "marketQuotedAt": "2026-06-12T04:55:01.210Z",
+    "bookSource": "live",
+    "features": {
+      "z": 2.52233205556079,
+      "m15": -0.12381336672413962,
+      "m60": 1.2751035428658124,
+      "m240": -0.35353886299117027,
+      "vr": -0.44838356674176466,
+      "todSin": 0.9600498543859287,
+      "todCos": 0.27982901403099203,
+      "mkt": -0.020000666706669543
+    },
+    "horizonMinutes": 4.999416666666667,
+    "decidedAt": "2026-06-12T04:55:00.035Z",
+    "source": "live",
+    "outcome": "UP",
+    "closePrice": 603.53,
+    "correct": true,
+    "resolvedBy": "binance",
+    "resolvedAt": "2026-06-12T05:00:39.006Z"
+  },
+  "sol:5m:1781240100000": {
+    "id": "sol:5m:1781240100000",
+    "crypto": "sol",
+    "rangeId": "5m",
+    "slug": "sol-updown-5m-1781240100",
+    "windowStart": "2026-06-12T04:55:00.000Z",
+    "windowEnd": "2026-06-12T05:00:00.000Z",
+    "strike": 67.02523788039018,
+    "probUp": 0.8876593621313383,
+    "rawProbUp": 0.8769754338330801,
+    "side": "UP",
+    "confidence": 0.8876593621313383,
+    "marketImpliedUp": 0.46499999999999997,
+    "marketBidUp": 0.44,
+    "marketAskUp": 0.49,
+    "marketUpBids": [
+      {
+        "p": 0.44,
+        "s": 10
+      },
+      {
+        "p": 0.42,
+        "s": 10
+      },
+      {
+        "p": 0.4,
+        "s": 5
+      },
+      {
+        "p": 0.39,
+        "s": 12.82
+      },
+      {
+        "p": 0.37,
+        "s": 5.4
+      }
+    ],
+    "marketUpAsks": [
+      {
+        "p": 0.49,
+        "s": 25
+      },
+      {
+        "p": 0.5,
+        "s": 20
+      },
+      {
+        "p": 0.51,
+        "s": 30
+      },
+      {
+        "p": 0.52,
+        "s": 20
+      },
+      {
+        "p": 0.53,
+        "s": 20
+      }
+    ],
+    "marketQuotedAt": "2026-06-12T04:55:01.432Z",
+    "bookSource": "live",
+    "features": {
+      "z": 1.1599994688644055,
+      "m15": 0.15793986997654,
+      "m60": 0.39508526546409406,
+      "m240": 0.17777510826623136,
+      "vr": -0.19333766243781708,
+      "todSin": 0.9600498543859287,
+      "todCos": 0.27982901403099203,
+      "mkt": -0.1402293413086504
+    },
+    "horizonMinutes": 4.99945,
+    "decidedAt": "2026-06-12T04:55:00.033Z",
+    "source": "live",
+    "outcome": "UP",
+    "closePrice": 67.07,
+    "correct": true,
+    "resolvedBy": "binance",
+    "resolvedAt": "2026-06-12T05:00:39.055Z"
+  },
+  "doge:5m:1781240100000": {
+    "id": "doge:5m:1781240100000",
+    "crypto": "doge",
+    "rangeId": "5m",
+    "slug": "doge-updown-5m-1781240100",
+    "windowStart": "2026-06-12T04:55:00.000Z",
+    "windowEnd": "2026-06-12T05:00:00.000Z",
+    "strike": 0.086865,
+    "probUp": 0.8800487628669836,
+    "rawProbUp": 0.8884395085458234,
+    "side": "UP",
+    "confidence": 0.8800487628669836,
+    "marketImpliedUp": 0.5,
+    "marketBidUp": 0.43,
+    "marketAskUp": 0.57,
+    "marketUpBids": [
+      {
+        "p": 0.43,
+        "s": 10
+      },
+      {
+        "p": 0.36,
+        "s": 120
+      },
+      {
+        "p": 0.24,
+        "s": 20
+      },
+      {
+        "p": 0.23,
+        "s": 20
+      },
+      {
+        "p": 0.21,
+        "s": 5
+      }
+    ],
+    "marketUpAsks": [
+      {
+        "p": 0.57,
+        "s": 5
+      },
+      {
+        "p": 0.62,
+        "s": 10
+      },
+      {
+        "p": 0.66,
+        "s": 40
+      },
+      {
+        "p": 0.67,
+        "s": 80
+      },
+      {
+        "p": 0.76,
+        "s": 20
+      }
+    ],
+    "marketQuotedAt": "2026-06-12T04:55:01.830Z",
+    "bookSource": "live",
+    "features": {
+      "z": 1.2182713956836546,
+      "m15": 1.3011590974448335,
+      "m60": 1.2507707542220725,
+      "m240": 0,
+      "vr": 0.24284373656986627,
+      "todSin": 0.9600498543859287,
+      "todCos": 0.27982901403099203,
+      "mkt": 0
+    },
+    "horizonMinutes": 4.982833333333334,
+    "decidedAt": "2026-06-12T04:55:01.030Z",
+    "source": "live",
+    "outcome": "UP",
+    "closePrice": 0.08701,
+    "correct": true,
+    "resolvedBy": "binance",
+    "resolvedAt": "2026-06-12T05:00:39.098Z"
+  },
+  "xrp:5m:1781240400000": {
+    "id": "xrp:5m:1781240400000",
+    "crypto": "xrp",
+    "rangeId": "5m",
+    "slug": "xrp-updown-5m-1781240400",
+    "windowStart": "2026-06-12T05:00:00.000Z",
+    "windowEnd": "2026-06-12T05:05:00.000Z",
+    "strike": 1.144941702073955,
+    "probUp": 0.9574295337119272,
+    "rawProbUp": 0.9517344052859671,
+    "side": "UP",
+    "confidence": 0.9574295337119272,
+    "marketImpliedUp": 0.6000000000000001,
+    "marketBidUp": 0.55,
+    "marketAskUp": 0.65,
+    "marketUpBids": [
+      {
+        "p": 0.55,
+        "s": 20
+      },
+      {
+        "p": 0.54,
+        "s": 20
+      },
+      {
+        "p": 0.53,
+        "s": 20
+      },
+      {
+        "p": 0.52,
+        "s": 20
+      },
+      {
+        "p": 0.51,
+        "s": 25
+      }
+    ],
+    "marketUpAsks": [
+      {
+        "p": 0.65,
+        "s": 5
+      },
+      {
+        "p": 0.7,
+        "s": 5
+      },
+      {
+        "p": 0.71,
+        "s": 20
+      },
+      {
+        "p": 0.72,
+        "s": 20
+      },
+      {
+        "p": 0.73,
+        "s": 20
+      }
+    ],
+    "marketQuotedAt": "2026-06-12T05:00:03.357Z",
+    "bookSource": "live",
+    "features": {
+      "z": 1.6619079593300932,
+      "m15": -1.0360303269065905,
+      "m60": 0.4899837846573833,
+      "m240": 0.8228813596082116,
+      "vr": -0.3504118445314573,
+      "todSin": 0.9659258262890683,
+      "todCos": 0.25881904510252074,
+      "mkt": 0.40546510810816483
+    },
+    "horizonMinutes": 4.962633333333334,
+    "decidedAt": "2026-06-12T05:00:02.242Z",
+    "source": "live",
+    "outcome": null
+  },
+  "xrp:15m:1781240400000": {
+    "id": "xrp:15m:1781240400000",
+    "crypto": "xrp",
+    "rangeId": "15m",
+    "slug": "xrp-updown-15m-1781240400",
+    "windowStart": "2026-06-12T05:00:00.000Z",
+    "windowEnd": "2026-06-12T05:15:00.000Z",
+    "strike": 1.144977846607537,
+    "probUp": 0.857903485760625,
+    "rawProbUp": 0.8254220749015664,
+    "side": "UP",
+    "confidence": 0.857903485760625,
+    "marketImpliedUp": 0.53,
+    "marketBidUp": 0.46,
+    "marketAskUp": 0.6,
+    "marketUpBids": [
+      {
+        "p": 0.46,
+        "s": 5
+      },
+      {
+        "p": 0.45,
+        "s": 10
+      },
+      {
+        "p": 0.44,
+        "s": 160
+      },
+      {
+        "p": 0.19,
+        "s": 5.78
+      },
+      {
+        "p": 0.12,
+        "s": 8.33
+      }
+    ],
+    "marketUpAsks": [
+      {
+        "p": 0.6,
+        "s": 5
+      },
+      {
+        "p": 0.62,
+        "s": 6
+      },
+      {
+        "p": 0.65,
+        "s": 90
+      },
+      {
+        "p": 0.66,
+        "s": 70
+      },
+      {
+        "p": 0.84,
+        "s": 6.87
+      }
+    ],
+    "marketQuotedAt": "2026-06-12T05:00:03.318Z",
+    "bookSource": "live",
+    "features": {
+      "z": 0.9362278445203013,
+      "m15": -1.0360303269065905,
+      "m60": 0.4899837846573833,
+      "m240": 0.8228813596082116,
+      "vr": -0.3504118445314573,
+      "todSin": 0.9659258262890683,
+      "todCos": 0.25881904510252074,
+      "mkt": 0.12014431184206341
+    },
+    "horizonMinutes": 14.962633333333333,
+    "decidedAt": "2026-06-12T05:00:02.242Z",
+    "source": "live",
+    "outcome": null
+  },
+  "xrp:1h:1781240400000": {
+    "id": "xrp:1h:1781240400000",
+    "crypto": "xrp",
+    "rangeId": "1h",
+    "slug": "xrp-up-or-down-june-12-2026-1am-et",
+    "windowStart": "2026-06-12T05:00:00.000Z",
+    "windowEnd": "2026-06-12T06:00:00.000Z",
+    "strike": 1.1466,
+    "probUp": 0.4905224806746858,
+    "rawProbUp": 0.49999999947519136,
+    "side": "DOWN",
+    "confidence": 0.5094775193253143,
+    "marketImpliedUp": 0.495,
+    "marketBidUp": 0.49,
+    "marketAskUp": 0.5,
+    "marketUpBids": [
+      {
+        "p": 0.49,
+        "s": 115
+      },
+      {
+        "p": 0.47,
+        "s": 50
+      },
+      {
+        "p": 0.43,
+        "s": 65
+      },
+      {
+        "p": 0.1,
+        "s": 8400
+      },
+      {
+        "p": 0.08,
+        "s": 10500
+      }
+    ],
+    "marketUpAsks": [
+      {
+        "p": 0.5,
+        "s": 6.12
+      },
+      {
+        "p": 0.51,
+        "s": 5
+      },
+      {
+        "p": 0.58,
+        "s": 50
+      },
+      {
+        "p": 0.59,
+        "s": 65
+      },
+      {
+        "p": 0.9,
+        "s": 8400
+      }
+    ],
+    "marketQuotedAt": "2026-06-12T05:00:03.344Z",
+    "bookSource": "live",
+    "features": {
+      "z": 0,
+      "m15": -1.0360303269065905,
+      "m60": 0.4899837846573833,
+      "m240": 0.8228813596082116,
+      "vr": -0.3504118445314573,
+      "todSin": 0.9659258262890683,
+      "todCos": 0.25881904510252074,
+      "mkt": -0.020000666706669543
+    },
+    "horizonMinutes": 59.962633333333336,
+    "decidedAt": "2026-06-12T05:00:02.242Z",
+    "source": "live",
+    "outcome": null
+  },
+  "btc:5m:1781240400000": {
+    "id": "btc:5m:1781240400000",
+    "crypto": "btc",
+    "rangeId": "5m",
+    "slug": "btc-updown-5m-1781240400",
+    "windowStart": "2026-06-12T05:00:00.000Z",
+    "windowEnd": "2026-06-12T05:05:00.000Z",
+    "strike": 63700,
+    "probUp": 0.45031277823240257,
+    "rawProbUp": 0.49999999947519136,
+    "side": "DOWN",
+    "confidence": 0.5496872217675974,
+    "marketImpliedUp": 0.375,
+    "marketBidUp": 0.37,
+    "marketAskUp": 0.38,
+    "marketUpBids": [
+      {
+        "p": 0.37,
+        "s": 732.77
+      },
+      {
+        "p": 0.36,
+        "s": 170.88
+      },
+      {
+        "p": 0.35,
+        "s": 285.44
+      },
+      {
+        "p": 0.34,
+        "s": 126
+      },
+      {
+        "p": 0.33,
+        "s": 81.29
+      }
+    ],
+    "marketUpAsks": [
+      {
+        "p": 0.38,
+        "s": 115.75
+      },
+      {
+        "p": 0.4,
+        "s": 89
+      },
+      {
+        "p": 0.41,
+        "s": 10
+      },
+      {
+        "p": 0.42,
+        "s": 20
+      },
+      {
+        "p": 0.43,
+        "s": 125.53
+      }
+    ],
+    "marketQuotedAt": "2026-06-12T05:00:03.409Z",
+    "bookSource": "live",
+    "features": {
+      "z": 0,
+      "m15": -0.3884874579811193,
+      "m60": 1.4109991263408967,
+      "m240": 0.5543619356630881,
+      "vr": -0.3350439514796604,
+      "todSin": 0.9659258262890683,
+      "todCos": 0.25881904510252074,
+      "mkt": -0.5108256237659907
+    },
+    "horizonMinutes": 4.96275,
+    "decidedAt": "2026-06-12T05:00:02.235Z",
+    "source": "live",
+    "outcome": null
+  },
+  "btc:15m:1781240400000": {
+    "id": "btc:15m:1781240400000",
+    "crypto": "btc",
+    "rangeId": "15m",
+    "slug": "btc-updown-15m-1781240400",
+    "windowStart": "2026-06-12T05:00:00.000Z",
+    "windowEnd": "2026-06-12T05:15:00.000Z",
+    "strike": 63612.6492130672,
+    "probUp": 0.8555985528806602,
+    "rawProbUp": 0.910893342605343,
+    "side": "UP",
+    "confidence": 0.8555985528806602,
+    "marketImpliedUp": 0.595,
+    "marketBidUp": 0.59,
+    "marketAskUp": 0.6,
+    "marketUpBids": [
+      {
+        "p": 0.59,
+        "s": 62.1
+      },
+      {
+        "p": 0.58,
+        "s": 21
+      },
+      {
+        "p": 0.56,
+        "s": 5
+      },
+      {
+        "p": 0.55,
+        "s": 5
+      },
+      {
+        "p": 0.54,
+        "s": 38.26
+      }
+    ],
+    "marketUpAsks": [
+      {
+        "p": 0.6,
+        "s": 43.06
+      },
+      {
+        "p": 0.61,
+        "s": 20
+      },
+      {
+        "p": 0.62,
+        "s": 30
+      },
+      {
+        "p": 0.63,
+        "s": 5
+      },
+      {
+        "p": 0.65,
+        "s": 93
+      }
+    ],
+    "marketQuotedAt": "2026-06-12T05:00:03.401Z",
+    "bookSource": "live",
+    "features": {
+      "z": 1.3462770216831939,
+      "m15": -0.3884874579811193,
+      "m60": 1.4109991263408967,
+      "m240": 0.5543619356630881,
+      "vr": -0.3350439514796604,
+      "todSin": 0.9659258262890683,
+      "todCos": 0.25881904510252074,
+      "mkt": 0.38467433843909055
+    },
+    "horizonMinutes": 14.96275,
+    "decidedAt": "2026-06-12T05:00:02.235Z",
+    "source": "live",
+    "outcome": null
+  },
+  "btc:1h:1781240400000": {
+    "id": "btc:1h:1781240400000",
+    "crypto": "btc",
+    "rangeId": "1h",
+    "slug": "bitcoin-up-or-down-june-12-2026-1am-et",
+    "windowStart": "2026-06-12T05:00:00.000Z",
+    "windowEnd": "2026-06-12T06:00:00.000Z",
+    "strike": 63700,
+    "probUp": 0.486405513435348,
+    "rawProbUp": 0.49999999947519136,
+    "side": "DOWN",
+    "confidence": 0.513594486564652,
+    "marketImpliedUp": 0.545,
+    "marketBidUp": 0.54,
+    "marketAskUp": 0.55,
+    "marketUpBids": [
+      {
+        "p": 0.54,
+        "s": 17
+      },
+      {
+        "p": 0.53,
+        "s": 10
+      },
+      {
+        "p": 0.52,
+        "s": 70
+      },
+      {
+        "p": 0.51,
+        "s": 30
+      },
+      {
+        "p": 0.5,
+        "s": 30
+      }
+    ],
+    "marketUpAsks": [
+      {
+        "p": 0.55,
+        "s": 61.34
+      },
+      {
+        "p": 0.56,
+        "s": 25
+      },
+      {
+        "p": 0.57,
+        "s": 25
+      },
+      {
+        "p": 0.58,
+        "s": 30
+      },
+      {
+        "p": 0.59,
+        "s": 5
+      }
+    ],
+    "marketQuotedAt": "2026-06-12T05:00:03.317Z",
+    "bookSource": "live",
+    "features": {
+      "z": 0,
+      "m15": -0.3884874579811193,
+      "m60": 1.4109991263408967,
+      "m240": 0.5543619356630881,
+      "vr": -0.3350439514796604,
+      "todSin": 0.9659258262890683,
+      "todCos": 0.25881904510252074,
+      "mkt": 0.1804883757122938
+    },
+    "horizonMinutes": 59.96275,
+    "decidedAt": "2026-06-12T05:00:02.235Z",
+    "source": "live",
+    "outcome": null
+  },
+  "eth:5m:1781240400000": {
+    "id": "eth:5m:1781240400000",
+    "crypto": "eth",
+    "rangeId": "5m",
+    "slug": "eth-updown-5m-1781240400",
+    "windowStart": "2026-06-12T05:00:00.000Z",
+    "windowEnd": "2026-06-12T05:05:00.000Z",
+    "strike": 1675.12265,
+    "probUp": 0.9839381303568859,
+    "rawProbUp": 0.9794028651938407,
+    "side": "UP",
+    "confidence": 0.9839381303568859,
+    "marketImpliedUp": 0.615,
+    "marketBidUp": 0.61,
+    "marketAskUp": 0.62,
+    "marketUpBids": [
+      {
+        "p": 0.61,
+        "s": 36
+      },
+      {
+        "p": 0.6,
+        "s": 30
+      },
+      {
+        "p": 0.59,
+        "s": 30
+      },
+      {
+        "p": 0.58,
+        "s": 30
+      },
+      {
+        "p": 0.57,
+        "s": 150
+      }
+    ],
+    "marketUpAsks": [
+      {
+        "p": 0.62,
+        "s": 21.06
+      },
+      {
+        "p": 0.63,
+        "s": 30
+      },
+      {
+        "p": 0.64,
+        "s": 35
+      },
+      {
+        "p": 0.66,
+        "s": 30
+      },
+      {
+        "p": 0.67,
+        "s": 35
+      }
+    ],
+    "marketQuotedAt": "2026-06-12T05:00:03.343Z",
+    "bookSource": "live",
+    "features": {
+      "z": 2.0415679616983375,
+      "m15": -0.8438376485748904,
+      "m60": 1.0744715728015424,
+      "m240": 0.8638025531263674,
+      "vr": -0.45308824044458446,
+      "todSin": 0.9659258262890683,
+      "todCos": 0.25881904510252074,
+      "mkt": 0.4683789335187336
+    },
+    "horizonMinutes": 4.962716666666667,
+    "decidedAt": "2026-06-12T05:00:02.237Z",
+    "source": "live",
+    "outcome": null
+  },
+  "eth:15m:1781240400000": {
+    "id": "eth:15m:1781240400000",
+    "crypto": "eth",
+    "rangeId": "15m",
+    "slug": "eth-updown-15m-1781240400",
+    "windowStart": "2026-06-12T05:00:00.000Z",
+    "windowEnd": "2026-06-12T05:15:00.000Z",
+    "strike": 1675.0589,
+    "probUp": 0.8624542302480864,
+    "rawProbUp": 0.886527700926826,
+    "side": "UP",
+    "confidence": 0.8624542302480864,
+    "marketImpliedUp": 0.495,
+    "marketBidUp": 0.49,
+    "marketAskUp": 0.5,
+    "marketUpBids": [
+      {
+        "p": 0.49,
+        "s": 79
+      },
+      {
+        "p": 0.48,
+        "s": 34
+      },
+      {
+        "p": 0.47,
+        "s": 34
+      },
+      {
+        "p": 0.46,
+        "s": 29
+      },
+      {
+        "p": 0.45,
+        "s": 29
+      }
+    ],
+    "marketUpAsks": [
+      {
+        "p": 0.5,
+        "s": 46
+      },
+      {
+        "p": 0.54,
+        "s": 10
+      },
+      {
+        "p": 0.56,
+        "s": 5
+      },
+      {
+        "p": 0.58,
+        "s": 29
+      },
+      {
+        "p": 0.59,
+        "s": 29
+      }
+    ],
+    "marketQuotedAt": "2026-06-12T05:00:03.396Z",
+    "bookSource": "live",
+    "features": {
+      "z": 1.2082672705977415,
+      "m15": -0.8438376485748904,
+      "m60": 1.0744715728015424,
+      "m240": 0.8638025531263674,
+      "vr": -0.45308824044458446,
+      "todSin": 0.9659258262890683,
+      "todCos": 0.25881904510252074,
+      "mkt": -0.020000666706669543
+    },
+    "horizonMinutes": 14.962716666666667,
+    "decidedAt": "2026-06-12T05:00:02.237Z",
+    "source": "live",
+    "outcome": null
+  },
+  "eth:1h:1781240400000": {
+    "id": "eth:1h:1781240400000",
+    "crypto": "eth",
+    "rangeId": "1h",
+    "slug": "ethereum-up-or-down-june-12-2026-1am-et",
+    "windowStart": "2026-06-12T05:00:00.000Z",
+    "windowEnd": "2026-06-12T06:00:00.000Z",
+    "strike": 1677.48,
+    "probUp": 0.40374369553622885,
+    "rawProbUp": 0.4981425108904961,
+    "side": "DOWN",
+    "confidence": 0.5962563044637712,
+    "marketImpliedUp": 0.505,
+    "marketBidUp": 0.5,
+    "marketAskUp": 0.51,
+    "marketUpBids": [
+      {
+        "p": 0.5,
+        "s": 35.97
+      },
+      {
+        "p": 0.49,
+        "s": 30
+      },
+      {
+        "p": 0.48,
+        "s": 180
+      },
+      {
+        "p": 0.47,
+        "s": 25
+      },
+      {
+        "p": 0.43,
+        "s": 65
+      }
+    ],
+    "marketUpAsks": [
+      {
+        "p": 0.51,
+        "s": 5
+      },
+      {
+        "p": 0.52,
+        "s": 30
+      },
+      {
+        "p": 0.53,
+        "s": 35
+      },
+      {
+        "p": 0.54,
+        "s": 25
+      },
+      {
+        "p": 0.57,
+        "s": 29
+      }
+    ],
+    "marketQuotedAt": "2026-06-12T05:00:03.339Z",
+    "bookSource": "live",
+    "features": {
+      "z": -0.00465602189756433,
+      "m15": -0.8438376485748904,
+      "m60": 1.0744715728015424,
+      "m240": 0.8638025531263674,
+      "vr": -0.45308824044458446,
+      "todSin": 0.9659258262890683,
+      "todCos": 0.25881904510252074,
+      "mkt": 0.020000666706669435
+    },
+    "horizonMinutes": 59.962716666666665,
+    "decidedAt": "2026-06-12T05:00:02.237Z",
+    "source": "live",
+    "outcome": null
+  },
+  "sol:5m:1781240400000": {
+    "id": "sol:5m:1781240400000",
+    "crypto": "sol",
+    "rangeId": "5m",
+    "slug": "sol-updown-5m-1781240400",
+    "windowStart": "2026-06-12T05:00:00.000Z",
+    "windowEnd": "2026-06-12T05:05:00.000Z",
+    "strike": 66.96903151712463,
+    "probUp": 0.9385345860944007,
+    "rawProbUp": 0.9238209033757537,
+    "side": "UP",
+    "confidence": 0.9385345860944007,
+    "marketImpliedUp": 0.605,
+    "marketBidUp": 0.6,
+    "marketAskUp": 0.61,
+    "marketUpBids": [
+      {
+        "p": 0.6,
+        "s": 41.24
+      },
+      {
+        "p": 0.59,
+        "s": 20
+      },
+      {
+        "p": 0.58,
+        "s": 20
+      },
+      {
+        "p": 0.57,
+        "s": 20
+      },
+      {
+        "p": 0.56,
+        "s": 20
+      }
+    ],
+    "marketUpAsks": [
+      {
+        "p": 0.61,
+        "s": 5.82
+      },
+      {
+        "p": 0.62,
+        "s": 10
+      },
+      {
+        "p": 0.63,
+        "s": 10.4
+      },
+      {
+        "p": 0.64,
+        "s": 8.33
+      },
+      {
+        "p": 0.66,
+        "s": 10
+      }
+    ],
+    "marketQuotedAt": "2026-06-12T05:00:03.350Z",
+    "bookSource": "live",
+    "features": {
+      "z": 1.431251659666466,
+      "m15": -0.40721375292300394,
+      "m60": 0.2037587199212812,
+      "m240": 0.5715055053094843,
+      "vr": -0.2172817062785541,
+      "todSin": 0.9659258262890683,
+      "todCos": 0.25881904510252074,
+      "mkt": 0.42634269312971956
+    },
+    "horizonMinutes": 4.96265,
+    "decidedAt": "2026-06-12T05:00:02.241Z",
+    "source": "live",
+    "outcome": null
+  },
+  "sol:15m:1781240400000": {
+    "id": "sol:15m:1781240400000",
+    "crypto": "sol",
+    "rangeId": "15m",
+    "slug": "sol-updown-15m-1781240400",
+    "windowStart": "2026-06-12T05:00:00.000Z",
+    "windowEnd": "2026-06-12T05:15:00.000Z",
+    "strike": 66.9686925,
+    "probUp": 0.809502192427301,
+    "rawProbUp": 0.7958922802089926,
+    "side": "UP",
+    "confidence": 0.809502192427301,
+    "marketImpliedUp": 0.535,
+    "marketBidUp": 0.46,
+    "marketAskUp": 0.61,
+    "marketUpBids": [
+      {
+        "p": 0.46,
+        "s": 5
+      },
+      {
+        "p": 0.45,
+        "s": 60
+      },
+      {
+        "p": 0.42,
+        "s": 5
+      },
+      {
+        "p": 0.4,
+        "s": 5
+      },
+      {
+        "p": 0.2,
+        "s": 5.5
+      }
+    ],
+    "marketUpAsks": [
+      {
+        "p": 0.61,
+        "s": 5
+      },
+      {
+        "p": 0.65,
+        "s": 60
+      },
+      {
+        "p": 0.66,
+        "s": 5
+      },
+      {
+        "p": 0.86,
+        "s": 7.14
+      },
+      {
+        "p": 0.9,
+        "s": 4218
+      }
+    ],
+    "marketQuotedAt": "2026-06-12T05:00:03.400Z",
+    "bookSource": "live",
+    "features": {
+      "z": 0.8270379429612015,
+      "m15": -0.40721375292300394,
+      "m60": 0.2037587199212812,
+      "m240": 0.5715055053094843,
+      "vr": -0.2172817062785541,
+      "todSin": 0.9659258262890683,
+      "todCos": 0.25881904510252074,
+      "mkt": 0.1402293413086503
+    },
+    "horizonMinutes": 14.96265,
+    "decidedAt": "2026-06-12T05:00:02.241Z",
+    "source": "live",
+    "outcome": null
+  },
+  "sol:1h:1781240400000": {
+    "id": "sol:1h:1781240400000",
+    "crypto": "sol",
+    "rangeId": "1h",
+    "slug": "solana-up-or-down-june-12-2026-1am-et",
+    "windowStart": "2026-06-12T05:00:00.000Z",
+    "windowEnd": "2026-06-12T06:00:00.000Z",
+    "strike": 67.07,
+    "probUp": 0.5143898901495823,
+    "rawProbUp": 0.49999999947519136,
+    "side": "UP",
+    "confidence": 0.5143898901495823,
+    "marketImpliedUp": 0.505,
+    "marketBidUp": 0.5,
+    "marketAskUp": 0.51,
+    "marketUpBids": [
+      {
+        "p": 0.5,
+        "s": 13.61
+      },
+      {
+        "p": 0.48,
+        "s": 5
+      },
+      {
+        "p": 0.45,
+        "s": 165
+      },
+      {
+        "p": 0.38,
+        "s": 5.6
+      },
+      {
+        "p": 0.1,
+        "s": 8400
+      }
+    ],
+    "marketUpAsks": [
+      {
+        "p": 0.51,
+        "s": 10
+      },
+      {
+        "p": 0.53,
+        "s": 5
+      },
+      {
+        "p": 0.58,
+        "s": 165
+      },
+      {
+        "p": 0.9,
+        "s": 8400
+      },
+      {
+        "p": 0.92,
+        "s": 10500
+      }
+    ],
+    "marketQuotedAt": "2026-06-12T05:00:02.830Z",
+    "bookSource": "live",
+    "features": {
+      "z": 0,
+      "m15": -0.40721375292300394,
+      "m60": 0.2037587199212812,
+      "m240": 0.5715055053094843,
+      "vr": -0.2172817062785541,
+      "todSin": 0.9659258262890683,
+      "todCos": 0.25881904510252074,
+      "mkt": 0.020000666706669435
+    },
+    "horizonMinutes": 59.96265,
+    "decidedAt": "2026-06-12T05:00:02.241Z",
+    "source": "live",
+    "outcome": null
+  },
+  "doge:5m:1781240400000": {
+    "id": "doge:5m:1781240400000",
+    "crypto": "doge",
+    "rangeId": "5m",
+    "slug": "doge-updown-5m-1781240400",
+    "windowStart": "2026-06-12T05:00:00.000Z",
+    "windowEnd": "2026-06-12T05:05:00.000Z",
+    "strike": 0.08687109274821389,
+    "probUp": 0.8410239813246125,
+    "rawProbUp": 0.8436394122429425,
+    "side": "UP",
+    "confidence": 0.8410239813246125,
+    "marketImpliedUp": 0.62,
+    "marketBidUp": 0.52,
+    "marketAskUp": 0.72,
+    "marketUpBids": [
+      {
+        "p": 0.52,
+        "s": 15
+      },
+      {
+        "p": 0.51,
+        "s": 15
+      },
+      {
+        "p": 0.5,
+        "s": 15
+      },
+      {
+        "p": 0.49,
+        "s": 5
+      },
+      {
+        "p": 0.48,
+        "s": 20.83
+      }
+    ],
+    "marketUpAsks": [
+      {
+        "p": 0.72,
+        "s": 10
+      },
+      {
+        "p": 0.73,
+        "s": 10
+      },
+      {
+        "p": 0.74,
+        "s": 50
+      },
+      {
+        "p": 0.76,
+        "s": 20
+      },
+      {
+        "p": 0.77,
+        "s": 20
+      }
+    ],
+    "marketQuotedAt": "2026-06-12T05:00:03.790Z",
+    "bookSource": "live",
+    "features": {
+      "z": 1.009528674530802,
+      "m15": 1.1295229104945044,
+      "m60": 0.9212546029791967,
+      "m240": 1.2512106926631286,
+      "vr": 0.41462088727043117,
+      "todSin": 0.9659258262890683,
+      "todCos": 0.25881904510252074,
+      "mkt": 0.4895482253187058
+    },
+    "horizonMinutes": 4.9626166666666665,
+    "decidedAt": "2026-06-12T05:00:02.243Z",
+    "source": "live",
+    "outcome": null
+  },
+  "doge:15m:1781240400000": {
+    "id": "doge:15m:1781240400000",
+    "crypto": "doge",
+    "rangeId": "15m",
+    "slug": "doge-updown-15m-1781240400",
+    "windowStart": "2026-06-12T05:00:00.000Z",
+    "windowEnd": "2026-06-12T05:15:00.000Z",
+    "strike": 0.08687109274821389,
+    "probUp": 0.69050084188711,
+    "rawProbUp": 0.7195124422029128,
+    "side": "UP",
+    "confidence": 0.69050084188711,
+    "marketImpliedUp": 0.5700000000000001,
+    "marketBidUp": 0.47,
+    "marketAskUp": 0.67,
+    "marketUpBids": [
+      {
+        "p": 0.47,
+        "s": 40
+      },
+      {
+        "p": 0.46,
+        "s": 40
+      },
+      {
+        "p": 0.45,
+        "s": 40
+      },
+      {
+        "p": 0.44,
+        "s": 80
+      },
+      {
+        "p": 0.43,
+        "s": 40
+      }
+    ],
+    "marketUpAsks": [
+      {
+        "p": 0.67,
+        "s": 80
+      },
+      {
+        "p": 0.68,
+        "s": 40
+      },
+      {
+        "p": 0.69,
+        "s": 40
+      },
+      {
+        "p": 0.7,
+        "s": 40
+      },
+      {
+        "p": 0.71,
+        "s": 40
+      }
+    ],
+    "marketQuotedAt": "2026-06-12T05:00:03.769Z",
+    "bookSource": "live",
+    "features": {
+      "z": 0.5813936032078684,
+      "m15": 1.1295229104945044,
+      "m60": 0.9212546029791967,
+      "m240": 1.2512106926631286,
+      "vr": 0.41462088727043117,
+      "todSin": 0.9659258262890683,
+      "todCos": 0.25881904510252074,
+      "mkt": 0.281851152140988
+    },
+    "horizonMinutes": 14.962616666666667,
+    "decidedAt": "2026-06-12T05:00:02.243Z",
+    "source": "live",
+    "outcome": null
+  },
+  "doge:1h:1781240400000": {
+    "id": "doge:1h:1781240400000",
+    "crypto": "doge",
+    "rangeId": "1h",
+    "slug": "dogecoin-up-or-down-june-12-2026-1am-et",
+    "windowStart": "2026-06-12T05:00:00.000Z",
+    "windowEnd": "2026-06-12T06:00:00.000Z",
+    "strike": 0.08701,
+    "probUp": 0.5475917141838414,
+    "rawProbUp": 0.49999999947519136,
+    "side": "UP",
+    "confidence": 0.5475917141838414,
+    "marketImpliedUp": 0.5349999999999999,
+    "marketBidUp": 0.5,
+    "marketAskUp": 0.57,
+    "marketUpBids": [
+      {
+        "p": 0.5,
+        "s": 23.88
+      },
+      {
+        "p": 0.47,
+        "s": 80
+      },
+      {
+        "p": 0.44,
+        "s": 20
+      },
+      {
+        "p": 0.43,
+        "s": 20
+      },
+      {
+        "p": 0.42,
+        "s": 20
+      }
+    ],
+    "marketUpAsks": [
+      {
+        "p": 0.57,
+        "s": 80
+      },
+      {
+        "p": 0.65,
+        "s": 41.57
+      },
+      {
+        "p": 0.74,
+        "s": 10
+      },
+      {
+        "p": 0.9,
+        "s": 8400
+      },
+      {
+        "p": 0.92,
+        "s": 10500
+      }
+    ],
+    "marketQuotedAt": "2026-06-12T05:00:03.588Z",
+    "bookSource": "live",
+    "features": {
+      "z": 0,
+      "m15": 1.1295229104945044,
+      "m60": 0.9212546029791967,
+      "m240": 1.2512106926631286,
+      "vr": 0.41462088727043117,
+      "todSin": 0.9659258262890683,
+      "todCos": 0.25881904510252074,
+      "mkt": 0.14022934130864992
+    },
+    "horizonMinutes": 59.96261666666667,
+    "decidedAt": "2026-06-12T05:00:02.243Z",
+    "source": "live",
+    "outcome": null
+  },
+  "bnb:5m:1781240400000": {
+    "id": "bnb:5m:1781240400000",
+    "crypto": "bnb",
+    "rangeId": "5m",
+    "slug": "bnb-updown-5m-1781240400",
+    "windowStart": "2026-06-12T05:00:00.000Z",
+    "windowEnd": "2026-06-12T05:05:00.000Z",
+    "strike": 602.71036,
+    "probUp": 0.9964187045063959,
+    "rawProbUp": 0.995859858057631,
+    "side": "UP",
+    "confidence": 0.9964187045063959,
+    "marketImpliedUp": 0.635,
+    "marketBidUp": 0.57,
+    "marketAskUp": 0.7,
+    "marketUpBids": [
+      {
+        "p": 0.57,
+        "s": 10
+      },
+      {
+        "p": 0.56,
+        "s": 5
+      },
+      {
+        "p": 0.55,
+        "s": 10
+      },
+      {
+        "p": 0.54,
+        "s": 10
+      },
+      {
+        "p": 0.53,
+        "s": 5
+      }
+    ],
+    "marketUpAsks": [
+      {
+        "p": 0.7,
+        "s": 5
+      },
+      {
+        "p": 0.71,
+        "s": 150
+      },
+      {
+        "p": 0.75,
+        "s": 5
+      },
+      {
+        "p": 0.76,
+        "s": 5
+      },
+      {
+        "p": 0.79,
+        "s": 5
+      }
+    ],
+    "marketQuotedAt": "2026-06-12T05:00:04.303Z",
+    "bookSource": "live",
+    "features": {
+      "z": 2.6404253647811364,
+      "m15": -0.5553634536605121,
+      "m60": 0.9636997765268995,
+      "m240": -0.09719584862174087,
+      "vr": -0.4290720963192417,
+      "todSin": 0.9659258262890683,
+      "todCos": 0.25881904510252074,
+      "mkt": 0.5537276453102001
+    },
+    "horizonMinutes": 4.962583333333333,
+    "decidedAt": "2026-06-12T05:00:02.245Z",
+    "source": "live",
+    "outcome": null
+  },
+  "bnb:15m:1781240400000": {
+    "id": "bnb:15m:1781240400000",
+    "crypto": "bnb",
+    "rangeId": "15m",
+    "slug": "bnb-updown-15m-1781240400",
+    "windowStart": "2026-06-12T05:00:00.000Z",
+    "windowEnd": "2026-06-12T05:15:00.000Z",
+    "strike": 602.71036,
+    "probUp": 0.9148337963684419,
+    "rawProbUp": 0.9358240421577505,
+    "side": "UP",
+    "confidence": 0.9148337963684419,
+    "marketImpliedUp": 0.5900000000000001,
+    "marketBidUp": 0.51,
+    "marketAskUp": 0.67,
+    "marketUpBids": [
+      {
+        "p": 0.51,
+        "s": 10
+      },
+      {
+        "p": 0.5,
+        "s": 5
+      },
+      {
+        "p": 0.49,
+        "s": 10
+      },
+      {
+        "p": 0.48,
+        "s": 10
+      },
+      {
+        "p": 0.47,
+        "s": 5
+      }
+    ],
+    "marketUpAsks": [
+      {
+        "p": 0.67,
+        "s": 150
+      },
+      {
+        "p": 0.68,
+        "s": 5
+      },
+      {
+        "p": 0.69,
+        "s": 5
+      },
+      {
+        "p": 0.7,
+        "s": 5
+      },
+      {
+        "p": 0.85,
+        "s": 18
+      }
+    ],
+    "marketQuotedAt": "2026-06-12T05:00:04.283Z",
+    "bookSource": "live",
+    "features": {
+      "z": 1.5206333508615613,
+      "m15": -0.5553634536605121,
+      "m60": 0.9636997765268995,
+      "m240": -0.09719584862174087,
+      "vr": -0.4290720963192417,
+      "todSin": 0.9659258262890683,
+      "todCos": 0.25881904510252074,
+      "mkt": 0.3639653772014119
+    },
+    "horizonMinutes": 14.962583333333333,
+    "decidedAt": "2026-06-12T05:00:02.245Z",
+    "source": "live",
+    "outcome": null
+  },
+  "bnb:1h:1781240400000": {
+    "id": "bnb:1h:1781240400000",
+    "crypto": "bnb",
+    "rangeId": "1h",
+    "slug": "bnb-up-or-down-june-12-2026-1am-et",
+    "windowStart": "2026-06-12T05:00:00.000Z",
+    "windowEnd": "2026-06-12T06:00:00.000Z",
+    "strike": 603.54,
+    "probUp": 0.5112806181639783,
+    "rawProbUp": 0.49842270603484606,
+    "side": "UP",
+    "confidence": 0.5112806181639783,
+    "marketImpliedUp": 0.53,
+    "marketBidUp": 0.51,
+    "marketAskUp": 0.55,
+    "marketUpBids": [
+      {
+        "p": 0.51,
+        "s": 13.06
+      },
+      {
+        "p": 0.49,
+        "s": 12.37
+      },
+      {
+        "p": 0.48,
+        "s": 150
+      },
+      {
+        "p": 0.32,
+        "s": 5
+      },
+      {
+        "p": 0.1,
+        "s": 8400
+      }
+    ],
+    "marketUpAsks": [
+      {
+        "p": 0.55,
+        "s": 15.28
+      },
+      {
+        "p": 0.56,
+        "s": 7.28
+      },
+      {
+        "p": 0.58,
+        "s": 150
+      },
+      {
+        "p": 0.68,
+        "s": 5
+      },
+      {
+        "p": 0.9,
+        "s": 8400
+      }
+    ],
+    "marketQuotedAt": "2026-06-12T05:00:04.246Z",
+    "bookSource": "live",
+    "features": {
+      "z": -0.003953674378880042,
+      "m15": -0.5553634536605121,
+      "m60": 0.9636997765268995,
+      "m240": -0.09719584862174087,
+      "vr": -0.4290720963192417,
+      "todSin": 0.9659258262890683,
+      "todCos": 0.25881904510252074,
+      "mkt": 0.12014431184206341
+    },
+    "horizonMinutes": 59.962583333333335,
+    "decidedAt": "2026-06-12T05:00:02.245Z",
     "source": "live",
     "outcome": null
   }

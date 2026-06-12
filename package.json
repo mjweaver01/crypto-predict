@@ -15,6 +15,7 @@
     "trade:setup": "bun run scripts/trade-setup.ts",
     "trade:check": "bun run scripts/trade-setup.ts --check",
     "trade:redeem": "bun run scripts/trade-redeem.ts",
+    "trade:verify": "bun run scripts/trade-verify.ts",
     "build:client": "bun build src/client/live.ts src/client/history.ts --outdir public/dist --target browser",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src scripts",
