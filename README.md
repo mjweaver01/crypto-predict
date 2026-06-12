@@ -1,7 +1,13 @@
-# Bitcoin Predict
+<img src="public/favicon.svg" width="64" alt="Crypto Predict" />
 
-A self-calibrating forecasting engine for near-term Bitcoin direction, rendered
-on a live dashboard. It reads BTC/USDT from the Binance public API — the same
+# Crypto Predict
+
+<img src="public/bywmsmfm.jpg" alt="B, you wanna make some mfn money?" />
+
+## What is Crypto Predict?
+
+A self-calibrating forecasting engine for near-term crypto direction, rendered
+on a live dashboard. It reads spot prices from the Binance public API — the same
 data the mirrored Polymarket markets settle against — and produces a probability
 of **Up** vs **Down** for each market family, a price-to-beat, and a price
 forecast with a confidence band.
@@ -15,19 +21,19 @@ It mirrors five recurring Polymarket families across **six crypto assets**
 (BTC, ETH, SOL, XRP, DOGE, BNB — every asset Polymarket runs up/down markets
 for, all sharing the same window boundaries and slug patterns):
 
-| Family | Horizon | Settles on |
-| --- | --- | --- |
-| **5 min** | rolling 5-minute window | Chainlink \<asset>/USD |
-| **15 min** | rolling 15-minute window | Chainlink \<asset>/USD |
-| **Hourly** | top-of-hour window | Binance \<asset>/USDT 1h candle |
-| **4 hour** | epoch-aligned 4h window | Chainlink \<asset>/USD |
-| **Daily** | noon-ET to noon-ET | Binance \<asset>/USDT 1m close at noon ET |
+| Family     | Horizon                  | Settles on                                |
+| ---------- | ------------------------ | ----------------------------------------- |
+| **5 min**  | rolling 5-minute window  | Chainlink \<asset>/USD                    |
+| **15 min** | rolling 15-minute window | Chainlink \<asset>/USD                    |
+| **Hourly** | top-of-hour window       | Binance \<asset>/USDT 1h candle           |
+| **4 hour** | epoch-aligned 4h window  | Chainlink \<asset>/USD                    |
+| **Daily**  | noon-ET to noon-ET       | Binance \<asset>/USDT 1m close at noon ET |
 
 A top-level dropdown switches the dashboard between any single asset and
 **All** — a holistic view with per-asset spot mini-cards and every asset's
 call/bet for the selected window family. Each asset gets its own calibrators,
 committed calls, and ledger rows (`?crypto=` filters every data endpoint);
-`TRADE_CRYPTOS` limits which may real-trade (default btc).
+`TRADE_CRYPTOS` limits which may real-trade (default `btc`).
 
 The app is fully statistical — no LLM, no API keys. The dashboard's
 "model read" is a stats-grounded sentence generated from the same numbers the
@@ -57,22 +63,21 @@ bun run backfill       # reconstructs ~288 historical committed calls vs outcome
 The core design separates three concerns that a naive forecaster conflates, then
 closes the loop between prediction and outcome.
 
-```
-            ┌─────────────────────────────────────────────────────────────┐
-            │                                                               │
-   market   │   1. Statistical model ─────────────────► raw probability   │
-   data ───►│            │                                       │          │
-            │            │                          3. Calibration (learned)│
-            │            │                                       │          │
-            │            ▼                                       ▼          │
-            │   4. Commit a frozen call ◄───────────── calibrated probability
-            │            │                                                  │
-            │            ▼                                                  │
-            │   5. Window resolves ──► grade vs real outcome ──► ledger      │
-            │                                       │                       │
-            └───────────────────────────────────────┼──────────────────────┘
-                                                     │
-                          6. Refit calibrators ◄─────┘   (every resolve cycle)
+```mermaid
+flowchart LR
+    MD([Market Data]) --> M1
+
+    subgraph loop["Learning Loop"]
+        M1["① Statistical\nModel"] --> RP["Raw\nProbability"]
+        RP --> M3["③ Calibration\n(learned)"]
+        M3 --> CP["Calibrated\nProbability"]
+        CP --> M4["④ Commit\nFrozen Call"]
+        M4 --> M5["⑤ Window\nResolves"]
+        M5 --> GR["Grade vs\nReal Outcome → Ledger"]
+    end
+
+    GR --> M6["⑥ Refit Calibrators\nevery resolve cycle"]
+    M6 --> M3
 ```
 
 ### 1. Statistical core
@@ -107,14 +112,14 @@ would have been absorbed by the calibration layer anyway.
 ### 3. Committed calls vs. the live read
 
 A pure snapshot predictor has a UX and a scientific problem: as a window
-approaches expiry the probability of "close above the open" *correctly* collapses
+approaches expiry the probability of "close above the open" _correctly_ collapses
 toward 0 or 1 (it's the delta of a binary option). The number appears to "flip,"
 and grading the last pre-close snapshot peeks at where price already landed —
 inflating apparent accuracy and yielding a bet you could never actually place.
 
 The engine therefore distinguishes two quantities:
 
-- **Committed call** — a single directional bet locked in *early* (while the
+- **Committed call** — a single directional bet locked in _early_ (while the
   horizon is still long), then **frozen** until the window resolves. This is the
   wager we grade and learn from. See `src/server/model/commitments.ts`.
 - **Live read** — the probability recomputed each tick, free to converge toward
@@ -130,7 +135,7 @@ are hydrated from the ledger on startup, so a restart mid-window keeps its call.
 
 This is what makes the model **get better as it sees more outcomes**. A pure
 Platt calibrator is monotone — it can reshape confidence but (almost) never flip
-a yes/no call, so it can't learn *direction*. We fit something strictly more
+a yes/no call, so it can't learn _direction_. We fit something strictly more
 general per family: a small **ridge logistic regression** from the raw
 probability **plus frozen commit-time features** to the observed win frequency:
 
@@ -140,13 +145,13 @@ calibrated_logit = w0 · raw_logit + Σ wj · xj + b
 
 The features (`src/server/model/features.ts`), all clamped and vol-normalized:
 
-| Feature | Meaning |
-| --- | --- |
-| `z` | distance-to-strike in vol units (the raw model's own signal) |
-| `m15/m60/m240` (`m1d/m3d/m7d` daily) | momentum at several lookbacks |
-| `vr` | volatility regime (fast vs slow EWMA log-ratio) |
-| `todSin/todCos` (`dowSin/dowCos` daily) | time-of-day / day-of-week seasonality |
-| `mkt` | logit of the live Polymarket implied probability |
+| Feature                                 | Meaning                                                      |
+| --------------------------------------- | ------------------------------------------------------------ |
+| `z`                                     | distance-to-strike in vol units (the raw model's own signal) |
+| `m15/m60/m240` (`m1d/m3d/m7d` daily)    | momentum at several lookbacks                                |
+| `vr`                                    | volatility regime (fast vs slow EWMA log-ratio)              |
+| `todSin/todCos` (`dowSin/dowCos` daily) | time-of-day / day-of-week seasonality                        |
+| `mkt`                                   | logit of the live Polymarket implied probability             |
 
 - `w0 < 1` shrinks overconfidence; `b` corrects base-rate bias (the old Platt
   behavior, recovered exactly when all `wj = 0`).
@@ -181,7 +186,7 @@ adjustment applied) is surfaced per family on the dashboard.
 ### Measuring the learning (not assuming it)
 
 Because each ledger entry's `probUp` was produced by the learner in force at
-commit time — trained only on windows resolved *before* that call — the ledger
+commit time — trained only on windows resolved _before_ that call — the ledger
 is a **prequential (online, out-of-sample) record**. `GET /api/metrics` scores
 it three ways per family: the calibrated probability we bet on, the frozen raw
 probability, and the market-implied quote. The history page renders this as a
@@ -197,7 +202,7 @@ below the raw line — measured, with no peeking. See
 Calibration needs resolved outcomes, which would otherwise take days to
 accumulate (the 1h/1d families especially). `bun run backfill` jump-starts it by
 reconstructing historical **committed calls**: for each recent resolved 5m/15m/1h
-window it rebuilds the model's raw probability *early* in the window — exactly
+window it rebuilds the model's raw probability _early_ in the window — exactly
 mirroring the live commit timing and using only the candles available at that
 instant — and pairs it with the real Polymarket outcome.
 
@@ -269,13 +274,13 @@ dashboard and on every range as `paper`):
   into profit.
 
 All costs, edges, Kelly sizes, and P&L are **fee-adjusted**: Polymarket
-charges a taker fee on every BTC up/down family (1000 bps = 10% as of June
+charges a taker fee on every crypto up/down family (1000 bps = 10% as of June
 2026; `PAPER_TAKER_FEE_BPS`, and the live executor reads the real rate from
 the CLOB per trade). A 50¢ buy effectively costs ~55.6¢ — more than the whole
 edge gate — so no decision in the system ever sees a pre-fee price.
 
 Fills are **depth-aware**: each commitment freezes the top order-book levels
-*with sizes*, and the replay fills by walking those levels (within
+_with sizes_, and the replay fills by walking those levels (within
 `PAPER_FILL_SLIPPAGE` of the touch) instead of assuming unlimited size at the
 best price. Stakes are additionally capped at `PAPER_MAX_STAKE_USD` (default
 $50) — market capacity, not risk appetite: without it the compounding bankroll
@@ -349,13 +354,13 @@ Polymarket UI). `bun run trade:redeem` catches up manually after downtime.
 
 Each family's strike matches the venue it settles against, exactly:
 
-| Family | Resolves on | Strike we use | Source |
-| --- | --- | --- | --- |
-| 5m / 15m | Chainlink BTC/USD | Polymarket `crypto-price` **openPrice** | exact¹ |
-| Hourly | Binance BTC/USDT 1h candle | Binance 1h **open** | exact |
-| Daily | Binance BTC/USDT 1m close @ noon ET | Binance 1m **close** at prior noon | exact |
+| Family   | Resolves on                              | Strike we use                           | Source |
+| -------- | ---------------------------------------- | --------------------------------------- | ------ |
+| 5m / 15m | Chainlink \<asset>/USD                   | Polymarket `crypto-price` **openPrice** | exact¹ |
+| Hourly   | Binance \<asset>/USDT 1h candle          | Binance 1h **open**                     | exact  |
+| Daily    | Binance \<asset>/USDT 1m close @ noon ET | Binance 1m **close** at prior noon      | exact  |
 
-¹ The 5m/15m markets settle on the **Chainlink** BTC/USD stream — a different
+¹ The 5m/15m markets settle on the **Chainlink** \<asset>/USD stream — a different
 feed than Binance, so a Binance proxy is off by tens of dollars. We read the
 exact Chainlink-derived open from Polymarket's API via `fetchPolymarketStrike`;
 if that fails we fall back to the Binance 1m-open proxy and flag the strike as
@@ -386,52 +391,75 @@ fits its own market weight from its actual track record and keeps adapting.
 
 ## Architecture
 
-```
-client (browser)
-  └─ dashboard: live price + per-family tabs (5m/15m/hourly/daily); shows the
-     committed call, the converging live read, and calibration status; polls
-     /api/predict every 5s
+```mermaid
+graph TD
+    Browser["Browser Dashboard\nLive price · per-family tabs · calibration status\npolls /api/predict every 5 s"]
 
-server (Bun)
-  ├─ sources/binance.ts    → spot, 24h change, OHLC klines + exact boundary candle
-  ├─ sources/polymarket.ts → live odds + historical outcome/price + exact strike
-  ├─ model/forecast.ts     → lognormal model (EWMA + Garman-Klass vol, shrunk drift)
-  ├─ model/features.ts     → commit-time features (momentum, vol regime, market, seasonality)
-  ├─ model/narrative.ts    → stats-grounded one-line model read
-  ├─ model/commitments.ts  → freezes one forward-looking call per window
-  ├─ model/calibration.ts  → learned per-family layer: ridge logistic on raw prob + features
-  ├─ model/ledger.ts       → committed calls vs real outcomes → data/ledger.json
-  ├─ model/metrics.ts      → prequential learning curve (calibrated vs raw vs market)
-  ├─ model/insights.ts     → windowed log of how the read evolved (persisted)
-  ├─ model/scoring.ts      → Brier / log-loss / reliability (backtest harness)
-  ├─ trade/executor.ts     → real CLOB orders on BET verdicts (env-gated, dry-run first)
-  ├─ trade/tradeLog.ts     → execution record + P&L settlement → data/trades.json
-  ├─ trade/redeem.ts       → on-chain redemption of winning positions
-  └─ routes/predict.ts     → GET /api/predict → Prediction JSON
+    subgraph server["Bun Server"]
+        subgraph sources["Data Sources"]
+            Binance["binance.ts\nspot · 24 h change · OHLC klines"]
+            Poly["polymarket.ts\nlive odds · outcome/price · exact strike"]
+        end
+
+        subgraph model["Model Pipeline"]
+            Forecast["forecast.ts\nlognormal · EWMA + Garman-Klass vol · shrunk drift"]
+            Features["features.ts\nmomentum · vol regime · market quote · seasonality"]
+            Narrative["narrative.ts\nstats-grounded one-line model read"]
+            Commitments["commitments.ts\nfreezes one forward-looking call per window"]
+            Calibration["calibration.ts\nridge logistic on raw prob + features"]
+            Ledger["ledger.ts\ncommitted calls vs outcomes → ledger.json"]
+            Metrics["metrics.ts\nprequential learning curve · calibrated vs raw vs market"]
+            Insights["insights.ts\nwindowed read-evolution log · persisted"]
+            Scoring["scoring.ts\nBrier · log-loss · reliability · backtest harness"]
+        end
+
+        subgraph trade["Trading Layer (env-gated)"]
+            Executor["executor.ts\nCLOB FAK orders on BET verdicts · dry-run first"]
+            TradeLog["tradeLog.ts\nexecution record + P&L → trades.json"]
+            Redeem["redeem.ts\non-chain redemption of winning positions"]
+        end
+
+        Routes["routes/predict.ts → GET /api/predict"]
+    end
+
+    Browser <-->|every 5 s| Routes
+    Routes --> Forecast
+    Binance --> Forecast
+    Poly --> Forecast
+    Forecast --> Features
+    Features --> Narrative
+    Features --> Calibration
+    Calibration --> Commitments
+    Commitments --> Ledger
+    Ledger --> Metrics
+    Commitments --> Executor
+    Executor --> TradeLog
+    TradeLog --> Redeem
 ```
 
 ---
 
 ## Configuration (env)
 
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `MODEL_EWMA_LAMBDA` | `0.94` | EWMA decay for volatility/drift |
-| `MODEL_DRIFT_SHRINK` | `0` | Fraction of trailing drift retained (0 = driftless) |
-| `MODEL_DRIFT_CAP_SIGMAS` | `0.5` | Cap on drift as a multiple of diffusion |
-| `COMMIT_BY_FRACTION` | `0.2` | How early a window must be seen to commit a call |
-| `CALIB_MIN_SAMPLES` | `25` | Resolved calls required before the learned layer activates |
-| `CALIB_PRIOR` | `10` | Shrinkage strength toward the identity calibrator (`w0`, `b`) |
-| `CALIB_FEATURE_PRIOR` | `10` | Shrinkage strength pulling feature weights toward 0 |
-| `CALIB_HALF_LIFE_HOURS_5M/_15M/_1H/_1D` | `24/48/168/1440` | Recency half-life per family (hours) |
-| `TRADING_ENABLED` | `false` | Master switch for the live-trading layer |
-| `TRADING_DRY_RUN` | `true` | Full execution path with simulated fills (shadow mode) |
-| `POLYMARKET_PRIVATE_KEY` | — | Dedicated bot wallet key (dry-run works without it) |
-| `TRADE_FAMILIES` | `5m` | Families allowed to trade for real |
-| `TRADE_MAX_STAKE_USD` / `TRADE_BANKROLL_CAP_USD` | `10` / `250` | Per-trade and Kelly-base caps |
-| `TRADE_MAX_SLIPPAGE` / `TRADE_MAX_OPEN` | `0.01` / `4` | Execution-price and concurrency rails |
-| `TRADE_DAILY_LOSS_LIMIT_USD` | `25` | Daily realized-loss kill switch (UTC reset) |
-| `PAPER_TAKER_FEE_BPS` | `1000` | Taker fee assumed by the paper replay (live reads the CLOB) |
+| Variable                                         | Default          | Purpose                                                       |
+| ------------------------------------------------ | ---------------- | ------------------------------------------------------------- |
+| `MODEL_EWMA_LAMBDA`                              | `0.94`           | EWMA decay for volatility/drift                               |
+| `MODEL_DRIFT_SHRINK`                             | `0`              | Fraction of trailing drift retained (0 = driftless)           |
+| `MODEL_DRIFT_CAP_SIGMAS`                         | `0.5`            | Cap on drift as a multiple of diffusion                       |
+| `COMMIT_BY_FRACTION`                             | `0.2`            | How early a window must be seen to commit a call              |
+| `CALIB_MIN_SAMPLES`                              | `25`             | Resolved calls required before the learned layer activates    |
+| `CALIB_PRIOR`                                    | `10`             | Shrinkage strength toward the identity calibrator (`w0`, `b`) |
+| `CALIB_FEATURE_PRIOR`                            | `10`             | Shrinkage strength pulling feature weights toward 0           |
+| `CALIB_HALF_LIFE_HOURS_5M/_15M/_1H/_1D`          | `24/48/168/1440` | Recency half-life per family (hours)                          |
+| `TRADING_ENABLED`                                | `false`          | Master switch for the live-trading layer                      |
+| `TRADING_DRY_RUN`                                | `true`           | Full execution path with simulated fills (shadow mode)        |
+| `POLYMARKET_PRIVATE_KEY`                         | —                | Dedicated bot wallet key (dry-run works without it)           |
+| `TRADE_FAMILIES`                                 | `5m`             | Families allowed to trade for real                            |
+| `TRADE_CRYPTOS`                                  | `btc`            | Assets allowed to trade for real                              |
+| `TRADE_MAX_STAKE_USD` / `TRADE_BANKROLL_CAP_USD` | `10` / `250`     | Per-trade and Kelly-base caps                                 |
+| `TRADE_MAX_SLIPPAGE` / `TRADE_MAX_OPEN`          | `0.01` / `4`     | Execution-price and concurrency rails                         |
+| `TRADE_DAILY_LOSS_LIMIT_USD`                     | `25`             | Daily realized-loss kill switch (UTC reset)                   |
+| `PAPER_TAKER_FEE_BPS`                            | `1000`           | Taker fee assumed by the paper replay (live reads the CLOB)   |
 
 See `.env.example` for the full annotated list.
 
@@ -448,6 +476,6 @@ bun run lint        # ESLint
 bun run format      # Prettier
 ```
 
-> Near-term BTC direction is close to a coin flip, so committed probabilities sit
+> Near-term crypto direction is close to a coin flip, so committed probabilities sit
 > near 50% by design and calibration mainly corrects confidence and bias. This is
 > a research/forecasting project, not trading advice.
