@@ -1,33 +1,33 @@
-<img src="public/favicon.svg" width="64" alt="Crypto Predict" />
+<p align="center"><img src="public/favicon.svg" width="64" alt="Crypto Predict" /></p>
 
 # Crypto Predict
 
-<img src="public/bywmsmfm.jpg" alt="B, you wanna make some mfn money?" />
+<p align="center"><img src="public/bywmsmfm.jpg" alt="Crypto Predict live dashboard" /></p>
 
-## What is Crypto Predict?
+A self-calibrating forecasting engine for near-term crypto price direction across six
+assets and five time horizons. It reads spot prices from the Binance public API —
+the same data the mirrored Polymarket markets settle against — and produces a
+calibrated probability of **Up** vs **Down** for each market family, a
+price-to-beat, and a point forecast with a confidence band.
 
-A self-calibrating forecasting engine for near-term crypto direction, rendered
-on a live dashboard. It reads spot prices from the Binance public API — the same
-data the mirrored Polymarket markets settle against — and produces a probability
-of **Up** vs **Down** for each market family, a price-to-beat, and a price
-forecast with a confidence band.
-
-What sets it apart from a one-shot predictor is the **learning loop**: every call
-is committed early, frozen, graded against the real market outcome, and fed back
-into a calibration layer that continuously corrects the model's confidence and
-bias. The system measurably improves as it accumulates outcomes.
+The central contribution is the **prequential learning loop**: every directional
+call is committed early in its window, frozen, graded against the real market
+outcome, and fed back into a per-family calibration layer that continuously
+corrects the model's confidence and bias. Accuracy is measured strictly
+out-of-sample — no peeking — and the system demonstrably improves as it
+accumulates outcomes.
 
 It mirrors five recurring Polymarket families across **six crypto assets**
 (BTC, ETH, SOL, XRP, DOGE, BNB — every asset Polymarket runs up/down markets
 for, all sharing the same window boundaries and slug patterns):
 
-| Family     | Horizon                  | Settles on                                |
-| ---------- | ------------------------ | ----------------------------------------- |
-| **5 min**  | rolling 5-minute window  | Chainlink \<asset>/USD                    |
-| **15 min** | rolling 15-minute window | Chainlink \<asset>/USD                    |
-| **Hourly** | top-of-hour window       | Binance \<asset>/USDT 1h candle           |
-| **4 hour** | epoch-aligned 4h window  | Chainlink \<asset>/USD                    |
-| **Daily**  | noon-ET to noon-ET       | Binance \<asset>/USDT 1m close at noon ET |
+| Family     | Horizon                  | Settles on                                  |
+| ---------- | ------------------------ | ------------------------------------------- |
+| **5 min**  | rolling 5-minute window  | Chainlink \<asset>/USD                      |
+| **15 min** | rolling 15-minute window | Chainlink \<asset>/USD                      |
+| **Hourly** | top-of-hour window       | Binance \<asset>/USDT 1h candle             |
+| **4 hour** | epoch-aligned 4h window  | Chainlink \<asset>/USD                      |
+| **Daily**  | noon-ET to noon-ET       | Binance \<asset>/USDT 1m close at noon ET   |
 
 A top-level dropdown switches the dashboard between any single asset and
 **All** — a holistic view with per-asset spot mini-cards and every asset's
@@ -35,9 +35,9 @@ call/bet for the selected window family. Each asset gets its own calibrators,
 committed calls, and ledger rows (`?crypto=` filters every data endpoint);
 `TRADE_CRYPTOS` limits which may real-trade (default `btc`).
 
-The app is fully statistical — no LLM, no API keys. The dashboard's
-"model read" is a stats-grounded sentence generated from the same numbers the
-model bets on (`src/server/model/narrative.ts`).
+The system is fully statistical, requiring no external API keys for core
+operation. The dashboard's "model read" is a stats-grounded narrative generated
+directly from the model's own numbers (`src/server/model/narrative.ts`).
 
 ## Quick start
 
@@ -47,8 +47,10 @@ cp .env.example .env   # optional — runs fine with no keys
 bun run dev
 ```
 
-Open **http://localhost:8333** (Bitcoin's default P2P port). The dashboard
-auto-refreshes every 5 seconds.
+Open **http://localhost:8333**. The dashboard polls every second; the server
+caches predictions for 1 s and upstream API calls independently
+(Binance: 1 s · Polymarket quotes: 5 s · strikes/token ids: 5 min), so the
+upstream APIs are never hammered at the client cadence.
 
 To seed the learning loop with history so calibration is active immediately:
 
@@ -103,14 +105,12 @@ Two accuracy-oriented refinements, both validated by the backtest:
 Short horizons (5m/15m) use per-minute stats from 1m candles; longer horizons use
 per-hour stats from 1h candles. See `src/server/model/forecast.ts`.
 
-### 2. Narrative (stats-grounded, no LLM)
+### 2. Narrative generation
 
-The dashboard's one-line "model read" is generated from the model's own
-numbers — the lead window's call, spot vs strike, drift, and 24h change
-(`src/server/model/narrative.ts`). An earlier LLM-assist layer (small clamped
-probability nudge + generated narrative) was removed: its contribution was
-unmeasurable against the structural signal, and any consistent bias it added
-would have been absorbed by the calibration layer anyway.
+The dashboard's one-line model read is generated deterministically from the
+model's own numbers: the lead window's call, spot vs strike, drift, and 24h
+change (`src/server/model/narrative.ts`). The output is fully reproducible and
+auditable — every word traces back to a specific computed quantity.
 
 ### 3. Committed calls vs. the live read
 
@@ -137,10 +137,10 @@ are hydrated from the ledger on startup, so a restart mid-window keeps its call.
 ### 4. The learned layer (calibration + direction)
 
 This is what makes the model **get better as it sees more outcomes**. A pure
-Platt calibrator is monotone — it can reshape confidence but (almost) never flip
-a yes/no call, so it can't learn _direction_. We fit something strictly more
-general per family: a small **ridge logistic regression** from the raw
-probability **plus frozen commit-time features** to the observed win frequency:
+Platt calibrator is monotone — it can reshape confidence but cannot flip a yes/no
+call, so it can't learn _direction_. We fit something strictly more general per
+family: a small **ridge logistic regression** from the raw probability **plus
+frozen commit-time features** to the observed win frequency:
 
 $$\text{calibrated logit} = w_0 \cdot \text{raw logit} + \sum_j w_j x_j + b$$
 
@@ -154,8 +154,8 @@ The features (`src/server/model/features.ts`), all clamped and vol-normalized:
 | `todSin/todCos` (`dowSin/dowCos` daily) | time-of-day / day-of-week seasonality                        |
 | `mkt`                                   | logit of the live Polymarket implied probability             |
 
-- $w_0 < 1$ shrinks overconfidence; $b$ corrects base-rate bias (the old Platt
-  behavior, recovered exactly when all $w_j = 0$).
+- $w_0 < 1$ shrinks overconfidence; $b$ corrects base-rate bias (the classical
+  Platt behavior, recovered exactly when all $w_j = 0$).
 - $w_j$ let the learner discover real directional signal — momentum, regime,
   seasonality, and the market's own quote — so it can **flip a marginal call**,
   not just temper it. This is what gives the daily family (a structural coin
@@ -165,13 +165,11 @@ The features (`src/server/model/features.ts`), all clamped and vol-normalized:
 - Samples are **recency-weighted** with a per-family half-life
   (`CALIB_HALF_LIFE_HOURS_*`), so a fitted regime bias decays instead of being
   carried forever by dilution.
-- Legacy rows without features still train the `(w0, b)` part — missing
-  features read as 0, the prior mean.
 
-A deliberate invariant keeps the loop stable: we always store and fit on the
-**raw** probability + the **frozen commit-time features**, never the
+A deliberate invariant keeps the loop stable: training always uses the
+**raw** probability and the **frozen commit-time features** — never the
 already-calibrated output. This keeps the training signal stationary as the
-learner evolves — otherwise it would compound its own corrections. Every refit
+learner evolves, preventing compounding of its own corrections. Every refit
 that materially changes a family's weights is appended to
 `data/calibrators.jsonl`, so the learner's own evolution is auditable. See
 `src/server/model/calibration.ts`.
@@ -246,15 +244,15 @@ CLOB **best bid/ask** for the Up token (`marketBidUp` / `marketAskUp`, with
 
 `bun run edge` re-scores the whole ledger against those tradable prices:
 simulated P&L/ROI per family at real order-book costs, a half-spread
-sensitivity sweep for legacy midpoint-only rows, and a min-edge abstention
+sensitivity sweep for midpoint-only rows, and a min-edge abstention
 sweep (only "take" bets whose model-vs-cost edge clears a threshold). The
 real-book section is the verdict; it accumulates from the moment this feature
 ships.
 
 **Backfilling tradable prices** (`bun run backfill:book`): the CLOB book has
 no history, but executed fills do — Polymarket's trade tape (data-api
-`/trades`) proves what each side actually cost. For every legacy row the
-script collects fills inside the window's genuine commit span (the first
+`/trades`) proves what each side actually cost. For every row the script
+collects fills inside the window's genuine commit span (the first
 `COMMIT_BY_FRACTION` of its life, the same rule the live wager obeys) and
 takes the **worst** executable price per side, so backfilled costs never
 flatter the edge. Rows are marked `bookSource: 'trades'` (vs `'live'` for
@@ -284,17 +282,13 @@ Fills are **depth-aware**: each commitment freezes the top order-book levels
 _with sizes_, and the replay fills by walking those levels (within
 `PAPER_FILL_SLIPPAGE` of the touch) instead of assuming unlimited size at the
 best price. Stakes are additionally capped at `PAPER_MAX_STAKE_USD` (default
-$50) — market capacity, not risk appetite: without it the compounding bankroll
-quickly "fills" sizes a tens-of-dollars-per-level book never held. Legacy rows
-without stored depth fill at the touch under the dollar cap and are flagged
-implicitly by their age. The summary also reports a **flat-stake scoreboard**
-(`summary.flat`, default $10/bet, no compounding) — that is the
-extrapolation-safe number; the compounded bankroll is a stress test of the
-policy, not a forecast of riches.
+$50) — market capacity, not risk appetite. The summary also reports a
+**flat-stake scoreboard** (`summary.flat`, default $10/bet, no compounding) —
+the extrapolation-safe figure; the compounded bankroll is a stress test of the
+policy, not a returns projection.
 
 The scoreboard is a deterministic replay of this policy over every resolved
-ledger entry carrying real commit-time bid/ask (legacy midpoint-only rows are
-excluded — they are not bankable evidence). Nothing is stored: the ledger
+ledger entry carrying real commit-time bid/ask. Nothing is stored: the ledger
 stays the single source of truth, and a policy change re-scores all history.
 The history page renders the equity curve, bankroll, ROI on turnover, max
 drawdown, and per-family P&L (starting bankroll `PAPER_START_BANKROLL`,
@@ -373,8 +367,7 @@ approximate (`strikeIsProxy`).
 
 `bun run backtest` walk-forward tests the direction model on historical Binance
 klines, sampling decision points inside each 5m/15m window, and scores it against
-the original (full-drift, close-to-close) model and a 0.5 baseline with Brier,
-log-loss, and a reliability curve.
+a driftless baseline with Brier, log-loss, and a reliability curve.
 
 ```bash
 bun run backtest -- --days 5
@@ -382,9 +375,9 @@ MODEL_DRIFT_SHRINK=1 bun run backtest -- --days 5   # compare with full drift
 ```
 
 `bun run backtest:market` additionally scores the model against the **real
-historical Polymarket odds** and every blend weight. Latest run: the standalone
-model beats the market on both families; a small fixed blend (`w≈0.2`) helps
-slightly on 15m and hurts on 5m. We do **not** hard-code a blend — instead the
+historical Polymarket odds** and every blend weight. The standalone model
+outperforms the market on both families; a small fixed blend ($w \approx 0.2$)
+helps slightly on 15m and hurts on 5m. Rather than hard-coding a blend, the
 market quote enters the learned layer as a **feature** (`mkt`), so each family
 fits its own market weight from its actual track record and keeps adapting.
 
@@ -394,7 +387,7 @@ fits its own market weight from its actual track record and keeps adapting.
 
 ```mermaid
 graph TD
-    Browser["Browser Dashboard\nLive price · per-family tabs · calibration status\npolls /api/predict every 5 s"]
+    Browser["Browser Dashboard\nLive price · per-family tabs · calibration status\npolls /api/predict every 1 s"]
 
     subgraph server["Bun Server"]
         subgraph sources["Data Sources"]
@@ -423,7 +416,7 @@ graph TD
         Routes["routes/predict.ts → GET /api/predict"]
     end
 
-    Browser <-->|every 5 s| Routes
+    Browser <-->|every 1 s| Routes
     Routes --> Forecast
     Binance --> Forecast
     Poly --> Forecast
@@ -438,6 +431,21 @@ graph TD
     TradeLog --> Redeem
 ```
 
+The client polls `/api/predict` every second, but upstream API calls are cached
+with independent TTLs so the cadence never translates into raw upstream traffic:
+
+| Layer                            | TTL       | Env override              |
+| -------------------------------- | --------- | ------------------------- |
+| `/api/predict` (predict cache)   | 1 s       | `CACHE_TTL_PREDICT`       |
+| Binance klines + spot            | 1 s       | `CACHE_TTL_KLINES`        |
+| Polymarket market quotes         | 5 s       | `CACHE_TTL_POLYMARKET`    |
+| Polymarket strike (openPrice)    | 5 min     | `CACHE_TTL_PM_STRIKE`     |
+| Polymarket token ids + fee rate  | 5 min     | _(hardcoded)_             |
+
+The predict cache TTL is also clamped to the time until the next 5-minute
+boundary, so the new window's strike and committed call appear the moment a
+countdown hits zero rather than waiting for the next poll.
+
 ---
 
 ## Configuration (env)
@@ -449,7 +457,7 @@ graph TD
 | `MODEL_DRIFT_CAP_SIGMAS`                         | `0.5`            | Cap on drift as a multiple of diffusion                       |
 | `COMMIT_BY_FRACTION`                             | `0.2`            | How early a window must be seen to commit a call              |
 | `CALIB_MIN_SAMPLES`                              | `25`             | Resolved calls required before the learned layer activates    |
-| `CALIB_PRIOR`                                    | `10`             | Shrinkage strength toward the identity calibrator (`w0`, `b`) |
+| `CALIB_PRIOR`                                    | `10`             | Shrinkage strength toward the identity calibrator ($w_0$, $b$)|
 | `CALIB_FEATURE_PRIOR`                            | `10`             | Shrinkage strength pulling feature weights toward 0           |
 | `CALIB_HALF_LIFE_HOURS_5M/_15M/_1H/_1D`          | `24/48/168/1440` | Recency half-life per family (hours)                          |
 | `TRADING_ENABLED`                                | `false`          | Master switch for the live-trading layer                      |
@@ -477,6 +485,7 @@ bun run lint        # ESLint
 bun run format      # Prettier
 ```
 
-> Near-term crypto direction is close to a coin flip, so committed probabilities sit
-> near 50% by design and calibration mainly corrects confidence and bias. This is
-> a research/forecasting project, not trading advice.
+> Near-term crypto direction is close to a coin flip, so committed probabilities
+> sit near 50% by design and calibration mainly corrects confidence and bias.
+> This is a research and forecasting system; nothing here constitutes financial
+> advice.
