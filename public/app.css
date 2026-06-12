@@ -1159,6 +1159,13 @@ header {
 .record-stats .rstat-val.accent {
   color: var(--accent);
 }
+.rstat-alltime {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-dim);
+  margin-left: 4px;
+  letter-spacing: 0;
+}
 .record-filters {
   display: flex;
   gap: 6px;
@@ -1199,6 +1206,87 @@ header {
 .record-filters button.active .rf-acc {
   color: rgba(247, 147, 26, 0.75);
 }
+
+/* ── Date range preset bar (lives in the header) ─────────── */
+.date-range-bar {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.date-range-bar button {
+  appearance: none;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 100px;
+  transition:
+    color 0.16s ease,
+    background 0.16s ease,
+    border-color 0.16s ease;
+}
+.date-range-bar button:hover {
+  color: var(--text);
+  border-color: var(--border-bright);
+}
+.date-range-bar button.active {
+  background: rgba(123, 143, 168, 0.14);
+  color: var(--text);
+  border-color: rgba(123, 143, 168, 0.35);
+}
+
+/* ── Pagination controls ─────────────────────────────────── */
+.rec-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.rec-pagination:empty {
+  display: none;
+}
+.rec-page-btn {
+  appearance: none;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 5px 14px;
+  border-radius: 100px;
+  transition:
+    color 0.16s ease,
+    background 0.16s ease,
+    border-color 0.16s ease;
+}
+.rec-page-btn:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--border-bright);
+  background: rgba(255, 255, 255, 0.07);
+}
+.rec-page-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+.rec-page-info {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .record-list {
   margin-top: 16px;
   display: flex;

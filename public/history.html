@@ -18,7 +18,10 @@
             <a href="/history" class="active">History</a>
           </nav>
         </div>
-        <div class="updated">updated <span id="updated">—</span></div>
+        <div class="header-right">
+          <div class="date-range-bar" id="date-range-bar"></div>
+          <div class="updated">updated <span id="updated">—</span></div>
+        </div>
       </header>
 
       <!-- Hit-rate hero: headline stats + accuracy-over-time chart -->
@@ -96,6 +99,7 @@
           <div class="card-title record-list-title"><span>Call history</span></div>
           <div class="record-list" id="rec-list"></div>
           <div class="record-empty" id="rec-empty">No resolved calls yet.</div>
+          <div class="rec-pagination" id="rec-pagination"></div>
         </div>
 
         <!-- Previous model reads (windowed in-memory history) -->

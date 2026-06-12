@@ -2,7 +2,9 @@ import type {
   FamilyMetrics,
   InsightSnapshot,
   LedgerEntry,
+  LedgerPagination,
   LedgerSummary,
+  MetricsPoint,
   MetricsResponse,
   PaperBet,
   PaperResponse,
@@ -31,7 +33,7 @@ type CryptoChoice = CryptoId | 'all';
 const CRYPTO_CHOICES: readonly CryptoChoice[] = [...CRYPTO_IDS, 'all'];
 let selectedCrypto: CryptoChoice = loadPref('crypto', CRYPTO_CHOICES, 'btc');
 
-/** Query-string suffix applied to every data fetch ('all' = no filter). */
+/** @deprecated use dateQS() or ledgerQS() — kept only for /api/insights which has no date filter yet */
 const cryptoQS = () =>
   selectedCrypto === 'all' ? '' : `?crypto=${selectedCrypto}`;
 
@@ -47,6 +49,7 @@ function wireCryptoSelect(onChange: () => void) {
   sel.addEventListener('change', () => {
     selectedCrypto = sel.value as CryptoChoice;
     savePref('crypto', selectedCrypto);
+    recordPage = 1;
     $('app').classList.add('loading');
     onChange();
   });
@@ -101,6 +104,43 @@ async function refreshHistory() {
   }
 }
 
+// ── Date range filter ─────────────────────────────────────────────────────
+type DatePreset = '1d' | '7d' | '30d' | '90d' | 'all';
+const DATE_PRESETS: readonly DatePreset[] = ['1d', '7d', '30d', '90d', 'all'];
+const DATE_PRESET_LABELS: Record<DatePreset, string> = {
+  '1d': '24h',
+  '7d': '7d',
+  '30d': '30d',
+  '90d': '90d',
+  'all': 'All time',
+};
+const DATE_PRESET_MS: Record<DatePreset, number> = {
+  '1d': 86_400_000,
+  '7d': 7 * 86_400_000,
+  '30d': 30 * 86_400_000,
+  '90d': 90 * 86_400_000,
+  'all': 0,
+};
+let datePreset: DatePreset = loadPref('datePreset', DATE_PRESETS, '30d');
+
+/** ISO string for the start of the active date window (undefined = no limit). */
+const dateFrom = (): string | undefined => {
+  if (datePreset === 'all') return undefined;
+  return new Date(Date.now() - DATE_PRESET_MS[datePreset]).toISOString();
+};
+
+/**
+ * Query-string for endpoints that accept crypto + date range but NOT pagination
+ * (metrics, paper).
+ */
+const dateQS = (): string => {
+  const parts: string[] = [];
+  if (selectedCrypto !== 'all') parts.push(`crypto=${selectedCrypto}`);
+  const from = dateFrom();
+  if (from) parts.push(`from=${encodeURIComponent(from)}`);
+  return parts.length ? `?${parts.join('&')}` : '';
+};
+
 // ── Track record (persisted calls vs realized outcomes) ──────────────────
 const RECORD_RANGES: RangeId[] = ['5m', '15m', '1h', '4h', '1d'];
 type RecordFilter = 'ALL' | RangeId;
@@ -110,22 +150,89 @@ let recordFilter: RecordFilter = loadPref(
   'ALL'
 );
 let ledgerEntries: LedgerEntry[] = [];
+/** All-time stats (crypto-filtered). Shown in the range filter tab badges. */
 let ledgerSummary: LedgerSummary | null = null;
+/** Date-window stats. Shown in the hit-rate headline card. */
+let ledgerFilteredSummary: LedgerSummary | null = null;
+
+// ── Pagination state ──────────────────────────────────────────────────────
+const PAGE_SIZE = 100;
+let recordPage = 1;
+let recordPagination: LedgerPagination | null = null;
 
 function renderRecordSummary() {
-  const s = ledgerSummary;
+  // Headline stats reflect the active date window; all-time shown as context.
+  const s = ledgerFilteredSummary ?? ledgerSummary;
+  const all = ledgerSummary;
   if (!s) return;
+  const windowLabel =
+    datePreset === 'all' ? 'all time' : DATE_PRESET_LABELS[datePreset];
   $('rec-sub').textContent =
-    `${s.resolved} resolved of ${s.total} calls · ${s.correct} correct`;
+    `${s.resolved} resolved of ${s.total} calls · ${s.correct} correct · ${windowLabel}`;
+  const allTimeSuffix =
+    all && all !== s && all.resolved
+      ? ` <span class="rstat-alltime">(${fmtPct(all.accuracy)} all time)</span>`
+      : '';
   $('rec-stats').innerHTML = `
     <div>
       <div class="rstat-label">Hit rate</div>
-      <div class="rstat-val accent">${s.resolved ? fmtPct(s.accuracy) : '—'}</div>
+      <div class="rstat-val accent">${s.resolved ? fmtPct(s.accuracy) : '—'}${allTimeSuffix}</div>
     </div>
     <div>
       <div class="rstat-label">Brier</div>
       <div class="rstat-val">${s.resolved ? s.brier.toFixed(3) : '—'}</div>
     </div>`;
+}
+
+function renderDateRange() {
+  const el = $('date-range-bar');
+  el.innerHTML = DATE_PRESETS.map(
+    p =>
+      `<button data-dp="${p}" class="${p === datePreset ? 'active' : ''}">${DATE_PRESET_LABELS[p]}</button>`
+  ).join('');
+  for (const btn of el.querySelectorAll<HTMLButtonElement>('button')) {
+    btn.addEventListener('click', () => {
+      datePreset = btn.dataset.dp as DatePreset;
+      savePref('datePreset', datePreset);
+      recordPage = 1;
+      $('app').classList.add('loading');
+      refreshAll();
+    });
+  }
+}
+
+function renderRecordPagination() {
+  const el = $('rec-pagination');
+  const p = recordPagination;
+  if (!p || p.total === 0) {
+    el.innerHTML = '';
+    return;
+  }
+  const totalPages = Math.ceil(p.total / p.pageSize);
+  if (totalPages <= 1) {
+    el.innerHTML = `<span class="rec-page-info">${p.total} entries</span>`;
+    return;
+  }
+  const from = (p.page - 1) * p.pageSize + 1;
+  const to = Math.min(p.page * p.pageSize, p.total);
+  el.innerHTML =
+    `<button class="rec-page-btn" id="rec-prev" ${p.page <= 1 ? 'disabled' : ''}>← Prev</button>` +
+    `<span class="rec-page-info">${from}–${to} of ${p.total}</span>` +
+    `<button class="rec-page-btn" id="rec-next" ${p.page >= totalPages ? 'disabled' : ''}>Next →</button>`;
+  el.querySelector('#rec-prev')?.addEventListener('click', () => {
+    if (recordPage > 1) {
+      recordPage--;
+      $('app').classList.add('loading');
+      refreshRecord();
+    }
+  });
+  el.querySelector('#rec-next')?.addEventListener('click', () => {
+    if (recordPage < totalPages) {
+      recordPage++;
+      $('app').classList.add('loading');
+      refreshRecord();
+    }
+  });
 }
 
 function renderRecordFilters() {
@@ -145,6 +252,7 @@ function renderRecordFilters() {
     btn.addEventListener('click', () => {
       recordFilter = btn.dataset.rf as RecordFilter;
       savePref('filter', recordFilter);
+      recordPage = 1;
       renderRecordFilters();
       renderRecordList();
       renderHitRateChart();
@@ -276,9 +384,10 @@ function renderLearningCurve() {
 
 async function refreshMetrics() {
   try {
-    const res = await fetch(`/api/metrics${cryptoQS()}`);
+    const res = await fetch(`/api/metrics${dateQS()}`);
     if (!res.ok) return;
     metrics = (await res.json()) as MetricsResponse;
+    renderHitRateChart();
     renderLearningCurve();
   } catch {
     // Learning curve is best-effort; ignore transient failures.
@@ -556,7 +665,7 @@ function renderPaper() {
 
 async function refreshPaper() {
   try {
-    const res = await fetch(`/api/paper${cryptoQS()}`);
+    const res = await fetch(`/api/paper${dateQS()}`);
     if (!res.ok) return;
     paper = (await res.json()) as PaperResponse;
     paperById = new Map(
@@ -570,48 +679,12 @@ async function refreshPaper() {
 }
 
 // ── Hit rate over time (accuracy-over-time line chart) ───────────────────
-// Rolling window (in resolved calls) for the recent-form line.
-const ROLL_N = 25;
+// Chart now reads from the metrics series (which is already date-filtered and
+// covers the FULL window, not just the current ledger page).
 
-/** Resolved entries for the active filter, oldest → newest. */
-function resolvedForChart(): LedgerEntry[] {
-  return ledgerEntries
-    .filter(
-      e =>
-        e.outcome != null &&
-        (recordFilter === 'ALL' || e.rangeId === recordFilter)
-    )
-    .sort((a, b) => Date.parse(a.windowStart) - Date.parse(b.windowStart));
-}
+function hitRateChartFromSeries(pts: MetricsPoint[]): string {
+  if (pts.length < 2) return '<div class="chart-empty"></div>';
 
-/**
- * Inline SVG line chart of accuracy over time: a cumulative hit rate (overall
- * trend) and a rolling hit rate (recent form), against a dashed 50% baseline.
- * Drawn in a 0..100 viewBox stretched to fill the card.
- */
-/** Cumulative + rolling hit-rate series for a resolved-entry sequence. */
-function computeHitPts(
-  entries: LedgerEntry[]
-): { cum: number; roll: number }[] {
-  let correct = 0;
-  return entries.map((e, i) => {
-    if (e.correct) correct++;
-    const cum = correct / (i + 1);
-    const from = Math.max(0, i - ROLL_N + 1);
-    let rollCorrect = 0;
-    for (let j = from; j <= i; j++) if (entries[j]!.correct) rollCorrect++;
-    const roll = rollCorrect / (i - from + 1);
-    return { cum, roll };
-  });
-}
-
-function hitRateChart(entries: LedgerEntry[]): string {
-  if (entries.length < 2) return '<div class="chart-empty"></div>';
-
-  const pts = computeHitPts(entries);
-
-  // X is the resolved-call sequence (evenly spaced), so bursts of backfilled
-  // calls don't bunch the line — each call is one step along the track record.
   const W = 100;
   const H = 100;
   const PADX = 1.5;
@@ -621,59 +694,64 @@ function hitRateChart(entries: LedgerEntry[]): string {
   const X = (i: number) => PADX + (i / lastIdx) * (W - 2 * PADX);
   const Y = (a: number) => PADTOP + (1 - a) * (H - PADTOP - PADBOT);
 
-  const line = (key: 'cum' | 'roll') =>
+  const line = (key: 'cumAccuracy' | 'accuracy') =>
     pts.map((p, i) => `${i ? 'L' : 'M'}${px(X(i))} ${px(Y(p[key]))}`).join(' ');
 
   const yMid = px(Y(0.5));
   return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
     <line x1="0" y1="${yMid}" x2="${W}" y2="${yMid}" stroke="${COLORS.muted}" stroke-width="1" stroke-dasharray="3 3" opacity="0.4" vector-effect="non-scaling-stroke"/>
-    <path d="${line('cum')}" fill="none" stroke="${COLORS.muted}" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round" opacity="0.7" vector-effect="non-scaling-stroke"/>
-    <path d="${line('roll')}" fill="none" stroke="${COLORS.accent}" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+    <path d="${line('cumAccuracy')}" fill="none" stroke="${COLORS.muted}" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round" opacity="0.7" vector-effect="non-scaling-stroke"/>
+    <path d="${line('accuracy')}" fill="none" stroke="${COLORS.accent}" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   </svg>`;
 }
 
 function renderHitRateChart() {
-  const entries = resolvedForChart();
-  $('hr-chart').innerHTML = hitRateChart(entries);
-  const pts = computeHitPts(entries);
-  attachChartTip($('hr-chart'), {
-    xs: seriesXs(entries.length),
+  // Use the metrics series for the selected family — it covers the full date
+  // window (not just the current ledger page) and is already date-filtered.
+  const f = activeFamilyMetrics();
+  const chart = $('hr-chart');
+  const axis = $('hr-axis');
+
+  if (!f || f.series.length < 2) {
+    chart.innerHTML = '<div class="chart-empty"></div>';
+    axis.innerHTML = '<span>Not enough resolved calls to chart yet.</span>';
+    $('hr-legend').innerHTML = '';
+    return;
+  }
+
+  const pts = f.series;
+  chart.innerHTML = hitRateChartFromSeries(pts);
+  attachChartTip(chart, {
+    xs: seriesXs(pts.length),
     at: i => {
-      const e = entries[i]!;
       const p = pts[i]!;
       return {
-        title: fmtDateTime(e.windowStart),
+        title: fmtDateTime(isoOf(p.t)),
         rows: [
           {
-            label: `Recent (${Math.min(ROLL_N, i + 1)})`,
-            value: fmtPct(p.roll),
+            label: `Recent (last ${f.window})`,
+            value: fmtPct(p.accuracy),
             color: COLORS.accent,
           },
-          { label: 'Cumulative', value: fmtPct(p.cum), color: COLORS.muted },
           {
-            label: `${e.rangeId} ${e.side}`,
-            value: e.correct ? '✓ hit' : '✗ miss',
-            color: e.correct ? COLORS.up : COLORS.down,
+            label: 'Cumulative',
+            value: fmtPct(p.cumAccuracy),
+            color: COLORS.muted,
           },
         ],
       };
     },
   });
 
-  const axis = $('hr-axis');
-  if (entries.length >= 2) {
-    const first = entries[0]!;
-    const last = entries[entries.length - 1]!;
-    axis.innerHTML =
-      `<span>${fmtDay(Date.parse(first.windowStart))}</span>` +
-      `<span class="hl">100% / 50% / 0%</span>` +
-      `<span>${fmtDay(Date.parse(last.windowStart))}</span>`;
-  } else {
-    axis.innerHTML = '<span>Not enough resolved calls to chart yet.</span>';
-  }
+  const first = pts[0]!;
+  const last = pts[pts.length - 1]!;
+  axis.innerHTML =
+    `<span>${fmtDay(first.t)}</span>` +
+    `<span class="hl">100% / 50% / 0%</span>` +
+    `<span>${fmtDay(last.t)}</span>`;
 
   $('hr-legend').innerHTML = `
-    <span class="key"><span class="swatch" style="background:${COLORS.accent}"></span>Recent form (last ${ROLL_N})</span>
+    <span class="key"><span class="swatch" style="background:${COLORS.accent}"></span>Recent form (last ${f.window})</span>
     <span class="key"><span class="swatch" style="background:${COLORS.muted}"></span>Cumulative</span>
     <span class="key"><span class="swatch dashed"></span>50% baseline</span>`;
 }
@@ -741,22 +819,38 @@ function renderRecordList() {
     ? 'No calls for this range yet.'
     : 'No resolved calls yet.';
   list.innerHTML = filtered.map(recordRow).join('');
+  renderRecordPagination();
+}
+
+/** Builds the /api/ledger query string with active date range + pagination. */
+function ledgerQS(): string {
+  const parts: string[] = [];
+  if (selectedCrypto !== 'all') parts.push(`crypto=${selectedCrypto}`);
+  const from = dateFrom();
+  if (from) parts.push(`from=${encodeURIComponent(from)}`);
+  parts.push(`page=${recordPage}`, `pageSize=${PAGE_SIZE}`);
+  return parts.length ? `?${parts.join('&')}` : '';
 }
 
 async function refreshRecord() {
   try {
-    const res = await fetch(`/api/ledger${cryptoQS()}`);
+    const res = await fetch(`/api/ledger${ledgerQS()}`);
     if (!res.ok) return;
     const data = (await res.json()) as {
       summary: LedgerSummary;
+      filteredSummary: LedgerSummary;
       entries: LedgerEntry[];
+      pagination: LedgerPagination;
     };
     ledgerEntries = data.entries;
     ledgerSummary = data.summary;
+    ledgerFilteredSummary = data.filteredSummary;
+    recordPagination = data.pagination;
     renderRecordSummary();
+    renderDateRange();
     renderRecordFilters();
     renderRecordList();
-    renderHitRateChart();
+    // Hit rate chart now uses metrics series — rendered by refreshMetrics().
     $('updated').textContent = new Date().toLocaleTimeString();
     $('app').classList.remove('loading');
   } catch {

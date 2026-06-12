@@ -84,8 +84,10 @@ function rollingSeries(rows: Scored[]): MetricsPoint[] {
   let hit = 0;
   let cal = 0;
   let raw = 0;
+  let cumHit = 0;
   for (let i = 0; i < rows.length; i++) {
     const r = rows[i]!;
+    cumHit += r.hit;
     hit += r.hit;
     cal += r.brierCal;
     raw += r.brierRaw;
@@ -101,6 +103,7 @@ function rollingSeries(rows: Scored[]): MetricsPoint[] {
       brierCal: cal / n,
       brierRaw: raw / n,
       accuracy: hit / n,
+      cumAccuracy: cumHit / (i + 1),
     });
   }
   if (pts.length <= MAX_POINTS) return pts;
@@ -123,15 +126,19 @@ function familyMetrics(family: RangeId | 'ALL', rows: Scored[]): FamilyMetrics {
 
 /**
  * Compute learning metrics for every family plus the ALL aggregate,
- * optionally restricted to one crypto (legacy rows without a crypto = btc).
+ * optionally restricted to one crypto and/or a date window.
  */
 export async function computeMetrics(
-  crypto?: string
+  crypto?: string,
+  from?: number,
+  to?: number
 ): Promise<MetricsResponse> {
   const entries = await getLedger();
   const resolved = entries
     .filter(e => e.outcome != null)
     .filter(e => !crypto || (e.crypto ?? 'btc') === crypto)
+    .filter(e => !from || Date.parse(e.windowStart) >= from)
+    .filter(e => !to || Date.parse(e.windowStart) <= to)
     .sort((a, b) => Date.parse(a.windowStart) - Date.parse(b.windowStart));
 
   const byFamily = new Map<RangeId, Scored[]>();

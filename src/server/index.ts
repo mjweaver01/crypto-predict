@@ -86,6 +86,16 @@ const server = Bun.serve({
     const inCrypto = (rowCrypto: CryptoId | undefined) =>
       !crypto || (rowCrypto ?? 'btc') === crypto;
 
+    // Shared date-range bounds parsed once, used by metrics, paper, and ledger.
+    const fromMs = searchParams.has('from')
+      ? Date.parse(searchParams.get('from')!)
+      : NaN;
+    const toMs = searchParams.has('to')
+      ? Date.parse(searchParams.get('to')!)
+      : NaN;
+    const dateFrom = isNaN(fromMs) ? undefined : fromMs;
+    const dateTo = isNaN(toMs) ? undefined : toMs;
+
     // Dev live-reload SSE stream.
     if (IS_DEV && pathname === '/api/__reload' && makeSseResponse) {
       return makeSseResponse();
@@ -109,21 +119,63 @@ const server = Bun.serve({
         return json({ predictions: await predictAll() });
       }
       if (pathname === '/api/ledger') {
-        const entries = (await getLedger()).filter(e => inCrypto(e.crypto));
-        return json({ summary: summarize(entries), entries });
+        const allEntries = (await getLedger()).filter(e => inCrypto(e.crypto));
+        // All-time summary is always over the full (crypto-filtered) set.
+        const summary = summarize(allEntries);
+
+        // Date-range filter applied to windowStart.
+        let ranged = allEntries;
+        if (dateFrom !== undefined)
+          ranged = ranged.filter(
+            e => Date.parse(e.windowStart) >= dateFrom
+          );
+        if (dateTo !== undefined)
+          ranged = ranged.filter(e => Date.parse(e.windowStart) <= dateTo);
+
+        // Summary over the date-filtered set (pre-pagination) — drives the
+        // hit-rate headline stats so they reflect the selected window.
+        const filteredSummary = summarize(ranged);
+
+        // Sort newest first so page 1 is always the most recent data.
+        ranged = ranged
+          .slice()
+          .sort((a, b) => Date.parse(b.windowStart) - Date.parse(a.windowStart));
+
+        const pageSize = Math.min(
+          Math.max(1, Number(searchParams.get('pageSize') || 100)),
+          500
+        );
+        const page = Math.max(1, Number(searchParams.get('page') || 1));
+        const total = ranged.length;
+        const entries = ranged.slice((page - 1) * pageSize, page * pageSize);
+
+        return json({
+          summary,
+          filteredSummary,
+          entries,
+          pagination: { page, pageSize, total },
+        });
       }
       if (pathname === '/api/insights') {
         return json({ entries: getInsights(crypto) });
       }
       if (pathname === '/api/metrics') {
         // Prequential learning-curve scores (raw vs calibrated vs market).
-        return json(await computeMetrics(crypto));
+        return json(await computeMetrics(crypto, dateFrom, dateTo));
       }
       if (pathname === '/api/paper') {
-        // Paper-trading replay: the EV policy run over every resolved call
-        // with real commit-time order-book prices. Deterministic from the
-        // ledger, so it is recomputed on demand rather than stored.
-        const entries = (await getLedger()).filter(e => inCrypto(e.crypto));
+        // Paper-trading replay filtered to the same date window as other views.
+        const allEntries = (await getLedger()).filter(e => inCrypto(e.crypto));
+        const entries =
+          dateFrom !== undefined || dateTo !== undefined
+            ? allEntries.filter(e => {
+                const t = Date.parse(e.windowStart);
+                return (
+                  (dateFrom === undefined || t >= dateFrom) &&
+                  (dateTo === undefined || t <= dateTo)
+                );
+              })
+            : allEntries;
         return json(simulatePaper(entries));
       }
       if (pathname === '/api/trades') {

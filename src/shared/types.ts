@@ -95,6 +95,14 @@ export interface LedgerEntry {
   resolvedAt?: string;
 }
 
+/** Pagination metadata returned with paginated list responses. */
+export interface LedgerPagination {
+  page: number;
+  pageSize: number;
+  /** Total entries in the (date-range-filtered) result set, before paging. */
+  total: number;
+}
+
 /** Aggregate stats over a set of resolved ledger entries. */
 export interface LedgerSummary {
   total: number;
@@ -567,8 +575,10 @@ export interface MetricsPoint {
   t: number;
   brierCal: number;
   brierRaw: number;
-  /** Rolling hit rate. */
+  /** Rolling (last-N) hit rate. */
   accuracy: number;
+  /** Cumulative hit rate from the first resolved call in the series. */
+  cumAccuracy: number;
 }
 
 /** Learning metrics for one family (or the ALL aggregate). */
