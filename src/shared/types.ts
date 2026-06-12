@@ -309,6 +309,96 @@ export interface PaperResponse {
 }
 
 /**
+ * Execution status of a real (or dry-run) Polymarket trade:
+ *  - dry-run  → full decision path ran but no order was sent (shadow mode)
+ *  - filled   → the FAK order filled completely
+ *  - partial  → the FAK order filled partially (remainder cancelled)
+ *  - unfilled → the order was accepted but matched nothing (book moved)
+ *  - failed   → the CLOB rejected the order or the request errored
+ */
+export type TradeStatus =
+  | 'dry-run'
+  | 'filled'
+  | 'partial'
+  | 'unfilled'
+  | 'failed';
+
+/**
+ * One real-money (or shadow) trade placed against a committed call. Persisted
+ * to data/trades.json — unlike paper bets this is a record of EXECUTION, not a
+ * replayable simulation, so fills/P&L are stored rather than recomputed.
+ */
+export interface TradeRecord {
+  /** Window id `${rangeId}:${windowStartMs}` — one trade max per window. */
+  id: string;
+  rangeId: RangeId;
+  slug: string;
+  windowStart: string;
+  windowEnd: string;
+  /** Side bought (the committed side). */
+  side: Side;
+  /** CLOB token id of the outcome token bought. */
+  tokenId: string;
+  /** Outcome index of `tokenId` in the market (0 = Up, 1 = Down). */
+  outcomeIndex: number;
+  /** CTF condition id, needed to redeem winning positions on-chain. */
+  conditionId?: string;
+  /** Whether the market trades on the neg-risk exchange (affects redemption). */
+  negRisk?: boolean;
+  /** Model probability of the side at decision time. */
+  pSide: number;
+  /** Edge (pSide − execution-time ask) that justified the trade. */
+  edge: number;
+  /** Best ask for the side token at execution time. */
+  quotedCost: number;
+  /** Marketable-limit price cap actually sent. */
+  limitPrice: number;
+  /** USD the order intended to spend. */
+  intendedUsd: number;
+  status: TradeStatus;
+  orderId?: string;
+  /** USD actually spent (maker amount of the fill). */
+  costUsd?: number;
+  /** Outcome tokens received (taker amount of the fill). */
+  shares?: number;
+  /** costUsd / shares. */
+  avgPrice?: number;
+  error?: string;
+  placedAt: string;
+
+  // ── Filled in once the window resolves ──────────────────────────────
+  outcome?: Side | null;
+  won?: boolean;
+  /** Realized P&L: shares − costUsd on a win, −costUsd on a loss. */
+  pnlUsd?: number;
+  settledAt?: string;
+  /** On-chain redemption tx hash once winnings were claimed. */
+  redeemTx?: string;
+  redeemedAt?: string;
+}
+
+/** GET /api/trades — live-trading status and the execution record. */
+export interface TradesResponse {
+  enabled: boolean;
+  dryRun: boolean;
+  summary: {
+    trades: number;
+    open: number;
+    settled: number;
+    wins: number;
+    /** Total USD spent across settled trades. */
+    costUsd: number;
+    /** Realized P&L across settled trades. */
+    pnlUsd: number;
+    /** Realized P&L for the current UTC day (drives the daily loss halt). */
+    pnlTodayUsd: number;
+    /** True when the daily loss limit has halted trading. */
+    halted: boolean;
+  };
+  trades: TradeRecord[];
+}
+
+/**
  * A full prediction for one Polymarket BTC Up/Down family (one tab): the
  * window-anchored up/down odds, the price-to-beat, a price forecast for the
  * window end, and the live market quote when one exists.

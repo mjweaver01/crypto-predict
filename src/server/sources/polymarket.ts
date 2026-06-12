@@ -53,7 +53,7 @@ interface ClobBookLevel {
  * could actually execute at, unlike the midpoint. Levels are scanned for the
  * extremes rather than trusting order. `quotedAt` is the book's own timestamp.
  */
-async function bookTop(
+export async function bookTop(
   tokenId: string
 ): Promise<{ bid?: number; ask?: number; quotedAt?: string } | undefined> {
   const data = (await getJson(`${CLOB}/book?token_id=${tokenId}`)) as {
@@ -225,6 +225,71 @@ export async function fetchMarket(
       upBestBid: top?.bid,
       upBestAsk: top?.ask,
       quotedAt: top?.quotedAt ?? new Date().toISOString(),
+    };
+  });
+}
+
+/** Everything the trade executor needs to place/redeem an order on a market. */
+export interface MarketTokens {
+  /** CLOB token id per outcome, in market order (0 = Up, 1 = Down). */
+  tokenIds: string[];
+  outcomes: string[];
+  /** Index of the "Up" outcome within tokenIds/outcomes. */
+  upIndex: number;
+  /** CTF condition id (for on-chain redemption of winning positions). */
+  conditionId?: string;
+  /** True when the market trades on the neg-risk exchange. */
+  negRisk: boolean;
+  /** Minimum order size in shares (Gamma orderMinSize). */
+  minOrderSize?: number;
+  /** Price tick (Gamma orderPriceMinTickSize), e.g. 0.01. */
+  tickSize?: number;
+}
+
+/**
+ * Fetch the trade-relevant identifiers for a market by slug. Token ids and the
+ * condition id are immutable for a market, so this caches longer than quotes.
+ */
+export async function fetchMarketTokens(
+  slug: string
+): Promise<MarketTokens | null> {
+  return cached(`pmtokens:${slug}`, 300, async () => {
+    let m:
+      | (GammaMarket & {
+          conditionId?: string;
+          negRisk?: boolean;
+          orderMinSize?: number;
+          orderPriceMinTickSize?: number;
+        })
+      | null;
+    try {
+      m = (await getJson(`${GAMMA}/markets/slug/${slug}`)) as typeof m;
+    } catch {
+      return null;
+    }
+    if (!m?.clobTokenIds || !m.outcomes) return null;
+    let outcomes: string[];
+    let tokenIds: string[];
+    try {
+      outcomes = JSON.parse(m.outcomes) as string[];
+      tokenIds = JSON.parse(m.clobTokenIds) as string[];
+    } catch {
+      return null;
+    }
+    const upIndex = outcomes.findIndex(o => o.toLowerCase() === 'up');
+    if (upIndex < 0 || tokenIds.length !== outcomes.length) return null;
+    return {
+      tokenIds,
+      outcomes,
+      upIndex,
+      conditionId: m.conditionId,
+      negRisk: m.negRisk === true,
+      minOrderSize: Number.isFinite(Number(m.orderMinSize))
+        ? Number(m.orderMinSize)
+        : undefined,
+      tickSize: Number.isFinite(Number(m.orderPriceMinTickSize))
+        ? Number(m.orderPriceMinTickSize)
+        : undefined,
     };
   });
 }

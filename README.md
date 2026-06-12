@@ -265,6 +265,55 @@ The history page renders the equity curve, bankroll, ROI on turnover, max
 drawdown, and per-family P&L (starting bankroll `PAPER_START_BANKROLL`,
 default $1,000).
 
+### Live trading (`GET /api/trades`) — REAL MONEY
+
+The paper policy, executed for real on the Polymarket CLOB. Off by default and
+**dry-run by default even when enabled** — the intended path is enable →
+shadow → live. **[TRADING.md](TRADING.md) is the full go-live runbook**
+(wallet funding, the USDC.e trap, shadow-mode exit criteria, kill switches);
+the short version:
+
+```bash
+# 1. Create a DEDICATED bot wallet (never your main wallet), fund it on
+#    Polygon with USDC.e (the CLOB's collateral) + a little POL for gas, and
+#    set POLYMARKET_PRIVATE_KEY in .env.
+bun run trade:setup     # derives CLOB API creds, sets USDC/CTF allowances
+bun run trade:check     # same checks, sends no transactions
+
+# 2. TRADING_ENABLED=true (TRADING_DRY_RUN stays true): the full execution
+#    path runs — token resolution, live book, edge re-check, sizing — but
+#    fills are simulated. Watch the shadow record at /api/trades.
+
+# 3. Only when the shadow record looks right: TRADING_DRY_RUN=false.
+```
+
+How an order happens (`src/server/trade/executor.ts`): when a window's
+committed call gets a **BET** verdict, the executor re-validates the edge at
+the **execution-time ask of the actual token being bought** (not the frozen
+commit-time book — an edge that evaporated is not chased), then posts a
+marketable-limit **FAK** order capped one tick through the ask, never above
+`probability − min edge` and never above the frozen cost plus
+`TRADE_MAX_SLIPPAGE`. Sizing is the same fractional Kelly as the paper layer,
+against `min(USDC balance, TRADE_BANKROLL_CAP_USD)`, hard-capped at
+`TRADE_MAX_STAKE_USD`.
+
+Safety rails, all enforced in code: one trade max per window (persisted in
+`data/trades.json`, so restarts can't double-fire), trading only inside the
+genuine commit span (`COMMIT_BY_FRACTION`), a family allowlist
+(`TRADE_FAMILIES`, default only `5m` — the one family with measured tradable
+edge), max concurrently open positions (`TRADE_MAX_OPEN`), and a **daily
+realized-loss kill switch** (`TRADE_DAILY_LOSS_LIMIT_USD`, resets at UTC
+midnight).
+
+Fills settle against the same resolution loop as the ledger, and winning
+positions are **auto-redeemed on-chain** back into USDC every resolve cycle
+(`TRADE_AUTO_REDEEM`, EOA wallets only — proxy-wallet accounts claim via the
+Polymarket UI). `bun run trade:redeem` catches up manually after downtime.
+
+> The paper record is the evidence; live trading just executes it. If the
+> paper equity curve isn't convincingly positive on real commit-time books,
+> there is nothing here worth funding.
+
 ---
 
 ## Strike (price to beat)
@@ -326,6 +375,9 @@ server (Bun)
   ├─ model/metrics.ts      → prequential learning curve (calibrated vs raw vs market)
   ├─ model/insights.ts     → windowed log of how the read evolved (persisted)
   ├─ model/scoring.ts      → Brier / log-loss / reliability (backtest harness)
+  ├─ trade/executor.ts     → real CLOB orders on BET verdicts (env-gated, dry-run first)
+  ├─ trade/tradeLog.ts     → execution record + P&L settlement → data/trades.json
+  ├─ trade/redeem.ts       → on-chain redemption of winning positions
   └─ routes/predict.ts     → GET /api/predict → Prediction JSON
 ```
 
@@ -344,6 +396,15 @@ server (Bun)
 | `CALIB_PRIOR` | `10` | Shrinkage strength toward the identity calibrator (`w0`, `b`) |
 | `CALIB_FEATURE_PRIOR` | `10` | Shrinkage strength pulling feature weights toward 0 |
 | `CALIB_HALF_LIFE_HOURS_5M/_15M/_1H/_1D` | `24/48/168/1440` | Recency half-life per family (hours) |
+| `TRADING_ENABLED` | `false` | Master switch for the live-trading layer |
+| `TRADING_DRY_RUN` | `true` | Full execution path with simulated fills (shadow mode) |
+| `POLYMARKET_PRIVATE_KEY` | — | Dedicated bot wallet key (dry-run works without it) |
+| `TRADE_FAMILIES` | `5m` | Families allowed to trade for real |
+| `TRADE_MAX_STAKE_USD` / `TRADE_BANKROLL_CAP_USD` | `10` / `250` | Per-trade and Kelly-base caps |
+| `TRADE_MAX_SLIPPAGE` / `TRADE_MAX_OPEN` | `0.01` / `4` | Execution-price and concurrency rails |
+| `TRADE_DAILY_LOSS_LIMIT_USD` | `25` | Daily realized-loss kill switch (UTC reset) |
+
+See `.env.example` for the full annotated list.
 
 ---
 

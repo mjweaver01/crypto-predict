@@ -11,6 +11,10 @@ import { refreshCalibrators } from './model/calibration.ts';
 import { computeMetrics } from './model/metrics.ts';
 import { getInsights } from './model/insights.ts';
 import { makePriceStreamResponse } from './sources/priceStream.ts';
+import { getTradeConfig } from './trade/config.ts';
+import { getTrades, isOpen, settleTrades } from './trade/tradeLog.ts';
+import { redeemSettled } from './trade/redeem.ts';
+import type { TradesResponse } from '../shared/types.ts';
 
 // 8333 is Bitcoin's default P2P network port.
 const PORT = Number(process.env.PORT ?? 8333);
@@ -105,6 +109,32 @@ const server = Bun.serve({
         // ledger, so it is recomputed on demand rather than stored.
         return json(simulatePaper(await getLedger()));
       }
+      if (pathname === '/api/trades') {
+        // Real-money (or dry-run shadow) execution record + halt status.
+        const cfg = getTradeConfig();
+        const trades = await getTrades();
+        const settled = trades.filter(t => t.settledAt !== undefined);
+        const dayStart = new Date().setUTCHours(0, 0, 0, 0);
+        const pnlTodayUsd = settled
+          .filter(t => Date.parse(t.settledAt!) >= dayStart)
+          .reduce((s, t) => s + (t.pnlUsd ?? 0), 0);
+        const body: TradesResponse = {
+          enabled: cfg.enabled,
+          dryRun: cfg.dryRun,
+          summary: {
+            trades: trades.length,
+            open: trades.filter(isOpen).length,
+            settled: settled.length,
+            wins: settled.filter(t => t.won).length,
+            costUsd: settled.reduce((s, t) => s + (t.costUsd ?? 0), 0),
+            pnlUsd: settled.reduce((s, t) => s + (t.pnlUsd ?? 0), 0),
+            pnlTodayUsd,
+            halted: pnlTodayUsd <= -cfg.dailyLossLimitUsd,
+          },
+          trades,
+        };
+        return json(body);
+      }
       if (pathname === '/api/read/refresh' && req.method === 'POST') {
         // Force a fresh LLM read now (normally refreshed once per 5m window).
         return json(await refreshRead());
@@ -154,6 +184,16 @@ const resolveLoop = async () => {
   await refreshCalibrators().catch(err =>
     console.warn('[calibration] refresh failed:', err)
   );
+  // Settle real trades against the freshly resolved outcomes, then redeem any
+  // winning positions back into USDC (no-ops unless trading is enabled live).
+  if (getTradeConfig().enabled) {
+    await settleTrades().catch(err =>
+      console.warn('[trade] settle failed:', err)
+    );
+    await redeemSettled().catch(err =>
+      console.warn('[trade] redeem failed:', err)
+    );
+  }
 };
 void resolveLoop();
 setInterval(resolveLoop, 60_000);

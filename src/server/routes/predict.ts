@@ -28,6 +28,7 @@ import {
   getCalibrator,
 } from '../model/calibration.ts';
 import { recordInsight } from '../model/insights.ts';
+import { executeTrades } from '../trade/executor.ts';
 import { dailyWindowAt } from '../model/windows.ts';
 import {
   fetchMarket,
@@ -483,6 +484,13 @@ async function computePrediction(assistWaitMs: number): Promise<Prediction> {
     // response or fail the request on a logging error).
     void recordPredictions(prediction).catch(err =>
       console.warn('[ledger] record failed:', err)
+    );
+
+    // Real-money execution on freshly committed BET verdicts. Inert unless
+    // TRADING_ENABLED; dry-run by default. Fire-and-forget for the same reason
+    // as the ledger write — the prediction response never waits on the CLOB.
+    void executeTrades(prediction, now).catch(err =>
+      console.warn('[trade] execute failed:', err)
     );
 
     return prediction;

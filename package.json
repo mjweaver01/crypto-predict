@@ -12,6 +12,9 @@
     "backfill:gaps": "bun run scripts/backfill-gaps.ts",
     "backfill:book": "bun run scripts/backfill-book.ts",
     "edge": "bun run scripts/edge-report.ts",
+    "trade:setup": "bun run scripts/trade-setup.ts",
+    "trade:check": "bun run scripts/trade-setup.ts --check",
+    "trade:redeem": "bun run scripts/trade-redeem.ts",
     "build:client": "bun build src/client/live.ts src/client/history.ts --outdir public/dist --target browser",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src scripts",
@@ -34,7 +37,9 @@
     "@ai-sdk/anthropic": "^3.0.81",
     "@ai-sdk/openai": "^3.0.68",
     "@ai-sdk/openai-compatible": "^2.0.48",
+    "@polymarket/clob-client": "^5.8.1",
     "ai": "^6.0.197",
+    "ethers": "5.8.0",
     "zod": "^4.4.3"
   }
 }
