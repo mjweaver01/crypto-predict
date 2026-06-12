@@ -142,7 +142,7 @@ a yes/no call, so it can't learn _direction_. We fit something strictly more
 general per family: a small **ridge logistic regression** from the raw
 probability **plus frozen commit-time features** to the observed win frequency:
 
-$$\text{calibrated\_logit} = w_0 \cdot \text{raw\_logit} + \sum_j w_j x_j + b$$
+$$\text{calibrated logit} = w_0 \cdot \text{raw logit} + \sum_j w_j x_j + b$$
 
 The features (`src/server/model/features.ts`), all clamped and vol-normalized:
 
