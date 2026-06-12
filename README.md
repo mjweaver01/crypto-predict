@@ -1,8 +1,6 @@
-<p align="center"><img src="public/favicon.svg" width="64" alt="Crypto Predict" /></p>
+<img src="public/favicon.svg" width="64" alt="Crypto Predict" />
 
 # Crypto Predict
-
-<p align="center"><img src="public/bywmsmfm.jpg" alt="Crypto Predict live dashboard" /></p>
 
 A self-calibrating forecasting engine for near-term crypto price direction across six
 assets and five time horizons. It reads spot prices from the Binance public API —
@@ -21,13 +19,13 @@ It mirrors five recurring Polymarket families across **six crypto assets**
 (BTC, ETH, SOL, XRP, DOGE, BNB — every asset Polymarket runs up/down markets
 for, all sharing the same window boundaries and slug patterns):
 
-| Family     | Horizon                  | Settles on                                  |
-| ---------- | ------------------------ | ------------------------------------------- |
-| **5 min**  | rolling 5-minute window  | Chainlink \<asset>/USD                      |
-| **15 min** | rolling 15-minute window | Chainlink \<asset>/USD                      |
-| **Hourly** | top-of-hour window       | Binance \<asset>/USDT 1h candle             |
-| **4 hour** | epoch-aligned 4h window  | Chainlink \<asset>/USD                      |
-| **Daily**  | noon-ET to noon-ET       | Binance \<asset>/USDT 1m close at noon ET   |
+| Family     | Horizon                  | Settles on                                |
+| ---------- | ------------------------ | ----------------------------------------- |
+| **5 min**  | rolling 5-minute window  | Chainlink \<asset>/USD                    |
+| **15 min** | rolling 15-minute window | Chainlink \<asset>/USD                    |
+| **Hourly** | top-of-hour window       | Binance \<asset>/USDT 1h candle           |
+| **4 hour** | epoch-aligned 4h window  | Chainlink \<asset>/USD                    |
+| **Daily**  | noon-ET to noon-ET       | Binance \<asset>/USDT 1m close at noon ET |
 
 A top-level dropdown switches the dashboard between any single asset and
 **All** — a holistic view with per-asset spot mini-cards and every asset's
@@ -434,13 +432,13 @@ graph TD
 The client polls `/api/predict` every second, but upstream API calls are cached
 with independent TTLs so the cadence never translates into raw upstream traffic:
 
-| Layer                            | TTL       | Env override              |
-| -------------------------------- | --------- | ------------------------- |
-| `/api/predict` (predict cache)   | 1 s       | `CACHE_TTL_PREDICT`       |
-| Binance klines + spot            | 1 s       | `CACHE_TTL_KLINES`        |
-| Polymarket market quotes         | 5 s       | `CACHE_TTL_POLYMARKET`    |
-| Polymarket strike (openPrice)    | 5 min     | `CACHE_TTL_PM_STRIKE`     |
-| Polymarket token ids + fee rate  | 5 min     | _(hardcoded)_             |
+| Layer                           | TTL   | Env override           |
+| ------------------------------- | ----- | ---------------------- |
+| `/api/predict` (predict cache)  | 1 s   | `CACHE_TTL_PREDICT`    |
+| Binance klines + spot           | 1 s   | `CACHE_TTL_KLINES`     |
+| Polymarket market quotes        | 5 s   | `CACHE_TTL_POLYMARKET` |
+| Polymarket strike (openPrice)   | 5 min | `CACHE_TTL_PM_STRIKE`  |
+| Polymarket token ids + fee rate | 5 min | _(hardcoded)_          |
 
 The predict cache TTL is also clamped to the time until the next 5-minute
 boundary, so the new window's strike and committed call appear the moment a
@@ -450,25 +448,25 @@ countdown hits zero rather than waiting for the next poll.
 
 ## Configuration (env)
 
-| Variable                                         | Default          | Purpose                                                       |
-| ------------------------------------------------ | ---------------- | ------------------------------------------------------------- |
-| `MODEL_EWMA_LAMBDA`                              | `0.94`           | EWMA decay for volatility/drift                               |
-| `MODEL_DRIFT_SHRINK`                             | `0`              | Fraction of trailing drift retained (0 = driftless)           |
-| `MODEL_DRIFT_CAP_SIGMAS`                         | `0.5`            | Cap on drift as a multiple of diffusion                       |
-| `COMMIT_BY_FRACTION`                             | `0.2`            | How early a window must be seen to commit a call              |
-| `CALIB_MIN_SAMPLES`                              | `25`             | Resolved calls required before the learned layer activates    |
-| `CALIB_PRIOR`                                    | `10`             | Shrinkage strength toward the identity calibrator ($w_0$, $b$)|
-| `CALIB_FEATURE_PRIOR`                            | `10`             | Shrinkage strength pulling feature weights toward 0           |
-| `CALIB_HALF_LIFE_HOURS_5M/_15M/_1H/_1D`          | `24/48/168/1440` | Recency half-life per family (hours)                          |
-| `TRADING_ENABLED`                                | `false`          | Master switch for the live-trading layer                      |
-| `TRADING_DRY_RUN`                                | `true`           | Full execution path with simulated fills (shadow mode)        |
-| `POLYMARKET_PRIVATE_KEY`                         | —                | Dedicated bot wallet key (dry-run works without it)           |
-| `TRADE_FAMILIES`                                 | `5m`             | Families allowed to trade for real                            |
-| `TRADE_CRYPTOS`                                  | `btc`            | Assets allowed to trade for real                              |
-| `TRADE_MAX_STAKE_USD` / `TRADE_BANKROLL_CAP_USD` | `10` / `250`     | Per-trade and Kelly-base caps                                 |
-| `TRADE_MAX_SLIPPAGE` / `TRADE_MAX_OPEN`          | `0.01` / `4`     | Execution-price and concurrency rails                         |
-| `TRADE_DAILY_LOSS_LIMIT_USD`                     | `25`             | Daily realized-loss kill switch (UTC reset)                   |
-| `PAPER_TAKER_FEE_BPS`                            | `1000`           | Taker fee assumed by the paper replay (live reads the CLOB)   |
+| Variable                                         | Default          | Purpose                                                        |
+| ------------------------------------------------ | ---------------- | -------------------------------------------------------------- |
+| `MODEL_EWMA_LAMBDA`                              | `0.94`           | EWMA decay for volatility/drift                                |
+| `MODEL_DRIFT_SHRINK`                             | `0`              | Fraction of trailing drift retained (0 = driftless)            |
+| `MODEL_DRIFT_CAP_SIGMAS`                         | `0.5`            | Cap on drift as a multiple of diffusion                        |
+| `COMMIT_BY_FRACTION`                             | `0.2`            | How early a window must be seen to commit a call               |
+| `CALIB_MIN_SAMPLES`                              | `25`             | Resolved calls required before the learned layer activates     |
+| `CALIB_PRIOR`                                    | `10`             | Shrinkage strength toward the identity calibrator ($w_0$, $b$) |
+| `CALIB_FEATURE_PRIOR`                            | `10`             | Shrinkage strength pulling feature weights toward 0            |
+| `CALIB_HALF_LIFE_HOURS_5M/_15M/_1H/_1D`          | `24/48/168/1440` | Recency half-life per family (hours)                           |
+| `TRADING_ENABLED`                                | `false`          | Master switch for the live-trading layer                       |
+| `TRADING_DRY_RUN`                                | `true`           | Full execution path with simulated fills (shadow mode)         |
+| `POLYMARKET_PRIVATE_KEY`                         | —                | Dedicated bot wallet key (dry-run works without it)            |
+| `TRADE_FAMILIES`                                 | `5m`             | Families allowed to trade for real                             |
+| `TRADE_CRYPTOS`                                  | `btc`            | Assets allowed to trade for real                               |
+| `TRADE_MAX_STAKE_USD` / `TRADE_BANKROLL_CAP_USD` | `10` / `250`     | Per-trade and Kelly-base caps                                  |
+| `TRADE_MAX_SLIPPAGE` / `TRADE_MAX_OPEN`          | `0.01` / `4`     | Execution-price and concurrency rails                          |
+| `TRADE_DAILY_LOSS_LIMIT_USD`                     | `25`             | Daily realized-loss kill switch (UTC reset)                    |
+| `PAPER_TAKER_FEE_BPS`                            | `1000`           | Taker fee assumed by the paper replay (live reads the CLOB)    |
 
 See `.env.example` for the full annotated list.
 
