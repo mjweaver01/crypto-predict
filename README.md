@@ -83,11 +83,14 @@ flowchart LR
 ### 1. Statistical core
 
 Log-returns between consecutive Binance candles are modeled as approximately
-normal with a small drift `μ` and volatility `σ`. Over a horizon of `h` periods
-the cumulative log-return is `~ Normal(μ·h, σ²·h)`, giving:
+normal with a small drift $\mu$ and volatility $\sigma$. Over a horizon of $h$
+periods the cumulative log-return is $\sim \mathcal{N}(\mu h,\; \sigma^2 h)$, giving:
 
-- **direction / above strike `K`:** `P(close > K) = 1 − Φ((ln(K/price) − μ·h) / (σ·√h))`
-- **price point:** `price · exp(μ·h)`, with a lognormal 95% band
+- **direction / above strike $K$:**
+
+$$P(\text{close} > K) \;=\; 1 - \Phi\!\left(\frac{\ln(K/\text{price}) - \mu h}{\sigma\sqrt{h}}\right)$$
+
+- **price point:** $\text{price} \cdot e^{\mu h}$, with a lognormal 95% band
 
 Two accuracy-oriented refinements, both validated by the backtest:
 
@@ -139,9 +142,7 @@ a yes/no call, so it can't learn _direction_. We fit something strictly more
 general per family: a small **ridge logistic regression** from the raw
 probability **plus frozen commit-time features** to the observed win frequency:
 
-```
-calibrated_logit = w0 · raw_logit + Σ wj · xj + b
-```
+$$\text{calibrated\_logit} = w_0 \cdot \text{raw\_logit} + \sum_j w_j x_j + b$$
 
 The features (`src/server/model/features.ts`), all clamped and vol-normalized:
 
@@ -153,13 +154,13 @@ The features (`src/server/model/features.ts`), all clamped and vol-normalized:
 | `todSin/todCos` (`dowSin/dowCos` daily) | time-of-day / day-of-week seasonality                        |
 | `mkt`                                   | logit of the live Polymarket implied probability             |
 
-- `w0 < 1` shrinks overconfidence; `b` corrects base-rate bias (the old Platt
-  behavior, recovered exactly when all `wj = 0`).
-- `wj` let the learner discover real directional signal — momentum, regime,
+- $w_0 < 1$ shrinks overconfidence; $b$ corrects base-rate bias (the old Platt
+  behavior, recovered exactly when all $w_j = 0$).
+- $w_j$ let the learner discover real directional signal — momentum, regime,
   seasonality, and the market's own quote — so it can **flip a marginal call**,
   not just temper it. This is what gives the daily family (a structural coin
   flip under a driftless model) an actual learned opinion.
-- An L2 prior pulls `(w0, w, b)` toward the identity `(1, 0, 0)`: with little
+- An L2 prior pulls $(w_0, \mathbf{w}, b)$ toward the identity $(1, \mathbf{0}, 0)$: with little
   data the layer is a no-op, and below `CALIB_MIN_SAMPLES` it is strictly off.
 - Samples are **recency-weighted** with a per-family half-life
   (`CALIB_HALF_LIFE_HOURS_*`), so a fitted regime bias decays instead of being
