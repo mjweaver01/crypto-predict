@@ -15,7 +15,13 @@ import { extractFeatures } from '../model/features.ts';
 import { buildNarrative } from '../model/narrative.ts';
 import { recordPredictions } from '../model/ledger.ts';
 import { decide, ensureHydrated } from '../model/commitments.ts';
-import { costOfSide, decideBet, fillSide, getPolicy } from '../model/paper.ts';
+import {
+  costOfSide,
+  decideBet,
+  feeAdjustedCost,
+  fillSide,
+  getPolicy,
+} from '../model/paper.ts';
 import { runBankroll } from '../workers/computeClient.ts';
 import {
   applyCalibration,
@@ -457,9 +463,31 @@ async function computePrediction(crypto: CryptoId): Promise<Prediction> {
               c.marketUpAsks,
               rawTouch + policy.fillSlippage
             );
-            range.paper.stake = f ? f.stake : 0;
-            range.paper.depthCapped =
-              f && f.stake < requested - 1e-9 ? true : undefined;
+            if (f) {
+              range.paper.stake = f.stake;
+              range.paper.depthCapped =
+                f.stake < requested - 1e-9 ? true : undefined;
+              // Replace the touch cost with the depth-weighted average actually
+              // paid (fee-adjusted), so the displayed cost/payout match the
+              // stake we just sized — the replay records the achieved cost the
+              // same way. Edge stays the touch-based gate value from decideBet.
+              range.paper.cost = feeAdjustedCost(
+                f.cost,
+                policy.takerFeeBps,
+                policy.feeModel
+              );
+            } else {
+              // Nothing fillable within the slippage cap — not a real bet, so
+              // flip to PASS exactly as the replay does instead of showing $0.
+              range.paper = {
+                action: 'PASS',
+                side: c.side,
+                cost: range.paper.cost,
+                edge: range.paper.edge,
+                stakeFraction: 0,
+                reason: 'no-book',
+              };
+            }
           } else {
             range.paper.stake = requested;
           }
