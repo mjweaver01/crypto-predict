@@ -1,11 +1,20 @@
-import { cached, env } from '../cache.ts';
+import { cached, env, invalidate } from '../cache.ts';
 
 // data-api.binance.vision is Binance's public market-data mirror: same
 // /api/v3/* endpoints and BTCUSDT data, but no API key and no geo-block (the
 // main api.binance.com returns HTTP 451 in some regions, e.g. the US).
 export const BASE = env('BINANCE_BASE_URL', 'https://data-api.binance.vision');
 const SYMBOL = env('BTC_SYMBOL', 'BTCUSDT');
-const TTL = Number(env('CACHE_TTL_KLINES', '1')); // seconds
+
+// Differentiated TTLs reduce Binance call volume. With 6 symbols × ~10 calls/s
+// a single 1s TTL fires ~60 req/s — well above the ~20 req/s public rate limit.
+// Historical boundary candles (kline-at) are immutable once closed; they never
+// need re-fetching within the same window. Coarser intervals change more slowly.
+const TTL_PRICE = Number(env('CACHE_TTL_PRICE', '3')); // seconds
+const TTL_1M = Number(env('CACHE_TTL_KLINES_1M', '5')); // seconds
+const TTL_5M = Number(env('CACHE_TTL_KLINES_5M', '15')); // seconds
+const TTL_1H = Number(env('CACHE_TTL_KLINES_1H', '60')); // seconds
+const TTL_KLINE_AT = Number(env('CACHE_TTL_KLINE_AT', '3600')); // historical candles are immutable
 
 /** A single OHLC candle + open time. High/low enable range-based volatility. */
 export interface Candle {
@@ -40,7 +49,8 @@ export async function fetchCandles(
   limit: number,
   symbol: string = SYMBOL
 ): Promise<Candle[]> {
-  return cached(`klines:${symbol}:${interval}:${limit}`, TTL, async () => {
+  const ttl = interval === '1h' ? TTL_1H : interval === '5m' ? TTL_5M : TTL_1M;
+  return cached(`klines:${symbol}:${interval}:${limit}`, ttl, async () => {
     const url = `${BASE}/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
     const res = await fetch(url, {
       headers: { 'User-Agent': 'bitcoin-predict/1.0' },
@@ -63,24 +73,31 @@ export async function fetchCandleAt(
   openTimeMs: number,
   symbol: string = SYMBOL
 ): Promise<Candle | null> {
-  return cached(
-    `kline-at:${symbol}:${interval}:${openTimeMs}`,
-    TTL,
-    async () => {
-      const url =
-        `${BASE}/api/v3/klines?symbol=${symbol}&interval=${interval}` +
-        `&startTime=${openTimeMs}&limit=1`;
-      const res = await fetch(url, {
-        headers: { 'User-Agent': 'bitcoin-predict/1.0' },
-        signal: AbortSignal.timeout(15_000),
-      });
-      if (!res.ok) throw new Error(`binance kline-at ${res.status}`);
-      const raw = (await res.json()) as RawKline[];
-      if (raw.length === 0) return null;
-      const c = toCandle(raw[0]!);
-      return c.openTime === openTimeMs ? c : null;
-    }
-  );
+  const key = `kline-at:${symbol}:${interval}:${openTimeMs}`;
+  // Use a short TTL wrapper when the candle isn't available yet (null result),
+  // so we retry on the next tick rather than caching the miss for an hour.
+  const shortTtl = TTL_1M;
+  const result = await cached(key, shortTtl, async () => {
+    const url =
+      `${BASE}/api/v3/klines?symbol=${symbol}&interval=${interval}` +
+      `&startTime=${openTimeMs}&limit=1`;
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'bitcoin-predict/1.0' },
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!res.ok) throw new Error(`binance kline-at ${res.status}`);
+    const raw = (await res.json()) as RawKline[];
+    if (raw.length === 0) return null;
+    const c = toCandle(raw[0]!);
+    return c.openTime === openTimeMs ? c : null;
+  });
+  // Promote to long-lived cache once the candle is confirmed — past candles
+  // are immutable and don't need re-fetching until the next window boundary.
+  if (result !== null) {
+    invalidate(key);
+    return cached(key, TTL_KLINE_AT, async () => result);
+  }
+  return result;
 }
 
 /**
@@ -116,7 +133,7 @@ export async function fetchKlineRange(
 
 /** Latest spot price. */
 export async function fetchPrice(symbol: string = SYMBOL): Promise<number> {
-  return cached(`price:${symbol}`, TTL, async () => {
+  return cached(`price:${symbol}`, TTL_PRICE, async () => {
     const url = `${BASE}/api/v3/ticker/price?symbol=${symbol}`;
     const res = await fetch(url, {
       headers: { 'User-Agent': 'bitcoin-predict/1.0' },
@@ -132,7 +149,7 @@ export async function fetchPrice(symbol: string = SYMBOL): Promise<number> {
 export async function fetch24hChangePct(
   symbol: string = SYMBOL
 ): Promise<number> {
-  return cached(`change24h:${symbol}`, TTL, async () => {
+  return cached(`change24h:${symbol}`, TTL_1H, async () => {
     const url = `${BASE}/api/v3/ticker/24hr?symbol=${symbol}`;
     const res = await fetch(url, {
       headers: { 'User-Agent': 'bitcoin-predict/1.0' },

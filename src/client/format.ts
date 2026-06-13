@@ -16,6 +16,8 @@ export const fmtUsd2 = (n: number) =>
     style: 'currency',
     currency: 'USD',
     minimumFractionDigits: 2,
+    // Drop the ".00" on whole-dollar amounts while keeping real cents ($10.50).
+    trailingZeroDisplay: 'stripIfInteger',
   });
 
 export const fmtPct = (p: number) => `${(p * 100).toFixed(1)}%`;

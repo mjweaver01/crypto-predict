@@ -39,10 +39,8 @@ export function AllPanel() {
 
   const betsOn = rows.filter(x => x.r.paper?.action === 'BET');
   const committed = rows.filter(x => x.r.committed).length;
-  const staked = betsOn.reduce((s, x) => s + (x.r.paper?.stake ?? 0), 0);
   const summary =
     `${committed}/${rows.length} calls committed · ${betsOn.length} paper bet${betsOn.length === 1 ? '' : 's'}` +
-    (staked > 0 ? ` · ${fmtUsd2(staked)} staked` : '') +
     ' · click a row to focus that crypto';
 
   return (

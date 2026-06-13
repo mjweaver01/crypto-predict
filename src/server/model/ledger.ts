@@ -30,17 +30,33 @@ function withLock<T>(fn: () => Promise<T>): Promise<T> {
   return run;
 }
 
+// In-memory mirror of the on-disk store. While the server runs, this process is
+// the only writer, so after the first read we serve from memory instead of
+// re-parsing the multi-MB ledger on every call. Re-parsing it dozens of times a
+// second (once per crypto per commit tick, plus per request) is synchronous work
+// that pegged the single JS thread and made page loads time out. Offline scripts
+// (backfill) run as separate processes and load their own copy, so they're
+// unaffected; their writes are only picked up on the next server restart.
+let memo: Store | null = null;
+
 async function load(): Promise<Store> {
+  if (memo) return memo;
   const file = Bun.file(PATH);
-  if (!(await file.exists())) return {};
-  try {
-    return (await file.json()) as Store;
-  } catch {
-    return {};
+  if (!(await file.exists())) {
+    memo = {};
+    return memo;
   }
+  try {
+    memo = (await file.json()) as Store;
+  } catch {
+    memo = {};
+  }
+  return memo;
 }
 
 async function save(store: Store): Promise<void> {
+  // Keep the in-memory mirror pointing at the latest store, then persist.
+  memo = store;
   await Bun.write(PATH, JSON.stringify(store, null, 2));
 }
 
@@ -64,6 +80,11 @@ function slugForRange(
 export async function recordPredictions(p: Prediction): Promise<void> {
   await withLock(async () => {
     const store = await load();
+    // Most ticks add nothing: a window's call is committed once and frozen, so
+    // every later tick within that window hits the `existing` guard below. Only
+    // serialize + write the (multi-MB) file when something genuinely changed,
+    // instead of re-stringifying the whole ledger on every single tick.
+    let dirty = false;
     for (const r of p.ranges) {
       const c = r.committed;
       if (!c) continue; // no genuine forward-looking call → don't grade it
@@ -107,8 +128,9 @@ export async function recordPredictions(p: Prediction): Promise<void> {
         source: 'live',
         outcome: null,
       };
+      dirty = true;
     }
-    await save(store);
+    if (dirty) await save(store);
   });
 }
 

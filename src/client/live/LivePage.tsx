@@ -9,6 +9,7 @@ import { NarrativeCard } from './NarrativeCard.tsx';
 import { RangeTabs } from './RangeTabs.tsx';
 import { DetailPanel } from './DetailPanel.tsx';
 import { AllPanel } from './AllPanel.tsx';
+import { TotalsCard } from './TotalsCard.tsx';
 
 export function LivePage() {
   const all = selectedCrypto.value === 'all';
@@ -23,6 +24,7 @@ export function LivePage() {
         <PriceCard />
         {!all && <NarrativeCard />}
       </div>
+      {all && <TotalsCard />}
       <RangeTabs />
       {all ? <AllPanel /> : <DetailPanel />}
       <div>{errorMsg.value}</div>

@@ -40,6 +40,9 @@ import type {
 } from '../../shared/types.ts';
 
 const TTL = Number(env('CACHE_TTL_PREDICT', '1'));
+// Bankroll is global (one number across all cryptos) and changes only as bets
+// resolve, so a few seconds of staleness on the live stake display is fine.
+const BANKROLL_TTL = 5;
 
 /**
  * The most recent prediction per crypto computed by the server-side commit
@@ -205,10 +208,15 @@ async function computePrediction(crypto: CryptoId): Promise<Prediction> {
     await ensureHydrated();
 
     // Current paper bankroll, so a live BET verdict can state its dollar stake
-    // (the replay sizes open bets at this same running bankroll).
+    // (the replay sizes open bets at this same running bankroll). The replay is
+    // a full O(n) pass over the ledger; it's identical for every crypto on a
+    // tick and the bankroll only inches between resolutions, so cache it briefly
+    // rather than re-running it six times a second.
     let bankroll: number | undefined;
     try {
-      bankroll = simulatePaper(await getLedger()).summary.bankroll;
+      bankroll = await cached('paper:bankroll', BANKROLL_TTL, async () =>
+        simulatePaper(await getLedger()).summary.bankroll
+      );
     } catch (err) {
       console.warn('[paper] bankroll unavailable for live stake:', err);
     }
