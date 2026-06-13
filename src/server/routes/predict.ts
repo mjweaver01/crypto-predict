@@ -13,9 +13,10 @@ import {
 } from '../model/forecast.ts';
 import { extractFeatures } from '../model/features.ts';
 import { buildNarrative } from '../model/narrative.ts';
-import { getLedger, recordPredictions } from '../model/ledger.ts';
+import { recordPredictions } from '../model/ledger.ts';
 import { decide, ensureHydrated } from '../model/commitments.ts';
-import { decideBet, getPolicy, simulatePaper } from '../model/paper.ts';
+import { costOfSide, decideBet, fillSide, getPolicy } from '../model/paper.ts';
+import { runBankroll } from '../workers/computeClient.ts';
 import {
   applyCalibration,
   calibrationInfo,
@@ -214,8 +215,11 @@ async function computePrediction(crypto: CryptoId): Promise<Prediction> {
     // rather than re-running it six times a second.
     let bankroll: number | undefined;
     try {
-      bankroll = await cached('paper:bankroll', BANKROLL_TTL, async () =>
-        simulatePaper(await getLedger()).summary.bankroll
+      // Replay runs in the analytics worker so this 5s-cadence sim never blocks
+      // the commit loop's single thread; the main-thread cache still collapses
+      // the per-crypto calls in a tick into one worker round-trip.
+      bankroll = await cached('paper:bankroll', BANKROLL_TTL, () =>
+        runBankroll()
       );
     } catch (err) {
       console.warn('[paper] bankroll unavailable for live stake:', err);
@@ -431,10 +435,34 @@ async function computePrediction(crypto: CryptoId): Promise<Prediction> {
           c.marketAskUp
         );
         if (range.paper.action === 'BET' && bankroll !== undefined) {
-          range.paper.stake = Math.min(
+          const policy = getPolicy();
+          // Intended size: fractional-Kelly bankroll slice, capped in dollars.
+          const requested = Math.min(
             bankroll * range.paper.stakeFraction,
-            getPolicy().maxStakeUsd
+            policy.maxStakeUsd
           );
+          // Walk the frozen commit-time book exactly as the replay does, so the
+          // live stake is what the (often thin) book could actually fill rather
+          // than the optimistic touch-price request. Rows without stored depth
+          // fall back to the full request, matching the replay's behaviour.
+          const hasDepth =
+            (c.marketUpBids?.length ?? 0) > 0 ||
+            (c.marketUpAsks?.length ?? 0) > 0;
+          const rawTouch = costOfSide(c.side, c.marketBidUp, c.marketAskUp);
+          if (hasDepth && rawTouch !== undefined) {
+            const f = fillSide(
+              c.side,
+              requested,
+              c.marketUpBids,
+              c.marketUpAsks,
+              rawTouch + policy.fillSlippage
+            );
+            range.paper.stake = f ? f.stake : 0;
+            range.paper.depthCapped =
+              f && f.stake < requested - 1e-9 ? true : undefined;
+          } else {
+            range.paper.stake = requested;
+          }
         }
       }
       return range;

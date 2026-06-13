@@ -267,10 +267,18 @@ export interface PaperDecision {
   /** Fraction of bankroll staked (fractional Kelly, capped). 0 when PASS. */
   stakeFraction: number;
   /**
-   * Dollars staked at the current paper bankroll (stakeFraction × bankroll),
-   * matching the stake the replay's open bet carries. Only set on live BETs.
+   * Dollars staked at the current paper bankroll, sized against the commit-time
+   * book depth the same way the replay fills — so it reflects what the thin
+   * book could actually absorb, not the un-depth-aware request. Only set on
+   * live BETs.
    */
   stake?: number;
+  /**
+   * True when book depth limited the fill below the requested stake (the
+   * intended `stakeFraction × bankroll`, capped at maxStakeUsd). Lets the UI
+   * flag a bet the market couldn't fully fill.
+   */
+  depthCapped?: boolean;
   /** Why a PASS passed: no book at commit, or edge below the minimum. */
   reason?: 'no-book' | 'edge-below-min';
 }

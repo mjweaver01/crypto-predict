@@ -31,7 +31,11 @@ import { env } from '../cache.ts';
 import { getLedger } from './ledger.ts';
 import { FEATURE_KEYS } from './features.ts';
 import { CRYPTO_IDS, type CryptoId } from '../../shared/cryptos.ts';
-import type { CalibrationInfo, RangeId } from '../../shared/types.ts';
+import type {
+  CalibrationInfo,
+  LedgerEntry,
+  RangeId,
+} from '../../shared/types.ts';
 
 export interface Calibrator {
   /** Feature keys aligned with `w` (canonical order from features.ts). */
@@ -250,21 +254,28 @@ async function logCalibrator(id: string, cal: Calibrator): Promise<void> {
   }
 }
 
+/** A fitted calibrator tagged with the (crypto, range) it belongs to. */
+export interface CalibratorFit {
+  crypto: CryptoId;
+  id: RangeId;
+  cal: Calibrator;
+}
+
 /**
- * Refit every range's calibrator from the resolved ledger. Only entries that
- * carry a RAW probability (i.e. recorded under the committed-call regime) are
- * used, so older contaminated rows can't poison the fit. Cheap enough to run on
- * the resolve cadence.
+ * Fit every (crypto, range) calibrator from a ledger snapshot. Only entries
+ * that carry a RAW probability (i.e. recorded under the committed-call regime)
+ * are used, so older contaminated rows can't poison the fit.
+ *
+ * PURE: no cache writes, no disk logging, no I/O. This is the heavy part — up
+ * to CRYPTO_IDS×5 logistic regressions, 50 Newton iterations each over
+ * thousands of samples — so it runs in the analytics worker, off the request
+ * thread. The caller installs the results via applyCalibratorFits().
  */
-export async function refreshCalibrators(): Promise<void> {
-  let entries;
-  try {
-    entries = await getLedger();
-  } catch (err) {
-    console.warn('[calibration] refresh failed to load ledger:', err);
-    return;
-  }
-  const now = Date.now();
+export function fitAllCalibrators(
+  entries: LedgerEntry[],
+  now = Date.now()
+): CalibratorFit[] {
+  const fits: CalibratorFit[] = [];
   for (const crypto of CRYPTO_IDS) {
     for (const id of RANGE_IDS) {
       const keys = FEATURE_KEYS[id];
@@ -293,10 +304,37 @@ export async function refreshCalibrators(): Promise<void> {
         samples.length < MIN_SAMPLES
           ? identity(id)
           : { keys, ...fit(samples, keys) };
-      cache.set(calKey(crypto, id), cal);
-      if (cal.n > 0) {
-        void logCalibrator(crypto === 'btc' ? id : calKey(crypto, id), cal);
-      }
+      fits.push({ crypto, id, cal });
     }
   }
+  return fits;
+}
+
+/**
+ * Install fitted calibrators into the live in-force cache (read by the predict
+ * path) and append materially-changed ones to the on-disk audit log. Runs on
+ * the main thread — it's cheap (map writes + the occasional append).
+ */
+export function applyCalibratorFits(fits: CalibratorFit[]): void {
+  for (const { crypto, id, cal } of fits) {
+    cache.set(calKey(crypto, id), cal);
+    if (cal.n > 0) {
+      void logCalibrator(crypto === 'btc' ? id : calKey(crypto, id), cal);
+    }
+  }
+}
+
+/**
+ * Main-thread refit: load the ledger, fit, install. Kept as a fallback for when
+ * the analytics worker is unavailable; the normal path fits in the worker.
+ */
+export async function refreshCalibrators(): Promise<void> {
+  let entries;
+  try {
+    entries = await getLedger();
+  } catch (err) {
+    console.warn('[calibration] refresh failed to load ledger:', err);
+    return;
+  }
+  applyCalibratorFits(fitAllCalibrators(entries));
 }

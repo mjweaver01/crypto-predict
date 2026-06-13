@@ -110,7 +110,7 @@ function PaperVerdict({ r }: { r: RangePrediction }) {
   if (pd.action === 'BET') {
     const sized =
       pd.stake !== undefined
-        ? `bet ${fmtUsd2(pd.stake)} to win ${fmtUsd2((pd.stake * (1 - pd.cost!)) / pd.cost!)}`
+        ? `bet ${fmtUsd2(pd.stake)}${pd.depthCapped ? ' (depth-capped)' : ''} to win ${fmtUsd2((pd.stake * (1 - pd.cost!)) / pd.cost!)}`
         : `bet ${(pd.stakeFraction * 100).toFixed(1)}% of bankroll`;
     return (
       <div class="detail" style={{ marginTop: '8px' }}>

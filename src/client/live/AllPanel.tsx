@@ -16,7 +16,8 @@ function Verdict({ r }: { r: RangePrediction }) {
     return (
       <>
         <span class="paper-chip bet">BET</span>{' '}
-        {pd.stake !== undefined ? fmtUsd2(pd.stake) : ''}{' '}
+        {pd.stake !== undefined ? fmtUsd2(pd.stake) : ''}
+        {pd.depthCapped ? <span title="limited by book depth">*</span> : ''}{' '}
         <span class="edge-pos">
           +{pd.edge !== undefined ? cents(pd.edge) : '—'}
         </span>

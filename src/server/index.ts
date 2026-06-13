@@ -5,11 +5,22 @@ import {
   predictAll,
 } from './routes/predict.ts';
 import { isCryptoId, type CryptoId } from '../shared/cryptos.ts';
-import { getLedger, resolvePending, summarize } from './model/ledger.ts';
-import { simulatePaper } from './model/paper.ts';
-import { env } from './cache.ts';
-import { refreshCalibrators } from './model/calibration.ts';
-import { computeMetrics } from './model/metrics.ts';
+import {
+  flushLedger,
+  getLedger,
+  resolvePending,
+  summarize,
+} from './model/ledger.ts';
+import { cached, env } from './cache.ts';
+import {
+  applyCalibratorFits,
+  refreshCalibrators,
+} from './model/calibration.ts';
+import {
+  runCalibrate,
+  runMetrics,
+  runPaper,
+} from './workers/computeClient.ts';
 import { getInsights } from './model/insights.ts';
 import { makePriceStreamResponse } from './sources/priceStream.ts';
 import { getTradeConfig } from './trade/config.ts';
@@ -72,6 +83,14 @@ const json = (data: unknown, status = 200) =>
     headers: { 'content-type': 'application/json' },
   });
 
+// Short TTL for the heavy read endpoints, each of which walks the entire
+// (multi-thousand-row) ledger on every call. Without this, history-page polling
+// fires a fresh O(n) scan per request and blocks the single JS thread. cached()
+// adds stale-while-revalidate, so the recompute happens off the request path
+// and the underlying data only changes as windows resolve anyway.
+const READ_CACHE_TTL = Number(env('READ_CACHE_TTL', '5')) || 5;
+const rangeKey = (from?: number, to?: number) => `${from ?? ''}:${to ?? ''}`;
+
 const server = Bun.serve({
   port: PORT,
   idleTimeout: 0,
@@ -119,51 +138,59 @@ const server = Bun.serve({
         return json({ predictions: await predictAll() });
       }
       if (pathname === '/api/ledger') {
-        const allEntries = (await getLedger()).filter(e => inCrypto(e.crypto));
-        // All-time summary is always over the full (crypto-filtered) set.
-        const summary = summarize(allEntries);
+        const key = `ledger:${crypto ?? 'all'}:${rangeKey(dateFrom, dateTo)}`;
+        return json(
+          await cached(key, READ_CACHE_TTL, async () => {
+            const allEntries = (await getLedger()).filter(e =>
+              inCrypto(e.crypto)
+            );
+            // All-time summary is always over the full (crypto-filtered) set.
+            const summary = summarize(allEntries);
 
-        // Date-range filter applied to windowStart.
-        let ranged = allEntries;
-        if (dateFrom !== undefined)
-          ranged = ranged.filter(e => Date.parse(e.windowStart) >= dateFrom);
-        if (dateTo !== undefined)
-          ranged = ranged.filter(e => Date.parse(e.windowStart) <= dateTo);
+            // Date-range filter applied to windowStart.
+            let ranged = allEntries;
+            if (dateFrom !== undefined)
+              ranged = ranged.filter(
+                e => Date.parse(e.windowStart) >= dateFrom
+              );
+            if (dateTo !== undefined)
+              ranged = ranged.filter(e => Date.parse(e.windowStart) <= dateTo);
 
-        // Summary over the date-filtered set — drives the hit-rate headline
-        // stats so they reflect the selected window.
-        const filteredSummary = summarize(ranged);
+            // Summary over the date-filtered set — drives the hit-rate headline
+            // stats so they reflect the selected window.
+            const filteredSummary = summarize(ranged);
 
-        // Newest first; the client virtualizes the full list (no pagination).
-        const entries = ranged
-          .slice()
-          .sort(
-            (a, b) => Date.parse(b.windowStart) - Date.parse(a.windowStart)
-          );
+            // Newest first; the client virtualizes the full list (no paging).
+            const entries = ranged
+              .slice()
+              .sort(
+                (a, b) => Date.parse(b.windowStart) - Date.parse(a.windowStart)
+              );
 
-        return json({ summary, filteredSummary, entries });
+            return { summary, filteredSummary, entries };
+          })
+        );
       }
       if (pathname === '/api/insights') {
         return json({ entries: getInsights(crypto) });
       }
       if (pathname === '/api/metrics') {
         // Prequential learning-curve scores (raw vs calibrated vs market).
-        return json(await computeMetrics(crypto, dateFrom, dateTo));
+        const key = `metrics:${crypto ?? 'all'}:${rangeKey(dateFrom, dateTo)}`;
+        return json(
+          await cached(key, READ_CACHE_TTL, () =>
+            runMetrics(crypto, dateFrom, dateTo)
+          )
+        );
       }
       if (pathname === '/api/paper') {
         // Paper-trading replay filtered to the same date window as other views.
-        const allEntries = (await getLedger()).filter(e => inCrypto(e.crypto));
-        const entries =
-          dateFrom !== undefined || dateTo !== undefined
-            ? allEntries.filter(e => {
-                const t = Date.parse(e.windowStart);
-                return (
-                  (dateFrom === undefined || t >= dateFrom) &&
-                  (dateTo === undefined || t <= dateTo)
-                );
-              })
-            : allEntries;
-        return json(simulatePaper(entries));
+        const key = `paper:replay:${crypto ?? 'all'}:${rangeKey(dateFrom, dateTo)}`;
+        return json(
+          await cached(key, READ_CACHE_TTL, () =>
+            runPaper(crypto, dateFrom, dateTo)
+          )
+        );
       }
       if (pathname === '/api/trades') {
         // Real-money (or dry-run shadow) execution record + halt status.
@@ -244,9 +271,19 @@ const resolveLoop = async () => {
   } catch (err) {
     console.warn('[ledger] resolve failed:', err);
   }
-  await refreshCalibrators().catch(err =>
-    console.warn('[calibration] refresh failed:', err)
-  );
+  // Refit the calibrators in the analytics worker so the (CRYPTO_IDS×5)
+  // logistic fits never block the request thread. Flush first so the worker —
+  // which reads the ledger from disk — sees the outcomes resolvePending() just
+  // wrote. Fall back to a main-thread refit only if the worker is unavailable.
+  try {
+    await flushLedger();
+    applyCalibratorFits(await runCalibrate());
+  } catch (err) {
+    console.warn('[calibration] worker refit failed, falling back:', err);
+    await refreshCalibrators().catch(e =>
+      console.warn('[calibration] refresh failed:', e)
+    );
+  }
   // Settle real trades against the freshly resolved outcomes, then redeem any
   // winning positions back into USDC (no-ops unless trading is enabled live).
   // Redemption is a Polymarket-only concept — Kalshi settles to cash itself.

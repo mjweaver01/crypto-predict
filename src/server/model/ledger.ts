@@ -39,6 +39,17 @@ function withLock<T>(fn: () => Promise<T>): Promise<T> {
 // unaffected; their writes are only picked up on the next server restart.
 let memo: Store | null = null;
 
+/**
+ * Drop the in-memory mirror so the next read re-parses from disk. Only the
+ * analytics worker calls this: it runs in a SEPARATE process with its own
+ * module state, so resetting its copy lets it pick up commits the main process
+ * has since flushed without ever touching the main thread's authoritative
+ * `memo` (which still holds not-yet-flushed live commits).
+ */
+export function reloadLedger(): void {
+  memo = null;
+}
+
 async function load(): Promise<Store> {
   if (memo) return memo;
   const file = Bun.file(PATH);
@@ -54,10 +65,56 @@ async function load(): Promise<Store> {
   return memo;
 }
 
-async function save(store: Store): Promise<void> {
-  // Keep the in-memory mirror pointing at the latest store, then persist.
+// Write-behind persistence. `memo` is authoritative while the server runs, so
+// callers update it synchronously and we COALESCE the actual disk write.
+// Re-serializing the multi-MB ledger is the single most expensive synchronous
+// operation on the request thread: at a window boundary every tracked crypto
+// commits a fresh call within the same tick, which previously fired one full
+// JSON.stringify + write PER crypto, back-to-back, freezing the event loop long
+// enough that a page refresh mid-boundary timed out. Debouncing collapses that
+// burst into a single write a moment after the boundary, off the hot path.
+const SAVE_DEBOUNCE_MS = Number(env('LEDGER_SAVE_DEBOUNCE_MS', '300')) || 300;
+let saveTimer: ReturnType<typeof setTimeout> | null = null;
+// Serialize writes so two flushes can never interleave on disk.
+let writeChain: Promise<void> = Promise.resolve();
+
+/** Persist the current `memo` to disk now (serialized against other writes). */
+function writeNow(): Promise<void> {
+  writeChain = writeChain.then(async () => {
+    if (!memo) return;
+    try {
+      await Bun.write(PATH, JSON.stringify(memo, null, 2));
+    } catch (err) {
+      console.warn('[ledger] persist failed:', err);
+    }
+  });
+  return writeChain;
+}
+
+/**
+ * Update the in-memory store immediately and schedule a coalesced disk flush.
+ * Synchronous on purpose: the lock-protected read-modify-write no longer waits
+ * on disk I/O, and rapid successive saves collapse into one write.
+ */
+function save(store: Store): void {
   memo = store;
-  await Bun.write(PATH, JSON.stringify(store, null, 2));
+  if (saveTimer) return;
+  saveTimer = setTimeout(() => {
+    saveTimer = null;
+    void writeNow();
+  }, SAVE_DEBOUNCE_MS);
+}
+
+/**
+ * Force any pending write to complete. Long-running offline scripts (backfill)
+ * must call this before exiting so a debounced write isn't lost on process end.
+ */
+export async function flushLedger(): Promise<void> {
+  if (saveTimer) {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+  }
+  await writeNow();
 }
 
 /** Market id for a window on the active platform, when it offers one. */
@@ -130,7 +187,7 @@ export async function recordPredictions(p: Prediction): Promise<void> {
       };
       dirty = true;
     }
-    if (dirty) await save(store);
+    if (dirty) save(store);
   });
 }
 
@@ -182,7 +239,7 @@ export async function resolvePending(): Promise<number> {
     await withLock(async () => {
       const store = await load();
       if (store[e.id]) store[e.id] = { ...store[e.id]!, ...patch };
-      await save(store);
+      save(store);
     });
     resolved++;
   }
@@ -194,7 +251,10 @@ export async function addEntries(entries: LedgerEntry[]): Promise<void> {
   await withLock(async () => {
     const store = await load();
     for (const e of entries) store[e.id] = { ...store[e.id], ...e };
-    await save(store);
+    save(store);
+    // Scripts run as one-shot processes and exit right after; force the write
+    // so the debounced flush isn't lost on process end.
+    await flushLedger();
   });
 }
 
