@@ -71,15 +71,20 @@ function resetForSwitch() {
 }
 
 // ── Polling ────────────────────────────────────────────────────────────────
-let inflight = false;
+// Cancel any in-flight predict/overview request before starting a new one so
+// that rapid window expirations or crypto switches don't pile up on the server.
+let currentRefresh: AbortController | null = null;
+
 export async function refresh() {
-  if (inflight) return;
-  inflight = true;
+  currentRefresh?.abort();
+  const ac = new AbortController();
+  currentRefresh = ac;
+  const { signal } = ac;
   // The selector may change mid-flight — only apply results that still match.
   const want = selectedCrypto.value;
   try {
     if (want === 'all') {
-      const res = await fetch('/api/overview');
+      const res = await fetch('/api/overview', { signal });
       if (!res.ok) throw new Error(`overview ${res.status}`);
       const data = (await res.json()) as { predictions: Prediction[] };
       if (selectedCrypto.value === 'all') {
@@ -92,7 +97,7 @@ export async function refresh() {
         loading.value = false;
       }
     } else {
-      const res = await fetch(`/api/predict?crypto=${want}`);
+      const res = await fetch(`/api/predict?crypto=${want}`, { signal });
       if (!res.ok) throw new Error(`predict ${res.status}`);
       const p = (await res.json()) as Prediction;
       if (selectedCrypto.value === want) {
@@ -109,9 +114,11 @@ export async function refresh() {
     }
     errorMsg.value = '';
   } catch (err) {
-    errorMsg.value = `Failed to load: ${String(err)}`;
+    if ((err as { name?: string }).name !== 'AbortError') {
+      errorMsg.value = `Failed to load: ${String(err)}`;
+    }
   } finally {
-    inflight = false;
+    if (currentRefresh === ac) currentRefresh = null;
   }
 }
 

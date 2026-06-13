@@ -89,20 +89,37 @@ const dateQS = (): string => {
   return parts.length ? `?${parts.join('&')}` : '';
 };
 
+// Per-function abort controllers so that a new call (whether from a date/crypto
+// change or a background interval) cancels any still-in-flight request for that
+// same endpoint — preventing request pile-ups on the server.
+let acHistory: AbortController | null = null;
+let acRecord: AbortController | null = null;
+let acMetrics: AbortController | null = null;
+let acPaper: AbortController | null = null;
+let acTrades: AbortController | null = null;
+
+const isAbort = (err: unknown) => (err as { name?: string }).name === 'AbortError';
+
 async function refreshHistory() {
+  acHistory?.abort();
+  acHistory = new AbortController();
+  const { signal } = acHistory;
   try {
-    const res = await fetch(`/api/insights${cryptoQS()}`);
+    const res = await fetch(`/api/insights${cryptoQS()}`, { signal });
     if (!res.ok) return;
     const data = (await res.json()) as { entries: InsightSnapshot[] };
     insights.value = data.entries;
-  } catch {
-    // best-effort
+  } catch (err) {
+    if (!isAbort(err)) { /* best-effort */ }
   }
 }
 
 export async function refreshRecord() {
+  acRecord?.abort();
+  acRecord = new AbortController();
+  const { signal } = acRecord;
   try {
-    const res = await fetch(`/api/ledger${dateQS()}`);
+    const res = await fetch(`/api/ledger${dateQS()}`, { signal });
     if (!res.ok) return;
     const data = (await res.json()) as {
       summary: LedgerSummary;
@@ -114,39 +131,48 @@ export async function refreshRecord() {
     ledgerFilteredSummary.value = data.filteredSummary;
     updatedAt.value = new Date().toLocaleTimeString();
     loading.value = false;
-  } catch {
-    // best-effort
+  } catch (err) {
+    if (!isAbort(err)) { /* best-effort */ }
   }
 }
 
 async function refreshMetrics() {
+  acMetrics?.abort();
+  acMetrics = new AbortController();
+  const { signal } = acMetrics;
   try {
-    const res = await fetch(`/api/metrics${dateQS()}`);
+    const res = await fetch(`/api/metrics${dateQS()}`, { signal });
     if (!res.ok) return;
     metrics.value = (await res.json()) as MetricsResponse;
-  } catch {
-    // best-effort
+  } catch (err) {
+    if (!isAbort(err)) { /* best-effort */ }
   }
 }
 
 async function refreshPaper() {
+  acPaper?.abort();
+  acPaper = new AbortController();
+  const { signal } = acPaper;
   try {
-    const res = await fetch(`/api/paper${dateQS()}`);
+    const res = await fetch(`/api/paper${dateQS()}`, { signal });
     if (!res.ok) return;
     paper.value = (await res.json()) as PaperResponse;
-  } catch {
-    // best-effort
+  } catch (err) {
+    if (!isAbort(err)) { /* best-effort */ }
   }
 }
 
 async function refreshLiveTrades() {
+  acTrades?.abort();
+  acTrades = new AbortController();
+  const { signal } = acTrades;
   try {
-    const res = await fetch('/api/trades');
+    const res = await fetch('/api/trades', { signal });
     if (!res.ok) return;
     const data = (await res.json()) as TradesResponse;
     liveTrades.value = data.trades;
-  } catch {
-    // best-effort
+  } catch (err) {
+    if (!isAbort(err)) { /* best-effort */ }
   }
 }
 
